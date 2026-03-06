@@ -11,8 +11,15 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from agent_control_plane.engine.budget_tracker import BudgetExhaustedError
+from agent_control_plane.types.agents import AgentMetadata, DelegationProposal
 from agent_control_plane.types.approvals import ApprovalTicketDTO
-from agent_control_plane.types.enums import ApprovalDecisionType, ApprovalStatus
+from agent_control_plane.types.enums import (
+    ApprovalDecisionType,
+    ApprovalStatus,
+    EventKind,
+    ProposalStatus,
+    SessionStatus,
+)
 from agent_control_plane.types.frames import EventFrame
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
 
@@ -54,7 +61,7 @@ class InMemorySessionRepository:
             raise ValueError(f"Session {session_id} not found")
         object.__setattr__(cs, "active_cycle_id", cycle_id)
 
-    async def list_sessions(self, statuses: list[str] | None = None, limit: int = 50) -> list[SessionState]:
+    async def list_sessions(self, statuses: list[SessionStatus] | None = None, limit: int = 50) -> list[SessionState]:
         result = list(self._sessions.values())
         if statuses:
             result = [s for s in result if s.status in statuses]
@@ -106,7 +113,7 @@ class InMemoryEventRepository:
     async def append(
         self,
         session_id: UUID,
-        event_kind: str,
+        event_kind: EventKind,
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
@@ -222,19 +229,48 @@ class InMemoryProposalRepository:
     def __init__(self) -> None:
         self._proposals: dict[UUID, dict] = {}
 
-    def add_proposal(self, proposal_id: UUID, session_id: UUID, resource_id: str, status: str = "pending") -> None:
+    def add_proposal(
+        self,
+        proposal_id: UUID,
+        session_id: UUID,
+        resource_id: str,
+        status: ProposalStatus = ProposalStatus.PENDING,
+    ) -> None:
         self._proposals[proposal_id] = {
             "session_id": session_id,
             "resource_id": resource_id,
             "status": status,
         }
 
-    async def update_status(self, proposal_id: UUID, status: str) -> None:
+    async def update_status(self, proposal_id: UUID, status: ProposalStatus) -> None:
         if proposal_id in self._proposals:
             self._proposals[proposal_id]["status"] = status
 
     async def has_pending_for_resource(self, session_id: UUID, resource_id: str) -> bool:
         return any(
-            p["session_id"] == session_id and p["resource_id"] == resource_id and p["status"] == "pending"
+            p["session_id"] == session_id and p["resource_id"] == resource_id and p["status"] == ProposalStatus.PENDING
             for p in self._proposals.values()
         )
+
+
+class InMemoryAgentRepository:
+    """In-memory agent repository for tests."""
+
+    def __init__(self) -> None:
+        self._agents: dict[str, AgentMetadata] = {}
+        self._delegations: list[DelegationProposal] = []
+
+    async def register_agent(self, agent: AgentMetadata) -> None:
+        self._agents[agent.id] = agent
+
+    async def get_agent(self, agent_id: str) -> AgentMetadata | None:
+        return self._agents.get(agent_id)
+
+    async def list_agents(self, tags: list[str] | None = None) -> list[AgentMetadata]:
+        agents = list(self._agents.values())
+        if tags:
+            return [a for a in agents if any(t in a.tags for t in tags)]
+        return agents
+
+    async def record_delegation(self, delegation: DelegationProposal) -> None:
+        self._delegations.append(delegation)
