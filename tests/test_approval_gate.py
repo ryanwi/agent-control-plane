@@ -15,7 +15,7 @@ class _FakeTicket:
         session_id,
         status,
         decision_type,
-        scope_symbols=None,
+        scope_resource_ids=None,
         scope_max_notional=None,
         scope_max_count=None,
         scope_expiry=None,
@@ -23,7 +23,7 @@ class _FakeTicket:
         self.session_id = session_id
         self.status = status
         self.decision_type = decision_type
-        self.scope_symbols = scope_symbols
+        self.scope_resource_ids = scope_resource_ids
         self.scope_max_notional = scope_max_notional
         self.scope_max_count = scope_max_count
         self.scope_expiry = scope_expiry
@@ -75,7 +75,7 @@ async def test_check_session_scope_consumes_scope_count():
         session_id=session_id,
         status=ApprovalStatus.APPROVED,
         decision_type=ApprovalDecisionType.ALLOW_FOR_SESSION,
-        scope_symbols=["AAPL"],
+        scope_resource_ids=["AAPL"],
         scope_max_notional=Decimal("100"),
         scope_max_count=2,
     )
@@ -86,7 +86,7 @@ async def test_check_session_scope_consumes_scope_count():
     result = await gate.check_session_scope(
         session,
         session_id=session_id,
-        security_id="AAPL",
+        resource_id="AAPL",
         risk_level=RiskLevel.MEDIUM,
         notional=Decimal("10"),
     )
@@ -103,7 +103,7 @@ async def test_check_session_scope_blocks_when_count_is_exhausted():
         session_id=session_id,
         status=ApprovalStatus.APPROVED,
         decision_type=ApprovalDecisionType.ALLOW_FOR_SESSION,
-        scope_symbols=["AAPL"],
+        scope_resource_ids=["AAPL"],
         scope_max_notional=Decimal("100"),
         scope_max_count=0,
     )
