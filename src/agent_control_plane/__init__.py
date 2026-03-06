@@ -5,7 +5,6 @@ from agent_control_plane.engine.budget_tracker import BudgetExhaustedError, Budg
 from agent_control_plane.engine.concurrency import (
     ConcurrencyGuard,
     CycleAlreadyActiveError,
-    InstrumentLockedError,
     ResourceLockedError,
 )
 from agent_control_plane.engine.event_store import EventStore
@@ -13,7 +12,9 @@ from agent_control_plane.engine.kill_switch import KillSwitch
 from agent_control_plane.engine.policy_engine import (
     AssetClassifier,
     DefaultAssetClassifier,
+    DefaultRiskClassifier,
     PolicyEngine,
+    RiskClassifier,
 )
 from agent_control_plane.engine.router import ProposalRouter, RoutingDecision
 from agent_control_plane.engine.session_manager import SessionManager
@@ -61,11 +62,11 @@ __all__ = [
     "ApprovalStatus",
     "EventKind",
     "ExecutionIntentStatus",
+    "ExecutionMode",
     "KillSwitchScope",
     "ProposalStatus",
     "RiskLevel",
     "SessionStatus",
-    "ExecutionMode",
     # Policy DTOs
     "ActionTiers",
     "AutoApproveConditions",
@@ -95,13 +96,14 @@ __all__ = [
     "BudgetTracker",
     "ConcurrencyGuard",
     "CycleAlreadyActiveError",
-    "ResourceLockedError",
     "DefaultAssetClassifier",
+    "DefaultRiskClassifier",
     "EventStore",
-    "InstrumentLockedError",
     "KillSwitch",
     "PolicyEngine",
     "ProposalRouter",
+    "ResourceLockedError",
+    "RiskClassifier",
     "RoutingDecision",
     "SessionManager",
     # Recovery

@@ -1,7 +1,6 @@
 """Action classification, risk tiering, and asset scope enforcement."""
 
 import logging
-from decimal import Decimal
 from typing import Protocol
 
 from agent_control_plane.types.enums import ActionTier, RiskLevel
@@ -17,6 +16,16 @@ class AssetClassifier(Protocol):
     def classify(self, resource_id: str) -> str: ...
 
 
+class RiskClassifier(Protocol):
+    """Protocol for classifying proposal risk level.
+
+    Implement this to provide domain-specific risk classification.
+    The default implementation uses proposal weight and score fields.
+    """
+
+    def classify(self, proposal: ActionProposalDTO, policy: PolicySnapshotDTO) -> RiskLevel: ...
+
+
 class DefaultAssetClassifier:
     """Default implementation using pattern matching."""
 
@@ -30,6 +39,37 @@ class DefaultAssetClassifier:
         return "unmatched"
 
 
+class DefaultRiskClassifier:
+    """Default risk classifier using weight and score thresholds.
+
+    LOW: Asset matches classifier + weight <= max + score >= min
+    HIGH: Weight >= max_weight_pct OR score < 0.5
+    MEDIUM: Everything else
+    """
+
+    def __init__(self, asset_classifier: AssetClassifier | None = None) -> None:
+        self._asset_classifier = asset_classifier
+
+    def classify(self, proposal: ActionProposalDTO, policy: PolicySnapshotDTO) -> RiskLevel:
+        is_matched = self._is_matched_asset(proposal.resource_id)
+        auto_cond = policy.auto_approve_conditions
+
+        if is_matched and proposal.weight <= auto_cond.max_weight and proposal.score >= auto_cond.min_score:
+            return RiskLevel.LOW
+
+        from decimal import Decimal
+
+        if proposal.weight >= policy.risk_limits.max_weight_pct or proposal.score < Decimal("0.5"):
+            return RiskLevel.HIGH
+
+        return RiskLevel.MEDIUM
+
+    def _is_matched_asset(self, resource_id: str) -> bool:
+        if self._asset_classifier is None:
+            return True
+        return self._asset_classifier.classify(resource_id) == "matched"
+
+
 class PolicyEngine:
     """Classifies proposals by risk tier and enforces policy constraints."""
 
@@ -37,31 +77,15 @@ class PolicyEngine:
         self,
         policy: PolicySnapshotDTO,
         asset_classifier: AssetClassifier | None = None,
+        risk_classifier: RiskClassifier | None = None,
     ) -> None:
         self.policy = policy
         self._asset_classifier = asset_classifier
+        self._risk_classifier = risk_classifier or DefaultRiskClassifier(asset_classifier)
 
     def classify_risk_level(self, proposal: ActionProposalDTO) -> RiskLevel:
-        """Classify a proposal's risk level.
-
-        LOW: Asset matches classifier + allocation <= max + confidence >= min
-        HIGH: Allocation >= 5% OR confidence < 0.5
-        MEDIUM: Everything else
-        """
-        is_matched = self._is_matched_asset(proposal.resource_id)
-        auto_cond = self.policy.auto_approve_conditions
-
-        if (
-            is_matched
-            and proposal.allocation_pct <= auto_cond.max_allocation_pct
-            and proposal.confidence >= auto_cond.min_confidence
-        ):
-            return RiskLevel.LOW
-
-        if proposal.allocation_pct >= Decimal("5.0") or proposal.confidence < Decimal("0.5"):
-            return RiskLevel.HIGH
-
-        return RiskLevel.MEDIUM
+        """Classify a proposal's risk level using the configured risk classifier."""
+        return self._risk_classifier.classify(proposal, self.policy)
 
     def classify_action_tier(
         self,
@@ -96,7 +120,7 @@ class PolicyEngine:
             return ActionTier.BLOCKED
 
         # 3. Risk tier mapping
-        if risk_level == RiskLevel.LOW and self._can_auto_approve(proposal):
+        if risk_level == RiskLevel.LOW and self._can_auto_approve():
             return ActionTier.AUTO_APPROVE
 
         if risk_level in (RiskLevel.MEDIUM, RiskLevel.HIGH):
@@ -116,8 +140,8 @@ class PolicyEngine:
             return self._is_matched_asset(proposal.resource_id)
         return True
 
-    def _can_auto_approve(self, proposal: ActionProposalDTO) -> bool:
-        """Check if a LOW risk proposal qualifies for auto-approval."""
+    def _can_auto_approve(self) -> bool:
+        """Check if auto-approval is allowed by policy."""
         auto_cond = self.policy.auto_approve_conditions
         return not (auto_cond.dry_run_only and self.policy.execution_mode.value != "dry_run")
 
