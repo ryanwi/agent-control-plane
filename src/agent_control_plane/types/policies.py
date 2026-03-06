@@ -35,8 +35,8 @@ class ActionTiers(BaseModel):
         default_factory=lambda: [
             "action_proposal_medium_risk",
             "action_proposal_high_risk",
-            "strategy_change",
-            "promotion",
+            "workflow_transition",
+            "config_update",
         ]
     )
     auto_approve: list[str] = Field(

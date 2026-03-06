@@ -18,7 +18,11 @@ class CycleAlreadyActiveError(Exception):
     """Raised when attempting to start a cycle while one is already active."""
 
 
-class InstrumentLockedError(Exception):
+class ResourceLockedError(Exception):
+    """Raised when a proposal conflicts with a pending approval for the same resource."""
+
+
+class InstrumentLockedError(ResourceLockedError):
     """Raised when a proposal conflicts with a pending approval for the same resource."""
 
 
@@ -115,4 +119,6 @@ class ConcurrencyGuard:
         )
         existing = result.scalar_one_or_none()
         if existing is not None:
-            raise InstrumentLockedError(f"Pending proposal {existing.id} for {rid} blocks new proposals")
+            raise ResourceLockedError(
+                f"Pending proposal {existing.id} for {rid} blocks new proposals"
+            )

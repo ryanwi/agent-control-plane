@@ -6,6 +6,7 @@ from agent_control_plane.engine.concurrency import (
     ConcurrencyGuard,
     CycleAlreadyActiveError,
     InstrumentLockedError,
+    ResourceLockedError,
 )
 from agent_control_plane.engine.event_store import EventStore
 from agent_control_plane.engine.kill_switch import KillSwitch
@@ -94,6 +95,7 @@ __all__ = [
     "BudgetTracker",
     "ConcurrencyGuard",
     "CycleAlreadyActiveError",
+    "ResourceLockedError",
     "DefaultAssetClassifier",
     "EventStore",
     "InstrumentLockedError",

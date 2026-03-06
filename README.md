@@ -44,7 +44,7 @@ flowchart LR
 - `ApprovalGate` manages ticket creation, scoped approvals, expiry, and denial paths.
 - `BudgetTracker` enforces session-level notional/count ceilings.
 - `KillSwitch` provides session/system/budget emergency stop semantics.
-- `ConcurrencyGuard` blocks duplicate work for the same session and instrument.
+- `ConcurrencyGuard` blocks duplicate work for the same session and resource.
 - `EventStore` writes monotonic events and supports non-state-bearing buffering on DB failures.
 - `SessionManager`, `CrashRecovery`, and `TimeoutEscalation` preserve continuity after failures.
 

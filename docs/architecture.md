@@ -57,7 +57,7 @@ sequenceDiagram
   AG-->>App: ticket/None
   App->>BT: reserve budget
   BT-->>App: budget check result
-  App->>CG: acquire instrument/session lock
+  App->>CG: acquire resource/session lock
   CG-->>App: lock token
   App->>KS: evaluate kill-switch scope
   KS-->>App: allowed / denied
