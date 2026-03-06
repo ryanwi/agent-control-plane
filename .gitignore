@@ -214,3 +214,4 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+agent_control_plane_example.db
