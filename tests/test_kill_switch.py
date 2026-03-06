@@ -65,8 +65,8 @@ class TestKillSwitchValidation:
 class TestSessionAbort:
     @pytest.mark.asyncio
     async def test_aborts_session_and_emits_event(self):
-        ks, sm, es, session_repo, event_repo, *_ = await _make_ks([{"status": SessionStatus.ACTIVE}])
-        sid = list(session_repo._sessions.keys())[0]
+        ks, _sm, _es, session_repo, event_repo, *_ = await _make_ks([{"status": SessionStatus.ACTIVE}])
+        sid = next(iter(session_repo._sessions.keys()))
         result = await ks.trigger(KillSwitchScope.SESSION_ABORT, session_id=sid, reason="test halt")
 
         assert result["scope"] == KillSwitchScope.SESSION_ABORT
@@ -80,8 +80,8 @@ class TestSessionAbort:
 class TestBudgetHalt:
     @pytest.mark.asyncio
     async def test_uses_budget_exhausted_reason(self):
-        ks, sm, es, session_repo, event_repo, *_ = await _make_ks([{"status": SessionStatus.ACTIVE}])
-        sid = list(session_repo._sessions.keys())[0]
+        ks, _sm, _es, session_repo, event_repo, *_ = await _make_ks([{"status": SessionStatus.ACTIVE}])
+        sid = next(iter(session_repo._sessions.keys()))
         result = await ks.trigger(KillSwitchScope.BUDGET_AUTO_HALT, session_id=sid)
 
         assert result["scope"] == KillSwitchScope.BUDGET_AUTO_HALT
@@ -92,7 +92,7 @@ class TestBudgetHalt:
 class TestSystemHalt:
     @pytest.mark.asyncio
     async def test_aborts_all_active_sessions(self):
-        ks, sm, es, session_repo, event_repo, *_ = await _make_ks(
+        ks, _sm, _es, session_repo, _event_repo, *_ = await _make_ks(
             [
                 {"status": SessionStatus.ACTIVE},
                 {"status": SessionStatus.CREATED},
@@ -109,7 +109,7 @@ class TestSystemHalt:
 class TestAgentAbort:
     @pytest.mark.asyncio
     async def test_pauses_active_and_clears_cycles(self):
-        ks, sm, es, session_repo, event_repo, *_ = await _make_ks([{"status": SessionStatus.ACTIVE}])
+        ks, _sm, _es, session_repo, _event_repo, *_ = await _make_ks([{"status": SessionStatus.ACTIVE}])
         result = await ks.trigger(KillSwitchScope.AGENT_ABORT, agent_id="agent-1", reason="stop")
 
         assert result["scope"] == KillSwitchScope.AGENT_ABORT
@@ -119,7 +119,7 @@ class TestAgentAbort:
 
     @pytest.mark.asyncio
     async def test_does_not_pause_created_sessions(self):
-        ks, sm, es, session_repo, event_repo, *_ = await _make_ks([{"status": SessionStatus.CREATED}])
+        ks, _sm, _es, session_repo, _event_repo, *_ = await _make_ks([{"status": SessionStatus.CREATED}])
         result = await ks.trigger(KillSwitchScope.AGENT_ABORT, agent_id="agent-1", reason="stop")
 
         assert result["sessions_affected"] == 1

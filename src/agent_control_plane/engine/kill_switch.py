@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agent_control_plane.engine.event_store import EventStore
@@ -43,7 +43,7 @@ class KillSwitch:
         session_id: UUID | None = None,
         agent_id: str | None = None,
         reason: str = "Kill switch triggered",
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Trigger the kill switch at the specified scope."""
         if scope == KillSwitchScope.SESSION_ABORT:
             return await self._abort_session(session_id, reason)
@@ -56,7 +56,7 @@ class KillSwitch:
         else:
             raise ValueError(f"Unknown kill switch scope: {scope}")
 
-    async def _abort_session(self, session_id: UUID | None, reason: str) -> dict:
+    async def _abort_session(self, session_id: UUID | None, reason: str) -> dict[str, Any]:
         """Stop one session and deny all pending tickets."""
         if session_id is None:
             raise ValueError("session_id required for session_abort")
@@ -72,7 +72,7 @@ class KillSwitch:
         )
         return {"scope": KillSwitchScope.SESSION_ABORT, "session_id": str(session_id), "tickets_denied": denied}
 
-    async def _abort_agent(self, agent_id: str | None, reason: str) -> dict:
+    async def _abort_agent(self, agent_id: str | None, reason: str) -> dict[str, Any]:
         """Pause active execution across all sessions for an agent-abort event."""
         if agent_id is None:
             raise ValueError("agent_id required for agent_abort")
@@ -100,7 +100,7 @@ class KillSwitch:
             "tickets_denied": denied,
         }
 
-    async def _system_halt(self, reason: str) -> dict:
+    async def _system_halt(self, reason: str) -> dict[str, Any]:
         """Emergency stop ALL execution system-wide."""
         sessions = await self._session_repo.list_sessions(statuses=[SessionStatus.ACTIVE, SessionStatus.CREATED])
 
@@ -121,7 +121,7 @@ class KillSwitch:
         logger.critical("SYSTEM HALT: Aborted %d sessions, denied %d tickets", aborted, total_denied)
         return {"scope": KillSwitchScope.SYSTEM_HALT, "sessions_aborted": aborted, "tickets_denied": total_denied}
 
-    async def _budget_halt(self, session_id: UUID | None, reason: str) -> dict:
+    async def _budget_halt(self, session_id: UUID | None, reason: str) -> dict[str, Any]:
         """Auto-triggered when session budget is exhausted."""
         if session_id is None:
             raise ValueError("session_id required for budget_auto_halt")

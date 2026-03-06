@@ -49,7 +49,7 @@ async def test_escalation_releases_cycle_id_before_append():
 
 @pytest.mark.asyncio
 async def test_escalation_still_releases_cycle_when_event_append_fails():
-    escalation, session_repo, event_repo = await _make_escalation(fail_events=True)
+    escalation, session_repo, _event_repo = await _make_escalation(fail_events=True)
 
     cycle_id = uuid4()
     cs = await session_repo.create_session(

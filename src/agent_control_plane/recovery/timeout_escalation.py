@@ -37,7 +37,7 @@ class TimeoutEscalation:
         self._event_repo = event_repo
         self.cycle_timeout_seconds = cycle_timeout_seconds
 
-    async def check_stuck_cycles(self) -> dict:
+    async def check_stuck_cycles(self) -> dict[str, int]:
         """Check for active sessions with cycles that have exceeded timeout."""
         sessions = await self._session_repo.list_sessions(statuses=[SessionStatus.ACTIVE])
         active_sessions = [s for s in sessions if s.active_cycle_id is not None]

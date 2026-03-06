@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agent_control_plane.engine.event_store import EventStore
@@ -78,7 +78,7 @@ class ApprovalGate:
         """Approve a pending ticket. State-bearing write."""
         ticket = await self._approval_repo.get_pending_ticket_for_update(ticket_id)
 
-        fields: dict = {
+        fields: dict[str, Any] = {
             "status": ApprovalStatus.APPROVED,
             "decision_type": decision_type,
             "decided_by": decided_by,

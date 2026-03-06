@@ -9,6 +9,7 @@ need custom model layout can use these directly:
 
 from __future__ import annotations
 
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import ForeignKey
@@ -81,7 +82,7 @@ def register_models() -> None:
     ModelRegistry.register("ApprovalTicket", ApprovalTicket)
 
 
-def create_tables(engine) -> None:
+def create_tables(engine: Any) -> None:
     """Create all tables using the reference Base metadata.
 
     For async engines, use:

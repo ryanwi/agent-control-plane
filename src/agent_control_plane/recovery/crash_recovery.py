@@ -31,7 +31,7 @@ class CrashRecovery:
         self._session_repo = session_repo
         self._event_repo = event_repo
 
-    async def recover_on_startup(self) -> dict:
+    async def recover_on_startup(self) -> dict[str, int]:
         """Scan for sessions with active cycles and attempt recovery.
 
         Called once on application startup.

@@ -1,6 +1,6 @@
 """Lazy model registry for decoupling ORM models from engine logic."""
 
-from typing import Any
+from typing import Any, ClassVar
 
 
 class ModelRegistry:
@@ -10,7 +10,7 @@ class ModelRegistry:
     and engine code resolves them lazily via ``ModelRegistry.get(name)``.
     """
 
-    _models: dict[str, type] = {}
+    _models: ClassVar[dict[str, type]] = {}
 
     @classmethod
     def register(cls, name: str, model: type) -> None:

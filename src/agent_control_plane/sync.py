@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import create_engine
@@ -76,10 +77,10 @@ class SyncControlPlane:
                 "max_count": info.max_count,
             }
 
-    def kill(self, session_id: UUID, reason: str = "Kill switch triggered") -> dict:
+    def kill(self, session_id: UUID, reason: str = "Kill switch triggered") -> dict[str, Any]:
         return self._trigger_kill(KillSwitchScope.SESSION_ABORT, session_id=session_id, reason=reason)
 
-    def kill_all(self, reason: str = "System halt") -> dict:
+    def kill_all(self, reason: str = "System halt") -> dict[str, Any]:
         return self._trigger_kill(KillSwitchScope.SYSTEM_HALT, reason=reason)
 
     def _trigger_kill(
@@ -88,7 +89,7 @@ class SyncControlPlane:
         *,
         session_id: UUID | None = None,
         reason: str = "Kill switch triggered",
-    ) -> dict:
+    ) -> dict[str, Any]:
         with self._session_factory() as db:
             uow = SyncSqlAlchemyUnitOfWork(db)
 

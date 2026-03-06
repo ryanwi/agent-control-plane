@@ -9,6 +9,7 @@ Host applications compose these with their own Base class:
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import DECIMAL, JSON, TIMESTAMP, VARCHAR, Text, func
@@ -19,12 +20,12 @@ from sqlalchemy.sql.sqltypes import Uuid
 class PolicySnapshotMixin:
     """Mixin for policy snapshot model."""
 
-    action_tiers: Mapped[dict] = mapped_column(JSON, nullable=False)
-    risk_limits: Mapped[dict] = mapped_column(JSON, nullable=False)
+    action_tiers: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    risk_limits: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     asset_scope: Mapped[str | None] = mapped_column(VARCHAR(50), nullable=True)
     execution_mode: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="dry_run")
     approval_timeout_seconds: Mapped[int] = mapped_column(nullable=False, default=3600)
-    auto_approve_conditions: Mapped[dict] = mapped_column(JSON, nullable=False)
+    auto_approve_conditions: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         default=func.current_timestamp(),
@@ -80,8 +81,8 @@ class ControlEventMixin:
     event_kind: Mapped[str] = mapped_column(VARCHAR(50), nullable=False)
     agent_id: Mapped[str | None] = mapped_column(VARCHAR(100), nullable=True)
     correlation_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
-    payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    routing_decision: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    routing_decision: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     routing_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(VARCHAR(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -101,7 +102,7 @@ class ActionProposalMixin:
     resource_type: Mapped[str] = mapped_column(VARCHAR(50), nullable=False)
     decision: Mapped[str] = mapped_column(VARCHAR(20), nullable=False)
     reasoning: Mapped[str] = mapped_column(Text, nullable=False)
-    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     # Scoring (domain-specific)
     weight: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False, default=Decimal("0"))
@@ -124,7 +125,7 @@ class RiskDecisionMixin:
 
     # Risk metrics
     risk_score: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), nullable=False)
-    risk_details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    risk_details: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     passed: Mapped[bool] = mapped_column(nullable=False, default=True)
 
@@ -139,7 +140,7 @@ class ApprovalTicketMixin:
     """Mixin for approval ticket model."""
 
     # Scope constraints
-    scope_resource_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    scope_resource_ids: Mapped[list[Any] | None] = mapped_column(JSON, nullable=True)
     scope_max_cost: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 2), nullable=True)
     scope_max_count: Mapped[int | None] = mapped_column(nullable=True)
     scope_expiry: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
@@ -166,7 +167,7 @@ class ExecutionIntentMixin:
 
     resource_id: Mapped[str] = mapped_column(VARCHAR(50), nullable=False)
     action: Mapped[str] = mapped_column(VARCHAR(20), nullable=False)
-    parameters_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    parameters_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     status: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="pending", server_default="pending")
     created_at: Mapped[datetime] = mapped_column(
@@ -184,7 +185,7 @@ class ExecutionResultMixin:
     success: Mapped[bool] = mapped_column(nullable=False, default=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     execution_duration_ms: Mapped[int | None] = mapped_column(nullable=True)
-    result_details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    result_details: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     completed_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
@@ -196,7 +197,7 @@ class ExecutionResultMixin:
 class ReleaseCandidateMixin:
     """Mixin for release candidate model."""
 
-    dry_run_metrics: Mapped[dict] = mapped_column(JSON, nullable=False)
+    dry_run_metrics: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     promotion_status: Mapped[str] = mapped_column(
         VARCHAR(20), nullable=False, default="pending", server_default="pending"
     )
