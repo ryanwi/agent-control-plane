@@ -4,6 +4,28 @@
 
 - No unreleased changes.
 
+## [0.1.1] - 2026-03-05
+
+### Added
+
+- Focused unit tests for core engines (38 new tests, 42 total):
+  - `PolicyEngine` / `ProposalRouter`: 19 tests covering risk classification, action tier dispatch, asset scope filtering, case-insensitive blocking, dry_run vs live mode, and custom classifier protocol.
+  - `BudgetTracker`: 10 tests covering cost/count boundary math, exact boundary pass/fail, zero-cost edge cases, remaining balance calculation, and session-not-found errors.
+  - `KillSwitch`: 9 tests covering input validation, session abort with event emission, budget halt with correct reason/event, system halt across multiple sessions, and agent abort pause/cycle-clear behavior.
+
+### Fixed
+
+- `quickstart.py`: use `model_dump(mode="json")` to avoid `Decimal` serialization crash with SQLite JSON columns.
+- `ApprovalTicketMixin`: added missing `scope_resource_ids` column.
+- `PolicyEngine`: moved inline `Decimal` import to module level.
+- `EventStore`: buffer now captures `routing_decision` and `routing_reason`; `_allocate_seq` raises a descriptive error instead of generic `NoResultFound`.
+- `CrashRecovery`: narrowed broad `except Exception` to `(RuntimeError, ValueError)`.
+
+### Changed
+
+- Removed unused `risk_level` parameter from `ApprovalGate.check_session_scope()`.
+- Clarified `KillSwitch._abort_agent` docstring regarding session scope behavior.
+
 ## [0.1.0] - 2026-03-05
 
 ### Added
