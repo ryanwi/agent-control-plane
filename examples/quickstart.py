@@ -82,9 +82,7 @@ class SessionSeqCounter(Base):
     __tablename__ = "session_seq_counters"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False
-    )
+    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
     next_seq: Mapped[int] = mapped_column(nullable=False, default=1)
 
 
@@ -352,9 +350,7 @@ async def main() -> None:
         try:
             import aiosqlite  # noqa: F401
         except ModuleNotFoundError as exc:
-            raise SystemExit(
-                "Missing optional dependency 'aiosqlite'. Install with: uv pip install aiosqlite"
-            ) from exc
+            raise SystemExit("Missing optional dependency 'aiosqlite'. Install with: uv pip install aiosqlite") from exc
 
     engine = create_async_engine(DATABASE_URL, echo=False)
     async with engine.begin() as conn:
