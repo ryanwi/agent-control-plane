@@ -6,7 +6,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
-from .enums import ActionName, ExecutionMode, RiskLevel, parse_action_name
+from .enums import ActionName, AssetScope, ExecutionMode, RiskLevel, parse_action_name
 
 
 class RiskLimits(BaseModel):
@@ -53,8 +53,15 @@ class PolicySnapshotDTO(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     action_tiers: ActionTiers = Field(default_factory=ActionTiers)
     risk_limits: RiskLimits = Field(default_factory=RiskLimits)
-    asset_scope: str | None = None
+    asset_scope: AssetScope | None = None
     execution_mode: ExecutionMode = ExecutionMode.DRY_RUN
     approval_timeout_seconds: int = 3600
     auto_approve_conditions: AutoApproveConditions = Field(default_factory=AutoApproveConditions)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @field_validator("asset_scope", mode="before")
+    @classmethod
+    def _parse_asset_scope(cls, value: AssetScope | str | None) -> AssetScope | None:
+        if value is None or isinstance(value, AssetScope):
+            return value
+        return AssetScope(value.strip().lower())

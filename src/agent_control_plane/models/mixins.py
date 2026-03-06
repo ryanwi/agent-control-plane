@@ -16,13 +16,15 @@ from sqlalchemy import DECIMAL, JSON, TIMESTAMP, VARCHAR, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql.sqltypes import Uuid
 
+from agent_control_plane.types.enums import AbortReason, AssetScope
+
 
 class PolicySnapshotMixin:
     """Mixin for policy snapshot model."""
 
     action_tiers: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     risk_limits: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
-    asset_scope: Mapped[str | None] = mapped_column(VARCHAR(50), nullable=True)
+    asset_scope: Mapped[AssetScope | None] = mapped_column(VARCHAR(50), nullable=True)
     execution_mode: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="dry_run")
     approval_timeout_seconds: Mapped[int] = mapped_column(nullable=False, default=3600)
     auto_approve_conditions: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
@@ -39,7 +41,7 @@ class ControlSessionMixin:
     session_name: Mapped[str] = mapped_column(VARCHAR(255), nullable=False, unique=True)
     status: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="created", server_default="created")
     execution_mode: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="dry_run")
-    asset_scope: Mapped[str | None] = mapped_column(VARCHAR(50), nullable=True)
+    asset_scope: Mapped[AssetScope | None] = mapped_column(VARCHAR(50), nullable=True)
 
     # Budget tracking
     max_cost: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), nullable=False, default=Decimal("100000"))
@@ -55,7 +57,7 @@ class ControlSessionMixin:
     active_cycle_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
 
     # Abort info
-    abort_reason: Mapped[str | None] = mapped_column(VARCHAR(50), nullable=True)
+    abort_reason: Mapped[AbortReason | None] = mapped_column(VARCHAR(50), nullable=True)
     abort_details: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(

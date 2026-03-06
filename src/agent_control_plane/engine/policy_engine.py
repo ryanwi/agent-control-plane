@@ -9,6 +9,7 @@ from agent_control_plane.types.enums import (
     ActionName,
     ActionTier,
     AssetMatch,
+    AssetScope,
     ExecutionMode,
     RiskLevel,
     RoutingResolutionStep,
@@ -163,7 +164,7 @@ class PolicyEngine:
 
     def _passes_asset_scope(self, proposal: ActionProposalDTO) -> bool:
         """Check if the proposal passes the asset scope filter."""
-        if self.policy.asset_scope is not None:
+        if self.policy.asset_scope == AssetScope.MATCHED_ONLY:
             return self._is_matched_asset(proposal.resource_id)
         return True
 

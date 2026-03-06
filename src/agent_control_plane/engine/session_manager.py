@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from agent_control_plane.types.enums import AbortReason, ExecutionMode, SessionStatus
+from agent_control_plane.types.enums import AbortReason, AssetScope, ExecutionMode, SessionStatus
 from agent_control_plane.types.sessions import SessionState
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ class SessionManager:
         *,
         session_name: str,
         execution_mode: ExecutionMode = ExecutionMode.DRY_RUN,
-        asset_scope: str | None = None,
+        asset_scope: AssetScope | None = None,
         max_cost: Decimal = Decimal("100000"),
         max_action_count: int = 50,
         policy_id: UUID | None = None,

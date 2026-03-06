@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from agent_control_plane.engine.event_store import EventStore
@@ -14,6 +14,7 @@ from agent_control_plane.types.enums import (
     KillSwitchScope,
     SessionStatus,
 )
+from agent_control_plane.types.sessions import KillSwitchResult
 
 if TYPE_CHECKING:
     from agent_control_plane.storage.protocols import AsyncApprovalRepository, AsyncSessionRepository
@@ -43,7 +44,7 @@ class KillSwitch:
         session_id: UUID | None = None,
         agent_id: str | None = None,
         reason: str = "Kill switch triggered",
-    ) -> dict[str, Any]:
+    ) -> KillSwitchResult:
         """Trigger the kill switch at the specified scope."""
         if scope == KillSwitchScope.SESSION_ABORT:
             return await self._abort_session(session_id, reason)
@@ -56,7 +57,7 @@ class KillSwitch:
         else:
             raise ValueError(f"Unknown kill switch scope: {scope}")
 
-    async def _abort_session(self, session_id: UUID | None, reason: str) -> dict[str, Any]:
+    async def _abort_session(self, session_id: UUID | None, reason: str) -> KillSwitchResult:
         """Stop one session and deny all pending tickets."""
         if session_id is None:
             raise ValueError("session_id required for session_abort")
@@ -70,9 +71,13 @@ class KillSwitch:
             payload={"reason": reason, "tickets_denied": denied},
             state_bearing=True,
         )
-        return {"scope": KillSwitchScope.SESSION_ABORT, "session_id": str(session_id), "tickets_denied": denied}
+        return KillSwitchResult(
+            scope=KillSwitchScope.SESSION_ABORT,
+            session_id=session_id,
+            tickets_denied=denied,
+        )
 
-    async def _abort_agent(self, agent_id: str | None, reason: str) -> dict[str, Any]:
+    async def _abort_agent(self, agent_id: str | None, reason: str) -> KillSwitchResult:
         """Pause active execution across all sessions for an agent-abort event."""
         if agent_id is None:
             raise ValueError("agent_id required for agent_abort")
@@ -93,14 +98,14 @@ class KillSwitch:
             )
             affected += 1
 
-        return {
-            "scope": KillSwitchScope.AGENT_ABORT,
-            "agent_id": agent_id,
-            "sessions_affected": affected,
-            "tickets_denied": denied,
-        }
+        return KillSwitchResult(
+            scope=KillSwitchScope.AGENT_ABORT,
+            agent_id=agent_id,
+            sessions_affected=affected,
+            tickets_denied=denied,
+        )
 
-    async def _system_halt(self, reason: str) -> dict[str, Any]:
+    async def _system_halt(self, reason: str) -> KillSwitchResult:
         """Emergency stop ALL execution system-wide."""
         sessions = await self._session_repo.list_sessions(statuses=[SessionStatus.ACTIVE, SessionStatus.CREATED])
 
@@ -119,9 +124,13 @@ class KillSwitch:
             aborted += 1
 
         logger.critical("SYSTEM HALT: Aborted %d sessions, denied %d tickets", aborted, total_denied)
-        return {"scope": KillSwitchScope.SYSTEM_HALT, "sessions_aborted": aborted, "tickets_denied": total_denied}
+        return KillSwitchResult(
+            scope=KillSwitchScope.SYSTEM_HALT,
+            sessions_aborted=aborted,
+            tickets_denied=total_denied,
+        )
 
-    async def _budget_halt(self, session_id: UUID | None, reason: str) -> dict[str, Any]:
+    async def _budget_halt(self, session_id: UUID | None, reason: str) -> KillSwitchResult:
         """Auto-triggered when session budget is exhausted."""
         if session_id is None:
             raise ValueError("session_id required for budget_auto_halt")
@@ -135,8 +144,8 @@ class KillSwitch:
             payload={"reason": reason, "tickets_denied": denied},
             state_bearing=True,
         )
-        return {
-            "scope": KillSwitchScope.BUDGET_AUTO_HALT,
-            "session_id": str(session_id),
-            "tickets_denied": denied,
-        }
+        return KillSwitchResult(
+            scope=KillSwitchScope.BUDGET_AUTO_HALT,
+            session_id=session_id,
+            tickets_denied=denied,
+        )

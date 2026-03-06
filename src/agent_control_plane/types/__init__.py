@@ -9,6 +9,7 @@ from .enums import (
     ApprovalDecisionType,
     ApprovalStatus,
     AssetMatch,
+    AssetScope,
     EventKind,
     ExecutionIntentStatus,
     ExecutionMode,
@@ -23,7 +24,7 @@ from .enums import (
 from .frames import EventFrame, RequestFrame, ResponseFrame
 from .policies import ActionTiers, AutoApproveConditions, PolicySnapshotDTO, RiskLimits
 from .proposals import ActionProposalDTO, ExecutionIntentDTO, ExecutionResultDTO, RiskDecisionDTO
-from .sessions import SessionCreate, SessionState, SessionSummary
+from .sessions import KillSwitchResult, SessionCreate, SessionState, SessionSummary
 
 __all__ = [
     "AbortReason",
@@ -38,6 +39,7 @@ __all__ = [
     "ApprovalStatus",
     "ApprovalTicketDTO",
     "AssetMatch",
+    "AssetScope",
     "AutoApproveConditions",
     "EventFrame",
     "EventKind",
@@ -45,6 +47,7 @@ __all__ = [
     "ExecutionIntentStatus",
     "ExecutionMode",
     "ExecutionResultDTO",
+    "KillSwitchResult",
     "KillSwitchScope",
     "McpEventName",
     "PolicySnapshotDTO",

@@ -320,7 +320,9 @@ class AsyncControlPlaneFacade:
                 )
                 await uow.commit()
                 return KillResultDTO(
-                    scope=KillSwitchScope.SESSION_ABORT, session_id=str(session_id), tickets_denied=denied
+                    scope=KillSwitchScope.SESSION_ABORT,
+                    session_id=session_id,
+                    tickets_denied=denied,
                 )
 
             if scope == KillSwitchScope.SYSTEM_HALT:

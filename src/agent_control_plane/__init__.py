@@ -109,6 +109,7 @@ from agent_control_plane.types.enums import (
     ApprovalDecisionType,
     ApprovalStatus,
     AssetMatch,
+    AssetScope,
     EventKind,
     ExecutionIntentStatus,
     ExecutionMode,
@@ -133,7 +134,7 @@ from agent_control_plane.types.proposals import (
     ExecutionResultDTO,
     RiskDecisionDTO,
 )
-from agent_control_plane.types.sessions import BudgetInfo, SessionCreate, SessionState, SessionSummary
+from agent_control_plane.types.sessions import BudgetInfo, KillSwitchResult, SessionCreate, SessionState, SessionSummary
 
 __all__ = [
     # Enums
@@ -166,6 +167,7 @@ __all__ = [
     "ApprovalTicketDTO",
     "AssetClassifier",
     "AssetMatch",
+    "AssetScope",
     "AsyncApprovalRepository",
     "AsyncControlPlaneFacade",
     "AsyncEventRepository",
@@ -207,6 +209,7 @@ __all__ = [
     "KillResultDTO",
     "KillSwitch",
     "KillSwitchActiveError",
+    "KillSwitchResult",
     "KillSwitchScope",
     "KillSwitchServices",
     "MappedEventDTO",

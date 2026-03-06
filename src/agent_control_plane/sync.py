@@ -34,8 +34,10 @@ from agent_control_plane.types.sessions import SessionState
 
 class KillResultDTO(BaseModel):
     scope: KillSwitchScope
-    session_id: str | None = None
+    session_id: UUID | None = None
+    agent_id: str | None = None
     sessions_aborted: int | None = None
+    sessions_affected: int | None = None
     tickets_denied: int = 0
 
 
@@ -307,7 +309,7 @@ class SyncControlPlane:
                 uow.commit()
                 return KillResultDTO(
                     scope=KillSwitchScope.SESSION_ABORT,
-                    session_id=str(session_id),
+                    session_id=session_id,
                     tickets_denied=denied,
                 )
 

@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from .enums import EventKind
+from .enums import ActionName, EventKind, parse_action_name
 
 
 class RequestFrame(BaseModel):
@@ -15,10 +15,15 @@ class RequestFrame(BaseModel):
     frame_kind: Literal["request"] = "request"
     request_id: UUID = Field(default_factory=uuid4)
     session_id: UUID
-    action: str
+    action: ActionName
     payload: dict[str, Any] = Field(default_factory=dict)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
     correlation_id: UUID | None = None
+
+    @field_validator("action", mode="before")
+    @classmethod
+    def _parse_action(cls, value: ActionName | str) -> ActionName:
+        return parse_action_name(value)
 
 
 class ResponseFrame(BaseModel):

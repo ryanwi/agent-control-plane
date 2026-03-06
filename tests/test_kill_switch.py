@@ -69,8 +69,8 @@ class TestSessionAbort:
         sid = next(iter(session_repo._sessions.keys()))
         result = await ks.trigger(KillSwitchScope.SESSION_ABORT, session_id=sid, reason="test halt")
 
-        assert result["scope"] == KillSwitchScope.SESSION_ABORT
-        assert result["session_id"] == str(sid)
+        assert result.scope == KillSwitchScope.SESSION_ABORT
+        assert result.session_id == sid
         cs = await session_repo.get_session(sid)
         assert cs.status == SessionStatus.ABORTED
         events = await event_repo.replay(sid)
@@ -84,7 +84,7 @@ class TestBudgetHalt:
         sid = next(iter(session_repo._sessions.keys()))
         result = await ks.trigger(KillSwitchScope.BUDGET_AUTO_HALT, session_id=sid)
 
-        assert result["scope"] == KillSwitchScope.BUDGET_AUTO_HALT
+        assert result.scope == KillSwitchScope.BUDGET_AUTO_HALT
         events = await event_repo.replay(sid)
         assert any(e.event_kind == EventKind.BUDGET_EXHAUSTED for e in events)
 
@@ -100,8 +100,8 @@ class TestSystemHalt:
         )
         result = await ks.trigger(KillSwitchScope.SYSTEM_HALT, reason="emergency")
 
-        assert result["scope"] == KillSwitchScope.SYSTEM_HALT
-        assert result["sessions_aborted"] == 2
+        assert result.scope == KillSwitchScope.SYSTEM_HALT
+        assert result.sessions_aborted == 2
         for cs in session_repo._sessions.values():
             assert cs.status == SessionStatus.ABORTED
 
@@ -112,8 +112,8 @@ class TestAgentAbort:
         ks, _sm, _es, session_repo, _event_repo, *_ = await _make_ks([{"status": SessionStatus.ACTIVE}])
         result = await ks.trigger(KillSwitchScope.AGENT_ABORT, agent_id="agent-1", reason="stop")
 
-        assert result["scope"] == KillSwitchScope.AGENT_ABORT
-        assert result["sessions_affected"] == 1
+        assert result.scope == KillSwitchScope.AGENT_ABORT
+        assert result.sessions_affected == 1
         for cs in session_repo._sessions.values():
             assert cs.status == SessionStatus.PAUSED
 
@@ -122,6 +122,6 @@ class TestAgentAbort:
         ks, _sm, _es, session_repo, _event_repo, *_ = await _make_ks([{"status": SessionStatus.CREATED}])
         result = await ks.trigger(KillSwitchScope.AGENT_ABORT, agent_id="agent-1", reason="stop")
 
-        assert result["sessions_affected"] == 1
+        assert result.sessions_affected == 1
         for cs in session_repo._sessions.values():
             assert cs.status == SessionStatus.CREATED

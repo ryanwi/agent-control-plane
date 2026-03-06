@@ -212,6 +212,12 @@ class AssetMatch(StrEnum):
     UNMATCHED = "unmatched"
 
 
+class AssetScope(StrEnum):
+    """Policy/session asset scope semantics."""
+
+    MATCHED_ONLY = "matched_only"
+
+
 class AgentScope(StrEnum):
     """Logical scopes used in payloads for agent/system timeout controls."""
 
