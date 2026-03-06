@@ -1,5 +1,7 @@
 # agent-control-plane
 
+[![CI](https://github.com/ryanwi/agent-control-plane/actions/workflows/ci.yml/badge.svg)](https://github.com/ryanwi/agent-control-plane/actions/workflows/ci.yml)
+
 Embeddable governance framework for autonomous agent runtimes.
 
 In this library, the **control plane** is the authoritative layer that decides when and how an agent may act.
