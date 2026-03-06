@@ -11,7 +11,13 @@ from agent_control_plane.engine.policy_engine import (
     PolicyEngine,
 )
 from agent_control_plane.engine.router import ProposalRouter
-from agent_control_plane.types.enums import ActionName, ActionTier, ExecutionMode, RiskLevel
+from agent_control_plane.types.enums import (
+    ActionName,
+    ActionTier,
+    ExecutionMode,
+    RiskLevel,
+    RoutingResolutionStep,
+)
 from agent_control_plane.types.policies import PolicySnapshotDTO
 from agent_control_plane.types.proposals import ActionProposalDTO
 
@@ -189,7 +195,7 @@ class TestProposalRouter:
         proposal = _proposal(decision=ActionName.BAN)
         decision = await router.route(proposal)
         assert decision.tier == ActionTier.BLOCKED
-        assert decision.resolution_step == "explicit_assignment"
+        assert decision.resolution_step == RoutingResolutionStep.EXPLICIT_ASSIGNMENT
 
     @pytest.mark.asyncio
     async def test_route_auto_approve(self):
@@ -198,7 +204,7 @@ class TestProposalRouter:
         decision = await router.route(proposal)
         assert decision.tier == ActionTier.AUTO_APPROVE
         assert decision.risk_level == RiskLevel.LOW
-        assert decision.resolution_step == "policy_list_match"
+        assert decision.resolution_step == RoutingResolutionStep.POLICY_LIST_MATCH
 
     @pytest.mark.asyncio
     async def test_route_always_approve_medium(self):

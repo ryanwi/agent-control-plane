@@ -162,7 +162,7 @@ class SecurityAgent:
 
         # 4. Handle based on tier
         if route.tier == ActionTier.ALWAYS_APPROVE or (
-            route.tier == ActionTier.AUTO_APPROVE and route.risk_level.value == "low"
+            route.tier == ActionTier.AUTO_APPROVE and route.risk_level == RiskLevel.LOW
         ):
             # Auto-approvable
             logger.info(f"Action {action_name} auto-approved.")

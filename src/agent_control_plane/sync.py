@@ -4,15 +4,28 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
 from uuid import UUID
 
+from pydantic import BaseModel
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from agent_control_plane.models.reference import Base, register_models
 from agent_control_plane.storage.sqlalchemy_sync import SyncSqlAlchemyUnitOfWork
-from agent_control_plane.types.enums import AbortReason, EventKind, KillSwitchScope, SessionStatus
+from agent_control_plane.types.enums import (
+    AbortReason,
+    EventKind,
+    ExecutionMode,
+    KillSwitchScope,
+    SessionStatus,
+)
+
+
+class KillResultDTO(BaseModel):
+    scope: KillSwitchScope
+    session_id: str | None = None
+    sessions_aborted: int | None = None
+    tickets_denied: int = 0
 
 
 class SyncControlPlane:
@@ -37,7 +50,7 @@ class SyncControlPlane:
         *,
         max_cost: Decimal = Decimal("10000"),
         max_action_count: int = 50,
-        execution_mode: str = "dry_run",
+        execution_mode: ExecutionMode = ExecutionMode.DRY_RUN,
     ) -> UUID:
         with self._session_factory() as db:
             uow = SyncSqlAlchemyUnitOfWork(db)
@@ -77,10 +90,10 @@ class SyncControlPlane:
                 "max_count": info.max_count,
             }
 
-    def kill(self, session_id: UUID, reason: str = "Kill switch triggered") -> dict[str, Any]:
+    def kill(self, session_id: UUID, reason: str = "Kill switch triggered") -> KillResultDTO:
         return self._trigger_kill(KillSwitchScope.SESSION_ABORT, session_id=session_id, reason=reason)
 
-    def kill_all(self, reason: str = "System halt") -> dict[str, Any]:
+    def kill_all(self, reason: str = "System halt") -> KillResultDTO:
         return self._trigger_kill(KillSwitchScope.SYSTEM_HALT, reason=reason)
 
     def _trigger_kill(
@@ -89,7 +102,7 @@ class SyncControlPlane:
         *,
         session_id: UUID | None = None,
         reason: str = "Kill switch triggered",
-    ) -> dict[str, Any]:
+    ) -> KillResultDTO:
         with self._session_factory() as db:
             uow = SyncSqlAlchemyUnitOfWork(db)
 
@@ -112,7 +125,11 @@ class SyncControlPlane:
                     state_bearing=True,
                 )
                 uow.commit()
-                return {"scope": "session_abort", "session_id": str(session_id), "tickets_denied": denied}
+                return KillResultDTO(
+                    scope=KillSwitchScope.SESSION_ABORT,
+                    session_id=str(session_id),
+                    tickets_denied=denied,
+                )
 
             if scope == KillSwitchScope.SYSTEM_HALT:
                 sessions = uow.session_repo.list_sessions(statuses=[SessionStatus.ACTIVE, SessionStatus.CREATED])
@@ -134,10 +151,10 @@ class SyncControlPlane:
                         state_bearing=True,
                     )
                 uow.commit()
-                return {
-                    "scope": "system_halt",
-                    "sessions_aborted": len(sessions),
-                    "tickets_denied": denied_total,
-                }
+                return KillResultDTO(
+                    scope=KillSwitchScope.SYSTEM_HALT,
+                    sessions_aborted=len(sessions),
+                    tickets_denied=denied_total,
+                )
 
             raise ValueError(f"Unsupported kill scope for sync API: {scope}")

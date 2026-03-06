@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from agent_control_plane.types.enums import EventKind
+
 if TYPE_CHECKING:
     from agent_control_plane.storage.protocols import AsyncEventRepository
 
@@ -27,7 +29,7 @@ class EventStore:
     async def append(
         self,
         session_id: UUID,
-        event_kind: str,
+        event_kind: EventKind,
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,

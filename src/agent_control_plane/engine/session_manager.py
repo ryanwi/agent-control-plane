@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from agent_control_plane.types.enums import AbortReason, SessionStatus
+from agent_control_plane.types.enums import AbortReason, ExecutionMode, SessionStatus
 from agent_control_plane.types.sessions import SessionState
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ class SessionManager:
         self,
         *,
         session_name: str,
-        execution_mode: str = "dry_run",
+        execution_mode: ExecutionMode = ExecutionMode.DRY_RUN,
         asset_scope: str | None = None,
         max_cost: Decimal = Decimal("100000"),
         max_action_count: int = 50,
@@ -55,7 +55,7 @@ class SessionManager:
 
     async def list_sessions(
         self,
-        status: str | None = None,
+        status: SessionStatus | None = None,
         limit: int = 50,
     ) -> list[SessionState]:
         """List sessions, optionally filtered by status."""

@@ -59,7 +59,7 @@ from agent_control_plane.storage import (
     SyncSqlAlchemyUnitOfWork,
     SyncUnitOfWork,
 )
-from agent_control_plane.sync import SyncControlPlane
+from agent_control_plane.sync import KillResultDTO, SyncControlPlane
 from agent_control_plane.types.agents import (
     AgentCapability,
     AgentMetadata,
@@ -74,14 +74,17 @@ from agent_control_plane.types.enums import (
     AbortReason,
     ActionName,
     ActionTier,
+    AgentScope,
     ApprovalDecisionType,
     ApprovalStatus,
+    AssetMatch,
     EventKind,
     ExecutionIntentStatus,
     ExecutionMode,
     KillSwitchScope,
     ProposalStatus,
     RiskLevel,
+    RoutingResolutionStep,
     SessionStatus,
 )
 from agent_control_plane.types.frames import EventFrame, RequestFrame, ResponseFrame
@@ -114,6 +117,7 @@ __all__ = [
     "AgentMetadata",
     "AgentRecord",
     "AgentRegistry",
+    "AgentScope",
     # Approval DTOs
     "ApprovalDecisionRequest",
     "ApprovalDecisionType",
@@ -126,6 +130,7 @@ __all__ = [
     "ApprovalTicket",
     "ApprovalTicketDTO",
     "AssetClassifier",
+    "AssetMatch",
     "AsyncApprovalRepository",
     "AsyncEventRepository",
     "AsyncProposalRepository",
@@ -160,6 +165,7 @@ __all__ = [
     "ExecutionIntentStatus",
     "ExecutionMode",
     "ExecutionResultDTO",
+    "KillResultDTO",
     "KillSwitch",
     "KillSwitchScope",
     # Models
@@ -179,6 +185,7 @@ __all__ = [
     "RiskLevel",
     "RiskLimits",
     "RoutingDecision",
+    "RoutingResolutionStep",
     # Session DTOs
     "SessionCreate",
     "SessionManager",

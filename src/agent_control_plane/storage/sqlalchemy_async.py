@@ -17,7 +17,13 @@ from agent_control_plane.engine.budget_tracker import BudgetExhaustedError
 from agent_control_plane.models.registry import ModelRegistry
 from agent_control_plane.types.agents import AgentCapability, AgentMetadata, DelegationProposal
 from agent_control_plane.types.approvals import ApprovalTicketDTO
-from agent_control_plane.types.enums import ApprovalDecisionType, ApprovalStatus, ProposalStatus
+from agent_control_plane.types.enums import (
+    ApprovalDecisionType,
+    ApprovalStatus,
+    EventKind,
+    ProposalStatus,
+    SessionStatus,
+)
 from agent_control_plane.types.frames import EventFrame
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
 
@@ -68,7 +74,7 @@ class AsyncSqlAlchemySessionRepo:
             .values(active_cycle_id=cycle_id, updated_at=datetime.now(UTC))
         )
 
-    async def list_sessions(self, statuses: list[str] | None = None, limit: int = 50) -> list[SessionState]:
+    async def list_sessions(self, statuses: list[SessionStatus] | None = None, limit: int = 50) -> list[SessionState]:
         control_session_model = ModelRegistry.get("ControlSession")
         query = select(control_session_model).order_by(control_session_model.created_at.desc()).limit(limit)
         if statuses:
@@ -155,7 +161,7 @@ class AsyncSqlAlchemyEventRepo:
     async def append(
         self,
         session_id: UUID,
-        event_kind: str,
+        event_kind: EventKind,
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
@@ -362,7 +368,7 @@ class AsyncSqlAlchemyProposalRepo:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def update_status(self, proposal_id: UUID, status: str) -> None:
+    async def update_status(self, proposal_id: UUID, status: ProposalStatus) -> None:
         action_proposal_model = ModelRegistry.get("ActionProposal")
         await self._session.execute(
             update(action_proposal_model).where(action_proposal_model.id == proposal_id).values(status=status)

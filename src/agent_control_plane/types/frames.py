@@ -6,6 +6,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+from .enums import EventKind
+
 
 class RequestFrame(BaseModel):
     """Inbound request envelope."""
@@ -37,7 +39,7 @@ class EventFrame(BaseModel):
     event_id: UUID = Field(default_factory=uuid4)
     session_id: UUID
     seq: int
-    event_kind: str
+    event_kind: EventKind
     agent_id: str | None = None
     correlation_id: UUID | None = None
     payload: dict[str, Any] = Field(default_factory=dict)

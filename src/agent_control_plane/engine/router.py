@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from agent_control_plane.engine.policy_engine import PolicyEngine
-from agent_control_plane.types.enums import ActionTier, RiskLevel
+from agent_control_plane.types.enums import ActionTier, RiskLevel, RoutingResolutionStep
 from agent_control_plane.types.proposals import ActionProposalDTO
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ class RoutingDecision:
     tier: ActionTier
     risk_level: RiskLevel
     reason: str
-    resolution_step: str  # explicit_assignment, risk_tier_match, capability_match, default_agent
+    resolution_step: RoutingResolutionStep
 
 
 class ProposalRouter:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from agent_control_plane.types.enums import ActionName, ActionTier, RiskLevel
+from agent_control_plane.types.enums import ActionName, ActionTier, RiskLevel, RoutingResolutionStep
 from agent_control_plane.types.policies import PolicySnapshotDTO
 from agent_control_plane.types.proposals import ActionProposalDTO
 
@@ -27,7 +27,7 @@ class ActionPolicyHandler(ABC):
         proposal: ActionProposalDTO,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, str]: ...
+    ) -> tuple[str, RoutingResolutionStep]: ...
 
 
 class BlockedActionHandler(ActionPolicyHandler):
@@ -45,8 +45,11 @@ class BlockedActionHandler(ActionPolicyHandler):
         proposal: ActionProposalDTO,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, str]:
-        return (f"Action blocked by policy (resource={proposal.resource_id})", "explicit_assignment")
+    ) -> tuple[str, RoutingResolutionStep]:
+        return (
+            f"Action blocked by policy (resource={proposal.resource_id})",
+            RoutingResolutionStep.EXPLICIT_ASSIGNMENT,
+        )
 
 
 class UnknownActionHandler(BlockedActionHandler):
@@ -55,8 +58,11 @@ class UnknownActionHandler(BlockedActionHandler):
         proposal: ActionProposalDTO,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, str]:
-        return (f"Unknown action blocked by policy (action={proposal.decision.value})", "explicit_assignment")
+    ) -> tuple[str, RoutingResolutionStep]:
+        return (
+            f"Unknown action blocked by policy (action={proposal.decision.value})",
+            RoutingResolutionStep.EXPLICIT_ASSIGNMENT,
+        )
 
 
 class AlwaysApproveActionHandler(ActionPolicyHandler):
@@ -74,8 +80,11 @@ class AlwaysApproveActionHandler(ActionPolicyHandler):
         proposal: ActionProposalDTO,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, str]:
-        return (f"{risk_level.value.upper()} risk requires human approval", "policy_list_match")
+    ) -> tuple[str, RoutingResolutionStep]:
+        return (
+            f"{risk_level.value.upper()} risk requires human approval",
+            RoutingResolutionStep.POLICY_LIST_MATCH,
+        )
 
 
 class AutoApproveActionHandler(ActionPolicyHandler):
@@ -93,13 +102,16 @@ class AutoApproveActionHandler(ActionPolicyHandler):
         proposal: ActionProposalDTO,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, RoutingResolutionStep]:
         if tier == ActionTier.AUTO_APPROVE:
             return (
                 f"Policy list auto-approve (score={proposal.score}, weight={proposal.weight})",
-                "policy_list_match",
+                RoutingResolutionStep.POLICY_LIST_MATCH,
             )
-        return ("Auto-approve disabled by policy constraints; requires human approval", "policy_list_match")
+        return (
+            "Auto-approve disabled by policy constraints; requires human approval",
+            RoutingResolutionStep.POLICY_LIST_MATCH,
+        )
 
 
 class DefaultRiskBasedHandler(ActionPolicyHandler):
@@ -119,10 +131,16 @@ class DefaultRiskBasedHandler(ActionPolicyHandler):
         proposal: ActionProposalDTO,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, RoutingResolutionStep]:
         if tier == ActionTier.AUTO_APPROVE:
-            return (f"LOW risk auto-approve (score={proposal.score}, weight={proposal.weight})", "risk_tier_match")
-        return (f"{risk_level.value.upper()} risk requires human approval", "risk_tier_match")
+            return (
+                f"LOW risk auto-approve (score={proposal.score}, weight={proposal.weight})",
+                RoutingResolutionStep.RISK_TIER_MATCH,
+            )
+        return (
+            f"{risk_level.value.upper()} risk requires human approval",
+            RoutingResolutionStep.RISK_TIER_MATCH,
+        )
 
 
 class ActionPolicyRegistry:

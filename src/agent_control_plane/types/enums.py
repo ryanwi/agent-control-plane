@@ -12,6 +12,16 @@ class ActionTier(StrEnum):
     UNRESTRICTED = "unrestricted"
 
 
+class RoutingResolutionStep(StrEnum):
+    """Deterministic routing resolution steps for auditability."""
+
+    EXPLICIT_ASSIGNMENT = "explicit_assignment"
+    POLICY_LIST_MATCH = "policy_list_match"
+    RISK_TIER_MATCH = "risk_tier_match"
+    CAPABILITY_MATCH = "capability_match"
+    DEFAULT_AGENT = "default_agent"
+
+
 class ActionName(StrEnum):
     """Canonical action identifiers."""
 
@@ -163,3 +173,18 @@ class ExecutionIntentStatus(StrEnum):
     FILLED = "filled"
     REJECTED = "rejected"
     CANCELLED = "cancelled"
+
+
+class AssetMatch(StrEnum):
+    """Asset-classifier match outcomes."""
+
+    MATCHED = "matched"
+    UNMATCHED = "unmatched"
+
+
+class AgentScope(StrEnum):
+    """Logical scopes used in payloads for agent/system timeout controls."""
+
+    AGENT_ABORT = "agent_abort"
+    SYSTEM_HALT = "system_halt"
+    AGENT_TIMEOUT = "agent_timeout"

@@ -5,7 +5,14 @@ from decimal import Decimal
 from typing import Protocol
 
 from agent_control_plane.engine.action_policy import ActionPolicyHandler, ActionPolicyRegistry
-from agent_control_plane.types.enums import ActionName, ActionTier, ExecutionMode, RiskLevel
+from agent_control_plane.types.enums import (
+    ActionName,
+    ActionTier,
+    AssetMatch,
+    ExecutionMode,
+    RiskLevel,
+    RoutingResolutionStep,
+)
 from agent_control_plane.types.policies import PolicySnapshotDTO
 from agent_control_plane.types.proposals import ActionProposalDTO
 
@@ -15,7 +22,7 @@ logger = logging.getLogger(__name__)
 class AssetClassifier(Protocol):
     """Protocol for classifying assets by resource ID."""
 
-    def classify(self, resource_id: str) -> str: ...
+    def classify(self, resource_id: str) -> AssetMatch: ...
 
 
 class RiskClassifier(Protocol):
@@ -34,11 +41,11 @@ class DefaultAssetClassifier:
     def __init__(self, patterns: frozenset[str] | None = None) -> None:
         self._patterns = patterns or frozenset()
 
-    def classify(self, resource_id: str) -> str:
+    def classify(self, resource_id: str) -> AssetMatch:
         upper = resource_id.upper()
         if any(p in upper for p in self._patterns):
-            return "matched"
-        return "unmatched"
+            return AssetMatch.MATCHED
+        return AssetMatch.UNMATCHED
 
 
 class DefaultRiskClassifier:
@@ -69,7 +76,7 @@ class DefaultRiskClassifier:
     def _is_matched_asset(self, resource_id: str) -> bool:
         if self._asset_classifier is None:
             return True
-        return self._asset_classifier.classify(resource_id) == "matched"
+        return self._asset_classifier.classify(resource_id) == AssetMatch.MATCHED
 
 
 class PolicyEngine:
@@ -140,12 +147,12 @@ class PolicyEngine:
         proposal: ActionProposalDTO,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, str]:
+    ) -> tuple[str, RoutingResolutionStep]:
         """Build routing reason + resolution step via polymorphic handlers."""
         if not self._passes_asset_scope(proposal):
             return (
                 f"Action blocked by asset scope (resource={proposal.resource_id}, scope={self.policy.asset_scope})",
-                "capability_match",
+                RoutingResolutionStep.CAPABILITY_MATCH,
             )
         handler = self.get_action_handler(proposal)
         return handler.build_routing_reason(proposal, risk_level, tier)
@@ -181,4 +188,4 @@ class PolicyEngine:
         """Check if a resource matches the configured asset classifier."""
         if self._asset_classifier is None:
             return True
-        return self._asset_classifier.classify(resource_id) == "matched"
+        return self._asset_classifier.classify(resource_id) == AssetMatch.MATCHED

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from agent_control_plane.engine.event_store import EventStore
 from agent_control_plane.engine.session_manager import SessionManager
-from agent_control_plane.types.enums import EventKind, SessionStatus
+from agent_control_plane.types.enums import AgentScope, EventKind, SessionStatus
 from agent_control_plane.types.sessions import SessionState
 
 if TYPE_CHECKING:
@@ -79,7 +79,7 @@ class TimeoutEscalation:
                 session_id=cs.id,
                 event_kind=EventKind.KILL_SWITCH_TRIGGERED,
                 payload={
-                    "scope": "agent_timeout",
+                    "scope": AgentScope.AGENT_TIMEOUT,
                     "cycle_id": str(cycle_id) if cycle_id else None,
                     "details": details,
                 },
