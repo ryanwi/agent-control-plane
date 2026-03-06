@@ -4,7 +4,7 @@ This file provides foundational context and mandates for Gemini CLI when working
 
 ## Project Overview
 
-`agent-control-plane` is an embeddable governance framework for autonomous agent runtimes. It establishes a clear separation between the **control plane** (decision governance) and the **data plane** (execution of side effects).
+`agent-control-plane` is an embeddable, self-hosted governance framework for autonomous agent runtimes. It establishes a clear separation between the **control plane** (decision governance) and the **data plane** (execution of side effects).
 
 ### Core Mission
 - **Deterministic Governance:** Enforce policies before agent execution.
@@ -14,7 +14,7 @@ This file provides foundational context and mandates for Gemini CLI when working
 
 ### Key Technologies
 - **Language:** Python 3.11+
-- **Database/ORM:** SQLAlchemy 2.0+ (Async)
+- **Database/ORM:** SQLAlchemy 2.0+ (Async and Sync adapters)
 - **Validation:** Pydantic 2.0+
 - **Tooling:** `uv` (package management), `ruff` (linting/formatting), `mypy` (type checking), `pytest` (testing).
 
@@ -22,7 +22,7 @@ This file provides foundational context and mandates for Gemini CLI when working
 
 The source code is located in `src/agent_control_plane/` and organized into logical layers:
 
-- **`engine/`**: Core governance engines. Each engine is a standalone class that takes an `AsyncSession` for DB operations.
+- **`engine/`**: Core governance engines operating on storage protocols (not tied directly to DB session type).
   - `policy_engine.py`: Risk classification via pluggable `RiskClassifier` protocols.
   - `router.py`: Produces deterministic `RoutingDecision` from policy engine output.
   - `approval_gate.py`: Ticket lifecycle, scoped session approvals, and expiry.
@@ -39,7 +39,8 @@ The source code is located in `src/agent_control_plane/` and organized into logi
 
 ### Key Design Patterns
 - **ModelRegistry:** Engines resolve ORM models at runtime via `ModelRegistry.get("ModelName")`. Host applications must register their concrete models at startup.
-- **Async Execution:** All database operations utilize SQLAlchemy's `AsyncSession`. Engines do not manage transactions; the caller is responsible for `commit()`.
+- **Storage Abstraction:** Engines depend on repository protocols from `storage/protocols.py`; SQLAlchemy async/sync backends implement those protocols.
+- **Transaction Ownership:** Engines do not manage transactions; the caller is responsible for `commit()`.
 - **Centralized API:** The public API is strictly exported via `src/agent_control_plane/__init__.py`.
 
 ## Reference Examples
@@ -54,20 +55,22 @@ Always use `uv run` to ensure the correct environment and dependencies are used.
 
 - **Setup & Sync:** `uv sync --extra dev`
 - **Testing:** `uv run pytest -q` (or `make test`)
-- **Linting:** `uv run ruff check src tests`
-- **Formatting:** `uv run ruff format src tests`
+- **Linting:** `uv run ruff check src tests examples`
+- **Formatting:** `uv run ruff format src tests examples`
 - **Type Checking:** `uv run mypy src`
+- **Docs Drift:** `make docs-drift`
 - **Full Check:** `make check` (Lint + Type Check + Test)
 
 ## Verification Checklist
 
 Before considering a task complete, ensure the following steps are performed:
 
-1. [ ] **Linting:** Run `uv run ruff check src tests` and fix all issues.
-2. [ ] **Formatting:** Run `uv run ruff format src tests`.
-3. [ ] **Type Checking:** Run `uv run mypy src` and ensure it passes strictly.
-4. [ ] **Tests:** Run `uv run pytest -q` and ensure all tests pass.
-5. [ ] **New Tests:** Add a new test case to verify any bug fixes or new features.
+1. [ ] **Docs Drift:** Run `make docs-drift`.
+2. [ ] **Linting:** Run `uv run ruff check src tests examples` and fix all issues.
+3. [ ] **Formatting:** Run `uv run ruff format src tests examples`.
+4. [ ] **Type Checking:** Run `uv run mypy src` and ensure it passes strictly.
+5. [ ] **Tests:** Run `uv run pytest -q` and ensure all tests pass.
+6. [ ] **New Tests:** Add a new test case to verify any bug fixes or new features.
 
 ## Implementation Mandates
 
@@ -81,4 +84,4 @@ Before considering a task complete, ensure the following steps are performed:
 - **Surgical Changes:** Focus on the requested task. Avoid unrelated refactoring.
 - **Test-Driven:** Always verify bug fixes with a reproduction test case.
 - **Public API:** If adding new functionality, ensure it is properly exported in `src/agent_control_plane/__init__.py`.
-- **Documentation:** Refer to `docs/` for deep dives on architecture, security, and operations.
+- **Documentation:** Refer to `docs/architecture.md`, `docs/security_model.md`, `docs/integration_identity.md`, and `docs/operations_runbook.md`.

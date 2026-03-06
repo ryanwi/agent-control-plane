@@ -9,12 +9,13 @@ uv sync --extra dev          # Install dependencies
 uv run pytest -q             # Run all tests
 uv run pytest tests/<file> -q  # Run single test file
 uv run pytest -k "test_name" # Run single test by name
+make docs-drift              # Validate instruction/docs alignment
 make check                   # Lint + typecheck + test (all at once)
 ```
 
 ## Architecture
 
-Embeddable governance framework for autonomous agent runtimes. Separates **control plane** (policy, approvals, budgets, kill switches) from **data plane** (actual execution of side effects). See `docs/architecture.md` for full design rationale.
+Embeddable, self-hosted governance framework for autonomous agent runtimes. Separates **control plane** (policy, approvals, budgets, kill switches) from **data plane** (actual execution of side effects). See `docs/architecture.md` for full design rationale.
 
 ### Source layout: `src/agent_control_plane/`
 

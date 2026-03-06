@@ -21,6 +21,7 @@ This repository is the standalone `agent-control-plane` package:
 
 ```bash
 uv sync --extra dev
+make docs-drift
 make check
 ```
 
@@ -30,6 +31,7 @@ Use the `Makefile` targets so commands always run in the project-managed `uv` en
 
 ```bash
 make sync
+make docs-drift
 make test
 make lint
 make format
