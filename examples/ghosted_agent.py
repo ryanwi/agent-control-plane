@@ -118,8 +118,8 @@ async def main():
         logger.info(f"  Expired {expired_count} ticket(s).")
 
         # Verify ticket state
-        ApprovalTicket = ModelRegistry.get("ApprovalTicket")
-        result = await uow._session.execute(select(ApprovalTicket).where(ApprovalTicket.id == ticket.id))
+        approval_ticket_model = ModelRegistry.get("ApprovalTicket")
+        result = await uow._session.execute(select(approval_ticket_model).where(approval_ticket_model.id == ticket.id))
         updated_ticket = result.scalar_one()
         if updated_ticket.status == "expired":
             logger.info(f"  Status: SUCCESS (Ticket {ticket.id} correctly marked EXPIRED).")
