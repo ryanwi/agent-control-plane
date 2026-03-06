@@ -22,19 +22,19 @@ required_docs=(
 
 for f in "${files[@]}"; do
   for d in "${required_docs[@]}"; do
-    if ! rg -q "$d" "$f"; then
+    if ! grep -Fq "$d" "$f"; then
       echo "docs-drift: $f missing reference to $d" >&2
       exit 1
     fi
   done
 done
 
-if ! rg -qi "embedded.*self-hosted|self-hosted.*embedded" AGENTS.md CLAUDE.md GEMINI.md; then
+if ! grep -Eqi "embedded.*self-hosted|self-hosted.*embedded" AGENTS.md CLAUDE.md GEMINI.md; then
   echo "docs-drift: expected embedded/self-hosted positioning in agent instruction docs" >&2
   exit 1
 fi
 
-if rg -q "takes an AsyncSession|All DB operations use AsyncSession|SQLAlchemy 2.0\+ \(Async\)$" CLAUDE.md GEMINI.md; then
+if grep -Eq "takes an AsyncSession|All DB operations use AsyncSession|SQLAlchemy 2.0\+ \(Async\)$" CLAUDE.md GEMINI.md; then
   echo "docs-drift: async-only language detected in CLAUDE.md or GEMINI.md" >&2
   exit 1
 fi
