@@ -6,8 +6,8 @@
 
 - Generalized concurrency conflict handling terminology from trading-specific naming:
   - Added `ResourceLockedError` as the canonical conflict error.
-  - Kept `InstrumentLockedError` as a backward-compatible alias (deprecated by naming in favor of resource terminology).
-- Added `ConcurrencyGuard.check_resource_lock(...)` and kept `check_instrument_lock(...)` as a compatibility wrapper.
+  - Kept `InstrumentLockedError` as an alias for users preferring the legacy naming.
+- Added `ConcurrencyGuard.check_resource_lock(...)` and kept `check_instrument_lock(...)` as a first-release alias.
 - Updated default `ActionTiers.always_approve` entries to be non-domain-specific (`workflow_transition`, `config_update`).
 
 ## [0.1.0] - 2026-03-05

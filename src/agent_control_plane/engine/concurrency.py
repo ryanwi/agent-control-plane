@@ -1,7 +1,6 @@
 """Concurrency enforcement for control plane operations."""
 
 import logging
-import warnings
 from typing import Any
 from uuid import UUID
 
@@ -77,13 +76,8 @@ class ConcurrencyGuard:
         """Check if there's a pending approval for the same resource.
 
         Raises InstrumentLockedError if a conflicting proposal exists.
-        Accepts both resource_id (generic) and security_id (backward compat).
+        Accepts both resource_id (generic) and security_id (legacy naming support).
         """
-        warnings.warn(
-            "check_instrument_lock is deprecated; use check_resource_lock",
-            DeprecationWarning,
-            stacklevel=2,
-        )
         await self.check_resource_lock(
             session=session,
             session_id=session_id,

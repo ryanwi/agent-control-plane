@@ -135,8 +135,6 @@ Recommended pre-release validation:
 6. Publish checklist:
    - Validate `uv`/pip install from sdist and wheel.
    - Validate import path from installed package.
-7. Governance metadata:
-   - Add upgrade notes and deprecation policy before v0.2.
 
 ## 10) Operational gotchas and anti-patterns
 
