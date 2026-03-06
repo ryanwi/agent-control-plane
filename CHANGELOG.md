@@ -4,6 +4,12 @@
 
 - No unreleased changes.
 
+## [0.1.2] - 2026-03-05
+
+### Added
+
+- `examples/sync_adapter.py`: sync wrapper for calling the async control plane from synchronous code. Demonstrates `SyncControlPlane` class with background event loop, own SQLite database, and sync methods for `BudgetTracker` and `KillSwitch`.
+
 ## [0.1.1] - 2026-03-05
 
 ### Added
