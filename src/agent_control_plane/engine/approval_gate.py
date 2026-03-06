@@ -16,7 +16,6 @@ from agent_control_plane.types.enums import (
     ApprovalStatus,
     EventKind,
     ProposalStatus,
-    RiskLevel,
 )
 
 logger = logging.getLogger(__name__)
@@ -203,16 +202,13 @@ class ApprovalGate:
         db_session: AsyncSession,
         session_id: UUID,
         resource_id: str,
-        risk_level: RiskLevel = RiskLevel.MEDIUM,
         cost: Decimal = Decimal("0"),
     ) -> Any | None:
         """Check if an existing allow_for_session scope covers this proposal.
 
         Returns the matching ticket if scope applies, None otherwise.
         Critically: scope waives the human click, NOT the policy/risk checks.
-        Note: risk_level is accepted for API compatibility and future policy hooks.
         """
-        _ = risk_level
         ApprovalTicket = ModelRegistry.get("ApprovalTicket")
         is_sqlalchemy_model = hasattr(ApprovalTicket, "__table__") or hasattr(ApprovalTicket, "__mapper__")
 

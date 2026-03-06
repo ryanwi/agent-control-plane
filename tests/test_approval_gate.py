@@ -6,7 +6,7 @@ import pytest
 from agent_control_plane.engine.approval_gate import ApprovalGate
 from agent_control_plane.engine.event_store import EventStore
 from agent_control_plane.models.registry import ModelRegistry
-from agent_control_plane.types.enums import ApprovalDecisionType, ApprovalStatus, RiskLevel
+from agent_control_plane.types.enums import ApprovalDecisionType, ApprovalStatus
 
 
 class _FakeTicket:
@@ -88,7 +88,6 @@ async def test_check_session_scope_consumes_scope_count():
         session,
         session_id=session_id,
         resource_id="res-001",
-        risk_level=RiskLevel.MEDIUM,
         cost=Decimal("10"),
     )
 
@@ -116,7 +115,6 @@ async def test_check_session_scope_blocks_when_count_is_exhausted():
         session,
         session_id=session_id,
         resource_id="res-001",
-        risk_level=RiskLevel.MEDIUM,
         cost=Decimal("10"),
     )
 
