@@ -305,11 +305,13 @@ class AsyncSqlAlchemyApprovalRepo:
 
     async def expire_timed_out(self) -> list[ApprovalTicketDTO]:
         ApprovalTicket = ModelRegistry.get("ApprovalTicket")
+        from sqlalchemy.sql import func
+
         now = datetime.now(UTC)
         result = await self._session.execute(
             select(ApprovalTicket).where(
                 ApprovalTicket.status == ApprovalStatus.PENDING,
-                ApprovalTicket.timeout_at <= now,
+                ApprovalTicket.timeout_at <= func.now(),
             )
         )
         tickets = list(result.scalars().all())
