@@ -4,11 +4,23 @@
 
 ### Changed
 
-- Generalized concurrency conflict handling terminology from trading-specific naming:
-  - Added `ResourceLockedError` as the canonical conflict error.
-  - Kept `InstrumentLockedError` as an alias for users preferring the legacy naming.
-- Added `ConcurrencyGuard.check_resource_lock(...)` and kept `check_instrument_lock(...)` as a first-release alias.
-- Updated default `ActionTiers.always_approve` entries to be non-domain-specific (`workflow_transition`, `config_update`).
+- **Breaking:** Generalized domain-specific naming to be domain-agnostic:
+  - Renamed budget fields: `notional`/`max_notional`/`used_notional` → `cost`/`max_cost`/`used_cost` across DTOs, mixins, and engines.
+  - Renamed proposal fields: `allocation_pct` → `weight`, `confidence` → `score`. Both are now optional (default `0`).
+  - Removed `time_horizon`, `max_allocation`, `max_concentration_pct`, `max_single_allocation_pct` fields.
+  - Renamed `ExecutionIntentDTO.quantity` → `parameters` (dict).
+  - Removed `scope_symbols` and `security_id` backward-compat shims; use `resource_id` and `scope_resource_ids` only.
+  - Removed `InstrumentLockedError` alias and `check_instrument_lock()`; use `ResourceLockedError` and `check_resource_lock()`.
+  - Emptied `ActionTiers` defaults — users define their own tier lists.
+- Added pluggable `RiskClassifier` protocol and `DefaultRiskClassifier` to `PolicyEngine`, replacing hardcoded allocation/confidence thresholds.
+- Clarified persistence contract: v0.1 remains SQLAlchemy-first with durable, transaction-backed state.
+  - Added architecture/readme notes and planned adapter path for future pluggable backends.
+
+### Added
+
+- `RiskClassifier` protocol for domain-specific risk classification.
+- `DefaultRiskClassifier` using generic `weight`/`score` thresholds.
+- `examples/quickstart.py` with a runnable, dependency-light SQLite walkthrough of a proposal through policy, approval, budget, concurrency, and event persistence flows.
 
 ## [0.1.0] - 2026-03-05
 

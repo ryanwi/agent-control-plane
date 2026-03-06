@@ -4,6 +4,21 @@
 
 This package separates *decision governance* from *execution*.
 
+It is intentionally designed as a reusable control-plane building block for:
+
+- agent harnesses that coordinate multiple LLM/tool loops,
+- workflows with human-in-the-loop approvals,
+- systems needing policy/risk gating before side effects.
+
+It is intended to be embedded into application runtimes (not replace the execution framework itself).
+
+Typical production fits:
+
+- Agent teams that need explicit governance for autonomous support, operations, or incident-response agents.
+- Multi-agent research and analysis pipelines requiring routing, scoped approvals, and recovery semantics.
+- CI/CD and infrastructure automation where policy/risk checks and kill-switches are mandatory.
+- Workflow systems that need auditable, resumable execution decisions (not just prompt chaining).
+
 - **Control plane**: classify proposals, enforce policy and budgets, route to agents, arbitrate approvals, and persist authoritative events.
 - **Execution plane**: carry out side effects (agent actions, tool calls, service writes, notifications, etc.).
 
@@ -84,11 +99,31 @@ sequenceDiagram
 4. Route long-running work through one control-plane entrypoint per proposal.
 5. Drive restart behavior through recovery runners before normal operation resumes.
 
+## 5b) Persistence coupling and abstraction roadmap
+
+Current design assumptions (v0.1):
+
+- Transactions and row-locking semantics are required for correctness in:
+  - active-cycle lock transitions,
+  - budget increment checks,
+  - session-scoped scope consumption,
+  - and event sequence allocation/replay.
+- `ModelRegistry` + `Session`-centric APIs are the concrete integration boundary for this release.
+
+Proposed v0.2 decoupling path:
+
+1. Extract narrow storage protocols (session/proposal/approval/event interfaces).
+2. Move SQLAlchemy-specific model code into an adapter package (`adapters/sqlalchemy`).
+3. Provide optional non-SQL backends using an optimistic-increment strategy where row locking is unavailable.
+4. Keep durable audit semantics mandatory, even when implementation changes.
+
+This means the package remains usable for any domain; only the storage runtime is abstracted by adapter.
+
 ## 6) Suggested extension points
 
 - Replace asset policy checks with a custom classifier while keeping proposal fields unchanged.
 - Add new `ActionTier` and `RiskLevel` mappings as your domain adds higher granularity risk controls.
-- Customize approval scope semantics (symbol/resource/region/project) using existing scoped ticket fields.
+- Customize approval scope semantics (resource/region/project/team) using existing scoped ticket fields.
 
 ## 7) Open-source framing
 
@@ -100,13 +135,18 @@ This package is narrower and production-oriented:
 
 Use it where correctness and operational safety matter as much as throughput.
 
+The intended fit is:
+
+- **High-confidence, low-latency demo agents:** optional and often overkill.
+- **Production orchestration runtimes:** recommended; this package becomes the governance rail between intention and side effects.
+
 ## 8) Public API surface (stable exports)
 
 Exports are centralized through [agent_control_plane/__init__.py](../src/agent_control_plane/__init__.py). Use that as the canonical import surface.
 
 | Module | Public symbols | Stability contract |
 | --- | --- | --- |
-| `agent_control_plane` | `PolicyEngine`, `ProposalRouter`, `ApprovalGate`, `BudgetTracker`, `ConcurrencyGuard`, `KillSwitch`, `EventStore`, `SessionManager`, `CrashRecovery`, `TimeoutEscalation`, `ModelRegistry` | Core control-plane entry points for orchestration and recovery. |
+| `agent_control_plane` | `PolicyEngine`, `ProposalRouter`, `ApprovalGate`, `BudgetTracker`, `ConcurrencyGuard`, `KillSwitch`, `EventStore`, `SessionManager`, `CrashRecovery`, `TimeoutEscalation`, `ModelRegistry`, `RiskClassifier`, `DefaultRiskClassifier` | Core control-plane entry points for orchestration and recovery. |
 | `agent_control_plane` | `ActionTier`, `RiskLevel`, `ApprovalStatus`, `ApprovalDecisionType`, `ProposalStatus`, `SessionStatus`, `EventKind`, `ExecutionMode`, `AbortReason`, `KillSwitchScope` | Enumerations used by all engines; considered stable between minor releases. |
 | `agent_control_plane` | `ActionProposalDTO`, `SessionCreate`, `SessionSummary`, `PolicySnapshotDTO`, `ApprovalScopeDTO`, `ApprovalTicketDTO`, `RequestFrame`, `EventFrame`, `ResponseFrame` | DTOs are semantically stable; add optional fields in minor releases only. |
 | `agent_control_plane.models` | `ModelRegistry`, `ControlSessionMixin`, `ControlEventMixin`, `ApprovalTicketMixin`, `PolicySnapshotMixin` | Intended for embedding into host SQLAlchemy models and runtime bootstrapping. |
