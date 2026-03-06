@@ -27,6 +27,22 @@ Who this is less useful for:
 - Single-agent demos that do not execute side effects.
 - Projects that only need lightweight prompt tooling without approval, policy, or budget constraints.
 
+### Hosted control planes vs this embedded library
+
+This project is for teams that need governance controls without adopting external control-plane infrastructure.
+
+| Dimension | Hosted/SaaS control plane | `agent-control-plane` |
+| --- | --- | --- |
+| Deployment model | Vendor-managed platform | Embedded library in your runtime |
+| Infra ownership | External control plane | Your service/process/database |
+| Data residency/control | Vendor-dependent | Stays in your environment |
+| Integration style | Platform adoption | Code-level integration |
+| Governance primitives | Product-dependent | Policy, approvals, budget, kill switch, audit replay |
+
+Best fit:
+- Platform teams embedding governance into existing services and orchestration loops.
+- Teams requiring strong operational controls while keeping infra and data boundaries internal.
+
 ## Adoption examples (non-trading)
 
 - **Support automation with approvals:** route support tasks to agents, but require approval before account changes or refunds.
@@ -113,6 +129,21 @@ flowchart LR
 - Non-state-bearing telemetry events are buffered when persistence is unavailable.
 - Kill switch and crash recovery paths are designed to resolve control locks deterministically.
 - Timeout recovery emits escalation events and can pause sessions to prevent runaway execution.
+
+## Identity and Zero Trust guidance
+
+Identity enforcement should happen at your application boundary; governance is then enforced inside the control plane.
+
+- Authenticate callers at the app edge (OIDC/JWT/service identity).
+- Authorize allowed operations before constructing control-plane proposals.
+- Pass normalized caller/agent identity as `agent_id` on proposals/events.
+- Use `UnknownAppEventPolicy.RAISE` for fail-closed event-name handling.
+- Use `state_bearing=True` for critical state transitions that must not be dropped.
+
+Related references:
+- [Security model](docs/security_model.md)
+- [Identity integration guide](docs/integration_identity.md)
+- [Operations runbook](docs/operations_runbook.md)
 
 ## Installation in host application
 

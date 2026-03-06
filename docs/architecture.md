@@ -12,6 +12,14 @@ It is intentionally designed as a reusable control-plane building block for:
 
 It is intended to be embedded into application runtimes (not replace the execution framework itself).
 
+### Deployment posture
+
+This package is intentionally **embedded/self-hosted** rather than a hosted control-plane platform:
+
+- no required external control-plane SaaS,
+- no vendor-owned control-plane data path,
+- governance logic runs inside your application/runtime boundary.
+
 Typical production fits:
 
 - Agent teams that need explicit governance for autonomous support, operations, or incident-response agents.
@@ -95,6 +103,29 @@ sequenceDiagram
 - **Recovery-ready**: crash and timeout pathways can release stale locks and continue gracefully.
 - **Human override paths**: approvals and kill switches remain explicit, configurable, and logged.
 
+## 4b) Identity boundary and Zero Trust model
+
+Identity/authentication is enforced at the host application boundary. The control plane consumes normalized identity context.
+
+- App boundary responsibilities:
+  - caller authentication (OIDC/JWT/service identity)
+  - authorization policy checks
+  - mapping caller principal -> `agent_id` and request metadata
+- Control-plane responsibilities:
+  - policy/risk classification
+  - approval/budget/kill-switch governance
+  - auditable event persistence and replay
+
+This keeps authn/authz concerns and governance concerns separate while preserving traceability.
+
+## 4c) Control objectives
+
+- Prevent unauthorized or unsafe side effects before execution.
+- Require explicit approvals for high-impact actions.
+- Enforce hard budget ceilings on cost/action volume.
+- Provide emergency stop semantics with clear scope.
+- Preserve replayable audit records for investigations and postmortems.
+
 ## 5) Integration contracts
 
 1. Register model classes with `ModelRegistry` at startup.
@@ -137,6 +168,12 @@ The intended fit is:
 
 - **High-confidence, low-latency demo agents:** optional and often overkill.
 - **Production orchestration runtimes:** recommended; this package becomes the governance rail between intention and side effects.
+
+## 7b) Known non-goals
+
+- Not a hosted control-plane SaaS.
+- Not an IAM/identity provider replacement.
+- Not a full deployment/orchestration platform for model rollout management.
 
 ## 8) Public API surface (stable exports)
 

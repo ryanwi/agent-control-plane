@@ -4,6 +4,25 @@
 
 - No unreleased changes.
 
+## [0.5.1] - 2026-03-06
+
+### Added
+
+- New security and operations documentation:
+  - `docs/security_model.md`
+  - `docs/operations_runbook.md`
+  - `docs/integration_identity.md`
+
+### Changed
+
+- README positioning now explicitly differentiates embedded/self-hosted usage from hosted control-plane platforms.
+- README now includes an identity/zero-trust integration section and links to operator/security docs.
+- Architecture docs now include:
+  - embedded deployment posture
+  - identity boundary guidance
+  - control objectives
+  - explicit non-goals
+
 ## [0.5.0] - 2026-03-06
 
 ### Added
