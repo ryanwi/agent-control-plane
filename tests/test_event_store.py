@@ -1,31 +1,21 @@
+"""Tests for EventStore buffering and fail-closed behavior."""
+
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.exc import OperationalError
 
 from agent_control_plane.engine.event_store import EventStore
 
-
-class _FlakySession:
-    def add(self, *_args, **_kwargs):
-        raise AssertionError("add() must not be called when _allocate_seq fails")
-
-    async def flush(self):
-        raise AssertionError("flush() must not be called when _allocate_seq fails")
+from .fakes import InMemoryEventRepository
 
 
 @pytest.mark.asyncio
-async def test_append_buffers_telemetry_events_when_non_state_bearing_failures_occur(monkeypatch):
-    store = EventStore()
-
-    async def _allocate_seq(*_args, **_kwargs):
-        raise OperationalError("INSERT", {}, Exception("db unavailable"))
-
-    monkeypatch.setattr(store, "_allocate_seq", _allocate_seq)
+async def test_append_buffers_telemetry_events_when_non_state_bearing_failures_occur():
+    repo = InMemoryEventRepository(fail=True)
+    store = EventStore(repo)
 
     session_id = uuid4()
     result = await store.append(
-        _FlakySession(),
         session_id=session_id,
         event_kind="cycle_started",
         payload={"source": "test"},
@@ -39,19 +29,35 @@ async def test_append_buffers_telemetry_events_when_non_state_bearing_failures_o
 
 
 @pytest.mark.asyncio
-async def test_append_raises_for_state_bearing_failures(monkeypatch):
-    store = EventStore()
+async def test_append_raises_for_state_bearing_failures():
+    repo = InMemoryEventRepository(fail=True)
+    store = EventStore(repo)
 
-    async def _allocate_seq(*_args, **_kwargs):
-        raise OperationalError("INSERT", {}, Exception("db unavailable"))
-
-    monkeypatch.setattr(store, "_allocate_seq", _allocate_seq)
-
-    with pytest.raises(OperationalError):
+    with pytest.raises(RuntimeError):
         await store.append(
-            _FlakySession(),
             session_id=uuid4(),
             event_kind="cycle_started",
             payload={},
             state_bearing=True,
         )
+
+
+@pytest.mark.asyncio
+async def test_append_returns_seq_on_success():
+    repo = InMemoryEventRepository()
+    store = EventStore(repo)
+    session_id = uuid4()
+
+    seq = await store.append(
+        session_id=session_id,
+        event_kind="cycle_started",
+        payload={"test": True},
+    )
+    assert seq == 1
+
+    seq2 = await store.append(
+        session_id=session_id,
+        event_kind="cycle_completed",
+        payload={},
+    )
+    assert seq2 == 2

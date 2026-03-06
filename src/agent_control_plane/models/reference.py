@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
-from sqlalchemy import DECIMAL, ForeignKey
+from sqlalchemy import ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql.sqltypes import Uuid
 
@@ -46,39 +46,29 @@ class SessionSeqCounter(Base, SessionSeqCounterMixin):
     __tablename__ = "session_seq_counters"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False
-    )
+    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
 
 
 class ControlEvent(Base, ControlEventMixin):
     __tablename__ = "control_events"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False
-    )
+    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
 
 
 class ActionProposal(Base, ActionProposalMixin):
     __tablename__ = "action_proposals"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False
-    )
+    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
 
 
 class ApprovalTicket(Base, ApprovalTicketMixin):
     __tablename__ = "approval_tickets"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False
-    )
-    proposal_id: Mapped[UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("action_proposals.id"), nullable=False
-    )
+    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
+    proposal_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("action_proposals.id"), nullable=False)
 
 
 def register_models() -> None:

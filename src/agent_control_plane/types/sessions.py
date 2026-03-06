@@ -28,7 +28,7 @@ class SessionState(BaseModel):
     session_name: str
     status: SessionStatus
     execution_mode: ExecutionMode
-    asset_scope: str | None
+    asset_scope: str | None = None
 
     # Budget
     max_cost: Decimal
@@ -47,6 +47,17 @@ class SessionState(BaseModel):
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime | None = None
+
+
+class BudgetInfo(BaseModel):
+    """Budget status for a control session."""
+
+    remaining_cost: Decimal
+    remaining_count: int
+    used_cost: Decimal
+    used_count: int
+    max_cost: Decimal
+    max_count: int
 
 
 class SessionSummary(BaseModel):

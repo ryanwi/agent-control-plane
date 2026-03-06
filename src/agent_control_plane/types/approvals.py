@@ -25,8 +25,11 @@ class ApprovalTicketDTO(BaseModel):
     session_id: UUID
     proposal_id: UUID
 
-    # Scope constraints
-    scope: ApprovalScopeDTO = Field(default_factory=ApprovalScopeDTO)
+    # Flat scope fields (match ORM column names)
+    scope_resource_ids: list[str] | None = None
+    scope_max_cost: Decimal | None = None
+    scope_max_count: int | None = None
+    scope_expiry: datetime | None = None
 
     status: ApprovalStatus = ApprovalStatus.PENDING
     decision_type: ApprovalDecisionType | None = None

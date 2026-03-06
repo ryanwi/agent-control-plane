@@ -1,16 +1,15 @@
 """Append-only event persistence with monotonic sequencing per session."""
 
+from __future__ import annotations
+
 import logging
 from collections import deque
 from datetime import UTC, datetime
-from typing import Any
-from uuid import UUID, uuid4
+from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
-from sqlalchemy import select, update
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from agent_control_plane.models.registry import ModelRegistry
+if TYPE_CHECKING:
+    from agent_control_plane.storage.protocols import AsyncEventRepository
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +20,12 @@ _MAX_BUFFER_SIZE = 1000
 class EventStore:
     """Append-only event store with fail-closed/buffer-ok semantics."""
 
-    def __init__(self) -> None:
+    def __init__(self, event_repo: AsyncEventRepository) -> None:
+        self._repo = event_repo
         self._buffer: deque[dict[str, Any]] = deque(maxlen=_MAX_BUFFER_SIZE)
 
     async def append(
         self,
-        session: AsyncSession,
         session_id: UUID,
         event_kind: str,
         payload: dict[str, Any],
@@ -37,47 +36,27 @@ class EventStore:
         routing_decision: dict[str, Any] | None = None,
         routing_reason: str | None = None,
         idempotency_key: str | None = None,
-    ) -> Any | None:
+    ) -> int | None:
         """Append an event with monotonic sequence allocation.
 
-        Args:
-            session: Active database session (caller manages transaction).
-            session_id: The control session this event belongs to.
-            event_kind: Type of event (from EventKind enum).
-            payload: Event-specific data.
-            state_bearing: If True, DB write failure raises (fail-closed).
-                If False, event is buffered on failure (telemetry).
-            agent_id: Optional agent that generated this event.
-            correlation_id: Optional correlation for request tracing.
-            routing_decision: Optional routing audit data.
-            routing_reason: Optional human-readable routing explanation.
-            idempotency_key: Optional dedup key for cycle_started events.
+        Returns the sequence number on success, None if buffered.
 
-        Returns:
-            The persisted ControlEvent.
-
-        Raises:
-            OperationalError: On DB failure when state_bearing=True.
+        Raises on DB failure when state_bearing=True (fail-closed).
         """
         try:
-            seq = await self._allocate_seq(session, session_id)
-            ControlEvent = ModelRegistry.get("ControlEvent")
-            event = ControlEvent(
-                id=uuid4(),
-                session_id=session_id,
-                seq=seq,
-                event_kind=event_kind,
+            seq = await self._repo.append(
+                session_id,
+                event_kind,
+                payload,
+                state_bearing=state_bearing,
                 agent_id=agent_id,
                 correlation_id=correlation_id,
-                payload=payload,
                 routing_decision=routing_decision,
                 routing_reason=routing_reason,
                 idempotency_key=idempotency_key,
             )
-            session.add(event)
-            await session.flush()
-            return event
-        except OperationalError:
+            return seq
+        except Exception:
             if state_bearing:
                 raise
             self._buffer.append(
@@ -92,68 +71,20 @@ class EventStore:
                     "buffered_at": datetime.now(UTC).isoformat(),
                 }
             )
-            logger.warning("Event buffered due to DB outage: %s", event_kind)
+            logger.warning("Event buffered due to storage failure: %s", event_kind)
             return None
-        except RuntimeError:
-            if state_bearing:
-                raise
-            self._buffer.append(
-                {
-                    "session_id": session_id,
-                    "event_kind": event_kind,
-                    "payload": payload,
-                    "agent_id": agent_id,
-                    "correlation_id": correlation_id,
-                    "routing_decision": routing_decision,
-                    "routing_reason": routing_reason,
-                    "buffered_at": datetime.now(UTC).isoformat(),
-                }
-            )
-            logger.warning("Event buffered due to missing model registry: %s", event_kind)
-            return None
-
-    async def _allocate_seq(self, session: AsyncSession, session_id: UUID) -> int:
-        """Atomically allocate the next sequence number for a session.
-
-        Uses SELECT ... FOR UPDATE to prevent race conditions.
-        """
-        SessionSeqCounter = ModelRegistry.get("SessionSeqCounter")
-        result = await session.execute(
-            select(SessionSeqCounter).where(SessionSeqCounter.session_id == session_id).with_for_update()
-        )
-        counter = result.scalar_one_or_none()
-        if counter is None:
-            raise ValueError(f"No sequence counter for session {session_id}")
-        allocated = counter.next_seq
-        await session.execute(
-            update(SessionSeqCounter)
-            .where(SessionSeqCounter.session_id == session_id)
-            .values(next_seq=SessionSeqCounter.next_seq + 1)
-        )
-        return allocated
 
     async def replay(
         self,
-        session: AsyncSession,
         session_id: UUID,
         after_seq: int = 0,
         limit: int = 100,
     ) -> list[Any]:
         """Replay events for a session after a given sequence number."""
-        ControlEvent = ModelRegistry.get("ControlEvent")
-        result = await session.execute(
-            select(ControlEvent)
-            .where(
-                ControlEvent.session_id == session_id,
-                ControlEvent.seq > after_seq,
-            )
-            .order_by(ControlEvent.seq)
-            .limit(limit)
-        )
-        return list(result.scalars().all())
+        return await self._repo.replay(session_id, after_seq=after_seq, limit=limit)
 
-    async def flush_buffer(self, session: AsyncSession) -> int:
-        """Flush buffered telemetry events to the database.
+    async def flush_buffer(self) -> int:
+        """Flush buffered telemetry events to the repository.
 
         Returns the number of events flushed.
         """
@@ -161,20 +92,18 @@ class EventStore:
         while self._buffer:
             item = self._buffer.popleft()
             try:
-                await self.append(
-                    session,
-                    session_id=item["session_id"],
-                    event_kind=item["event_kind"],
-                    payload=item["payload"],
+                await self._repo.append(
+                    item["session_id"],
+                    item["event_kind"],
+                    item["payload"],
+                    state_bearing=False,
                     agent_id=item.get("agent_id"),
                     correlation_id=item.get("correlation_id"),
                     routing_decision=item.get("routing_decision"),
                     routing_reason=item.get("routing_reason"),
-                    state_bearing=False,
                 )
                 flushed += 1
-            except OperationalError:
-                # Put it back and stop trying
+            except Exception:
                 self._buffer.appendleft(item)
                 break
         if flushed:

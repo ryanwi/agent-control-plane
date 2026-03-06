@@ -43,3 +43,4 @@ class EventFrame(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
     routing_decision: dict[str, Any] | None = None
     routing_reason: str | None = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

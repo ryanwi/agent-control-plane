@@ -1,16 +1,17 @@
 """Crash recovery: detect and resume in-progress sessions on startup."""
 
-import logging
-from typing import Any
-from uuid import UUID
+from __future__ import annotations
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+import logging
+from typing import TYPE_CHECKING
 
 from agent_control_plane.engine.event_store import EventStore
 from agent_control_plane.engine.session_manager import SessionManager
-from agent_control_plane.models.registry import ModelRegistry
 from agent_control_plane.types.enums import AbortReason, EventKind, SessionStatus
+from agent_control_plane.types.sessions import SessionState
+
+if TYPE_CHECKING:
+    from agent_control_plane.storage.protocols import AsyncEventRepository, AsyncSessionRepository
 
 logger = logging.getLogger(__name__)
 
@@ -22,37 +23,34 @@ class CrashRecovery:
         self,
         session_manager: SessionManager,
         event_store: EventStore,
+        session_repo: AsyncSessionRepository,
+        event_repo: AsyncEventRepository,
     ) -> None:
         self.session_manager = session_manager
         self.event_store = event_store
+        self._session_repo = session_repo
+        self._event_repo = event_repo
 
-    async def recover_on_startup(self, db_session: AsyncSession) -> dict:
+    async def recover_on_startup(self) -> dict:
         """Scan for sessions with active cycles and attempt recovery.
 
         Called once on application startup.
 
         Returns summary of recovery actions taken.
         """
-        ControlSession = ModelRegistry.get("ControlSession")
-        result = await db_session.execute(
-            select(ControlSession).where(
-                ControlSession.status == SessionStatus.ACTIVE,
-                ControlSession.active_cycle_id.is_not(None),
-            )
-        )
-        stuck_sessions = list(result.scalars().all())
+        sessions = await self._session_repo.list_sessions(statuses=[SessionStatus.ACTIVE])
+        stuck_sessions = [s for s in sessions if s.active_cycle_id is not None]
 
         recovered = 0
         aborted = 0
 
         for cs in stuck_sessions:
             try:
-                await self._recover_session(db_session, cs)
+                await self._recover_session(cs)
                 recovered += 1
             except (RuntimeError, ValueError) as e:
                 logger.error("Failed to recover session %s: %s", cs.id, e)
                 await self.session_manager.abort_session(
-                    db_session,
                     cs.id,
                     AbortReason.SYSTEM_ERROR,
                     f"Crash recovery failed: {e}",
@@ -60,7 +58,6 @@ class CrashRecovery:
                 aborted += 1
 
         if stuck_sessions:
-            await db_session.commit()
             logger.info(
                 "Crash recovery: %d stuck sessions found, %d recovered, %d aborted",
                 len(stuck_sessions),
@@ -74,18 +71,13 @@ class CrashRecovery:
             "aborted": aborted,
         }
 
-    async def _recover_session(self, db_session: AsyncSession, cs: Any) -> None:
-        """Attempt to recover a single session.
-
-        Strategy: Look at the last event to determine where the cycle was
-        when the crash occurred. If the cycle completed analysis but
-        hadn't finished, release the cycle lock so the next beat can start fresh.
-        """
-        last_event = await self._get_last_event(db_session, cs.id)
+    async def _recover_session(self, cs: SessionState) -> None:
+        """Attempt to recover a single session."""
+        last_event = await self._event_repo.get_last_event(cs.id)
 
         if last_event is None:
             logger.info("Session %s: no events found, releasing cycle lock", cs.id)
-            cs.active_cycle_id = None
+            await self._session_repo.set_active_cycle(cs.id, None)
             return
 
         logger.info(
@@ -95,9 +87,7 @@ class CrashRecovery:
             last_event.seq,
         )
 
-        # Emit a recovery event
         await self.event_store.append(
-            db_session,
             session_id=cs.id,
             event_kind=EventKind.CYCLE_RECOVERED,
             payload={
@@ -107,13 +97,4 @@ class CrashRecovery:
             },
         )
 
-        # Release the cycle lock so next beat can proceed
-        cs.active_cycle_id = None
-
-    async def _get_last_event(self, db_session: AsyncSession, session_id: UUID) -> Any | None:
-        """Get the most recent event for a session."""
-        ControlEvent = ModelRegistry.get("ControlEvent")
-        result = await db_session.execute(
-            select(ControlEvent).where(ControlEvent.session_id == session_id).order_by(ControlEvent.seq.desc()).limit(1)
-        )
-        return result.scalar_one_or_none()
+        await self._session_repo.set_active_cycle(cs.id, None)

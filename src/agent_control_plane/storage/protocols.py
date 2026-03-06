@@ -1,0 +1,168 @@
+"""Repository protocols for storage abstraction.
+
+Defines sync and async protocol pairs that decouple engines from any
+specific database backend (SQLAlchemy, in-memory, etc.).
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from decimal import Decimal
+from typing import Any, Protocol, runtime_checkable
+from uuid import UUID
+
+from agent_control_plane.types.approvals import ApprovalTicketDTO
+from agent_control_plane.types.frames import EventFrame
+from agent_control_plane.types.sessions import BudgetInfo, SessionState
+
+# ---------------------------------------------------------------------------
+# Session repositories
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class SessionRepository(Protocol):
+    def get_session(self, session_id: UUID) -> SessionState | None: ...
+    def get_session_for_update(self, session_id: UUID) -> SessionState: ...
+    def create_session(self, **kwargs: Any) -> SessionState: ...
+    def update_session(self, session_id: UUID, **fields: Any) -> None: ...
+    def set_active_cycle(self, session_id: UUID, cycle_id: UUID | None) -> None: ...
+    def list_sessions(self, statuses: list[str] | None = None, limit: int = 50) -> list[SessionState]: ...
+    def increment_budget(self, session_id: UUID, cost: Decimal, action_count: int) -> None: ...
+    def get_budget(self, session_id: UUID) -> BudgetInfo: ...
+    def create_policy(self, **kwargs: Any) -> UUID: ...
+    def create_seq_counter(self, session_id: UUID) -> None: ...
+
+
+@runtime_checkable
+class AsyncSessionRepository(Protocol):
+    async def get_session(self, session_id: UUID) -> SessionState | None: ...
+    async def get_session_for_update(self, session_id: UUID) -> SessionState: ...
+    async def create_session(self, **kwargs: Any) -> SessionState: ...
+    async def update_session(self, session_id: UUID, **fields: Any) -> None: ...
+    async def set_active_cycle(self, session_id: UUID, cycle_id: UUID | None) -> None: ...
+    async def list_sessions(self, statuses: list[str] | None = None, limit: int = 50) -> list[SessionState]: ...
+    async def increment_budget(self, session_id: UUID, cost: Decimal, action_count: int) -> None: ...
+    async def get_budget(self, session_id: UUID) -> BudgetInfo: ...
+    async def create_policy(self, **kwargs: Any) -> UUID: ...
+    async def create_seq_counter(self, session_id: UUID) -> None: ...
+
+
+# ---------------------------------------------------------------------------
+# Event repositories
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class EventRepository(Protocol):
+    def append(
+        self,
+        session_id: UUID,
+        event_kind: str,
+        payload: dict[str, Any],
+        *,
+        state_bearing: bool = False,
+        agent_id: str | None = None,
+        correlation_id: UUID | None = None,
+        routing_decision: dict[str, Any] | None = None,
+        routing_reason: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> int: ...
+
+    def replay(self, session_id: UUID, after_seq: int = 0, limit: int = 100) -> list[EventFrame]: ...
+    def get_last_event(self, session_id: UUID) -> EventFrame | None: ...
+
+
+@runtime_checkable
+class AsyncEventRepository(Protocol):
+    async def append(
+        self,
+        session_id: UUID,
+        event_kind: str,
+        payload: dict[str, Any],
+        *,
+        state_bearing: bool = False,
+        agent_id: str | None = None,
+        correlation_id: UUID | None = None,
+        routing_decision: dict[str, Any] | None = None,
+        routing_reason: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> int: ...
+
+    async def replay(self, session_id: UUID, after_seq: int = 0, limit: int = 100) -> list[EventFrame]: ...
+    async def get_last_event(self, session_id: UUID) -> EventFrame | None: ...
+
+
+# ---------------------------------------------------------------------------
+# Approval repositories
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class ApprovalRepository(Protocol):
+    def create_ticket(self, session_id: UUID, proposal_id: UUID, timeout_at: datetime) -> ApprovalTicketDTO: ...
+
+    def get_pending_ticket_for_update(self, ticket_id: UUID) -> ApprovalTicketDTO: ...
+    def update_ticket(self, ticket_id: UUID, **fields: Any) -> None: ...
+    def get_pending_tickets(self, session_id: UUID | None = None) -> list[ApprovalTicketDTO]: ...
+    def get_session_scope_tickets(self, session_id: UUID) -> list[ApprovalTicketDTO]: ...
+    def decrement_scope_count(self, ticket_id: UUID) -> None: ...
+    def deny_all_pending(self, session_id: UUID) -> int: ...
+    def expire_timed_out(self) -> list[ApprovalTicketDTO]: ...
+
+
+@runtime_checkable
+class AsyncApprovalRepository(Protocol):
+    async def create_ticket(self, session_id: UUID, proposal_id: UUID, timeout_at: datetime) -> ApprovalTicketDTO: ...
+
+    async def get_pending_ticket_for_update(self, ticket_id: UUID) -> ApprovalTicketDTO: ...
+    async def update_ticket(self, ticket_id: UUID, **fields: Any) -> None: ...
+    async def get_pending_tickets(self, session_id: UUID | None = None) -> list[ApprovalTicketDTO]: ...
+    async def get_session_scope_tickets(self, session_id: UUID) -> list[ApprovalTicketDTO]: ...
+    async def decrement_scope_count(self, ticket_id: UUID) -> None: ...
+    async def deny_all_pending(self, session_id: UUID) -> int: ...
+    async def expire_timed_out(self) -> list[ApprovalTicketDTO]: ...
+
+
+# ---------------------------------------------------------------------------
+# Proposal repositories
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class ProposalRepository(Protocol):
+    def update_status(self, proposal_id: UUID, status: str) -> None: ...
+    def has_pending_for_resource(self, session_id: UUID, resource_id: str) -> bool: ...
+
+
+@runtime_checkable
+class AsyncProposalRepository(Protocol):
+    async def update_status(self, proposal_id: UUID, status: str) -> None: ...
+    async def has_pending_for_resource(self, session_id: UUID, resource_id: str) -> bool: ...
+
+
+# ---------------------------------------------------------------------------
+# Unit of Work
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class SyncUnitOfWork(Protocol):
+    session_repo: SessionRepository
+    event_repo: EventRepository
+    approval_repo: ApprovalRepository
+    proposal_repo: ProposalRepository
+
+    def commit(self) -> None: ...
+    def rollback(self) -> None: ...
+
+
+@runtime_checkable
+class AsyncUnitOfWork(Protocol):
+    session_repo: AsyncSessionRepository
+    event_repo: AsyncEventRepository
+    approval_repo: AsyncApprovalRepository
+    proposal_repo: AsyncProposalRepository
+
+    async def commit(self) -> None: ...
+    async def rollback(self) -> None: ...
