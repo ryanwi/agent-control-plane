@@ -84,6 +84,7 @@ async def main():
                 resource_id=res,
                 resource_type="host",
                 decision=action,
+                reasoning=f"cyber response for {res}",
                 weight=Decimal(str(weight)),
                 score=Decimal(str(score)),
             )
