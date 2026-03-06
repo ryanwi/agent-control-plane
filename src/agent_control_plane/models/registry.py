@@ -1,5 +1,7 @@
 """Lazy model registry for decoupling ORM models from engine logic."""
 
+from typing import Any
+
 
 class ModelRegistry:
     """Registry for ORM model classes.
@@ -15,11 +17,10 @@ class ModelRegistry:
         cls._models[name] = model
 
     @classmethod
-    def get(cls, name: str) -> type:
+    def get(cls, name: str) -> Any:
         if name not in cls._models:
             raise RuntimeError(
-                f"Model '{name}' not registered. "
-                f"Call ModelRegistry.register('{name}', YourModel) at startup."
+                f"Model '{name}' not registered. Call ModelRegistry.register('{name}', YourModel) at startup."
             )
         return cls._models[name]
 

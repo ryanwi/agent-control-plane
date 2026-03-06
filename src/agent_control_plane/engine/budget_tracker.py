@@ -2,6 +2,7 @@
 
 import logging
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select, update

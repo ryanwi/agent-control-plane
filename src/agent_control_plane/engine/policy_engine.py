@@ -122,9 +122,7 @@ class PolicyEngine:
     def _can_auto_approve(self, proposal: ActionProposalDTO) -> bool:
         """Check if a LOW risk proposal qualifies for auto-approval."""
         auto_cond = self.policy.auto_approve_conditions
-        if auto_cond.dry_run_only and self.policy.execution_mode.value != "dry_run":
-            return False
-        return True
+        return not (auto_cond.dry_run_only and self.policy.execution_mode.value != "dry_run")
 
     def _is_matched_asset(self, resource_id: str) -> bool:
         """Check if a resource matches the configured asset classifier."""
