@@ -16,6 +16,9 @@ or a Rails-adjacent Python process) can't use `await` directly.
 The adapter owns its own SQLite database and event loop, completely separate
 from your host application's database. This is intentional: governance state
 (sessions, budgets, events, approvals) is orthogonal to domain data.
+
+Note: for the default SQLite URL below, install `aiosqlite` first:
+`uv pip install aiosqlite`.
 """
 
 import asyncio
@@ -45,6 +48,7 @@ class SyncControlPlane:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
         self._session_factory = None
+        self._engine = None
 
         # Engines
         self._session_manager = SessionManager()
@@ -59,6 +63,8 @@ class SyncControlPlane:
 
         Call this once at process startup.
         """
+        if self._loop and self._loop.is_running():
+            return
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
         self._thread.start()
@@ -67,9 +73,12 @@ class SyncControlPlane:
     def close(self) -> None:
         """Shut down the background event loop."""
         if self._loop and self._loop.is_running():
+            self._run(self._async_close())
             self._loop.call_soon_threadsafe(self._loop.stop)
         if self._thread:
             self._thread.join(timeout=5)
+        self._thread = None
+        self._loop = None
 
     # -- Session management ----------------------------------------------
 
@@ -251,7 +260,14 @@ class SyncControlPlane:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
 
+        self._engine = engine
         self._session_factory = async_sessionmaker(bind=engine, expire_on_commit=False)
+
+    async def _async_close(self) -> None:
+        """Dispose resources owned by the adapter."""
+        if self._engine is not None:
+            await self._engine.dispose()
+            self._engine = None
 
 
 # ---------------------------------------------------------------------------
