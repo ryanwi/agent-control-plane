@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-## [0.6.0] - 2026-03-06
+## [0.1.6] - 2026-03-06
 
 ### Changed
 
@@ -20,7 +20,7 @@
   - `build_session_event_budget(...)`
   - `build_kill_switch_stack(...)`
 
-## [0.5.1] - 2026-03-06
+## [0.1.5] - 2026-03-06
 
 ### Added
 
@@ -39,7 +39,7 @@
   - control objectives
   - explicit non-goals
 
-## [0.5.0] - 2026-03-06
+## [0.1.4] - 2026-03-06
 
 ### Added
 
@@ -88,7 +88,7 @@
 - `ControlPlaneFacade` now exposes `get_session(session_id)`.
 - README expanded with MCP tool-call gateway integration guidance.
 
-## [0.3.1] - 2026-03-06
+## [0.1.3] - 2026-03-06
 
 ### Changed
 
@@ -99,7 +99,7 @@
 
 - New unit tests for risk level comparison logic in `tests/test_enums.py`.
 
-## [0.3.0] - 2026-03-06
+## [0.1.2] - 2026-03-06
 
 ### Added
 
@@ -122,7 +122,7 @@
 - Public API exports updated for sync facade and app-event mapping primitives.
 - README sync integration docs expanded with event/facade guidance.
 
-## [0.2.1] - 2026-03-06
+## [0.1.1] - 2026-03-06
 
 ### Added
 
