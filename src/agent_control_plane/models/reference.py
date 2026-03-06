@@ -26,7 +26,7 @@ from agent_control_plane.models.mixins import (
     PolicySnapshotMixin,
     SessionSeqCounterMixin,
 )
-from agent_control_plane.models.registry import ModelRegistry
+from agent_control_plane.models.registry import DEFAULT_MODEL_REGISTRY, RegistryProtocol
 
 
 class Base(DeclarativeBase):
@@ -86,16 +86,16 @@ class DelegationRecord(Base, DelegationMixin):
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
 
 
-def register_models() -> None:
+def register_models(registry: RegistryProtocol = DEFAULT_MODEL_REGISTRY) -> None:
     """Register all reference models with the ModelRegistry."""
-    ModelRegistry.register("PolicySnapshot", PolicySnapshot)
-    ModelRegistry.register("ControlSession", ControlSession)
-    ModelRegistry.register("SessionSeqCounter", SessionSeqCounter)
-    ModelRegistry.register("ControlEvent", ControlEvent)
-    ModelRegistry.register("ActionProposal", ActionProposal)
-    ModelRegistry.register("ApprovalTicket", ApprovalTicket)
-    ModelRegistry.register("AgentRecord", AgentRecord)
-    ModelRegistry.register("DelegationRecord", DelegationRecord)
+    registry.register("PolicySnapshot", PolicySnapshot)
+    registry.register("ControlSession", ControlSession)
+    registry.register("SessionSeqCounter", SessionSeqCounter)
+    registry.register("ControlEvent", ControlEvent)
+    registry.register("ActionProposal", ActionProposal)
+    registry.register("ApprovalTicket", ApprovalTicket)
+    registry.register("AgentRecord", AgentRecord)
+    registry.register("DelegationRecord", DelegationRecord)
 
 
 def create_tables(engine: Any) -> None:

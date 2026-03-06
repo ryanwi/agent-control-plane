@@ -1,5 +1,12 @@
 """agent-control-plane: Embeddable governance framework for agentic AI."""
 
+from agent_control_plane.async_facade import AsyncControlPlaneFacade
+from agent_control_plane.builders import (
+    KillSwitchServices,
+    SessionEventBudgetServices,
+    build_kill_switch_stack,
+    build_session_event_budget,
+)
 from agent_control_plane.engine.agent_registry import AgentRegistry, DelegationGuard
 from agent_control_plane.engine.approval_gate import ApprovalGate
 from agent_control_plane.engine.budget_tracker import BudgetExhaustedError, BudgetTracker
@@ -49,7 +56,7 @@ from agent_control_plane.models import (
 from agent_control_plane.models import (
     Base as ReferenceBase,
 )
-from agent_control_plane.models.registry import ModelRegistry
+from agent_control_plane.models.registry import ModelRegistry, ScopedModelRegistry
 from agent_control_plane.recovery.crash_recovery import CrashRecovery
 from agent_control_plane.recovery.timeout_escalation import TimeoutEscalation
 from agent_control_plane.storage import (
@@ -160,6 +167,7 @@ __all__ = [
     "AssetClassifier",
     "AssetMatch",
     "AsyncApprovalRepository",
+    "AsyncControlPlaneFacade",
     "AsyncEventRepository",
     "AsyncProposalRepository",
     "AsyncSessionRepository",
@@ -200,6 +208,7 @@ __all__ = [
     "KillSwitch",
     "KillSwitchActiveError",
     "KillSwitchScope",
+    "KillSwitchServices",
     "MappedEventDTO",
     "McpEventMapper",
     "McpEventName",
@@ -225,8 +234,10 @@ __all__ = [
     "RiskLimits",
     "RoutingDecision",
     "RoutingResolutionStep",
+    "ScopedModelRegistry",
     # Session DTOs
     "SessionCreate",
+    "SessionEventBudgetServices",
     "SessionLifecycleResult",
     "SessionManager",
     "SessionRepository",
@@ -249,6 +260,8 @@ __all__ = [
     "ToolPolicyMap",
     "UnknownAppEventError",
     "UnknownAppEventPolicy",
+    "build_kill_switch_stack",
+    "build_session_event_budget",
     "create_tables",
     "register_models",
 ]

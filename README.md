@@ -163,6 +163,7 @@ package ships SQLAlchemy async and sync implementations:
 - `SyncSqlAlchemyUnitOfWork`
 - `SyncControlPlane` convenience facade
 - `ControlPlaneFacade` high-level sync host wrapper
+- `AsyncControlPlaneFacade` high-level async host wrapper
 
 Recommended startup sequence:
 
@@ -266,6 +267,7 @@ async def handle_proposal(db_session: AsyncSession, request: dict) -> None:
 ```
 
 For a native sync host, use `SyncControlPlane` or `ControlPlaneFacade` and `examples/quickstart_sync.py`.
+For async hosts (FastAPI/async workers), use `AsyncControlPlaneFacade`.
 
 `SyncControlPlane.kill()` and `SyncControlPlane.kill_all()` return `KillResultDTO`.
 `SyncControlPlane.emit_event()` / `replay_events()` provide first-class sync event operations.
@@ -312,6 +314,11 @@ Import enums from `agent_control_plane.types`:
 ```python
 from agent_control_plane.types import EventKind, UnknownAppEventPolicy
 ```
+
+## Registry strategy
+
+- Quickstart: rely on defaults (reference models auto-registered).
+- Production integration: create and pass an explicit `ScopedModelRegistry` per app/runtime to avoid global registry coupling.
 
 ## ORM integration
 

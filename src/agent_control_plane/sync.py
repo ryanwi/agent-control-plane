@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -10,10 +10,15 @@ from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
 from pydantic import BaseModel, Field
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from agent_control_plane.models.reference import Base, register_models
+from agent_control_plane.models.registry import (
+    RegistryProtocol,
+    ScopedModelRegistry,
+    registry_scope,
+)
 from agent_control_plane.storage.sqlalchemy_sync import SyncSqlAlchemyUnitOfWork
 from agent_control_plane.types.enums import (
     AbortReason,
@@ -81,11 +86,23 @@ class UnknownAppEventError(ValueError):
 class SyncControlPlane:
     """Synchronous control-plane facade (no asyncio event loop required)."""
 
-    def __init__(self, database_url: str = "sqlite:///./control_plane.db") -> None:
+    def __init__(
+        self,
+        database_url: str = "sqlite:///./control_plane.db",
+        *,
+        engine: Engine | None = None,
+        session_factory: sessionmaker[Session] | None = None,
+        registry: RegistryProtocol | None = None,
+        uow_factory: Callable[[Session], SyncSqlAlchemyUnitOfWork] | None = None,
+        register_reference_models: bool = True,
+    ) -> None:
         self._database_url = database_url
-        self._engine = create_engine(database_url, future=True)
-        self._session_factory = sessionmaker(bind=self._engine, expire_on_commit=False, future=True)
-        register_models()
+        self._registry = registry or ScopedModelRegistry()
+        self._engine = engine or create_engine(database_url, future=True)
+        self._session_factory = session_factory or sessionmaker(bind=self._engine, expire_on_commit=False, future=True)
+        self._uow_factory = uow_factory or (lambda db: SyncSqlAlchemyUnitOfWork(db))
+        if register_reference_models:
+            register_models(registry=self._registry)
 
     def setup(self) -> None:
         """Create reference-model tables for control-plane state."""
@@ -97,7 +114,7 @@ class SyncControlPlane:
     @contextmanager
     def session_scope(self) -> Iterator[Session]:
         """Context manager exposing a raw sync SQLAlchemy session."""
-        with self._session_factory() as db:
+        with registry_scope(self._registry), self._session_factory() as db:
             yield db
 
     def create_session(
@@ -108,8 +125,8 @@ class SyncControlPlane:
         max_action_count: int = 50,
         execution_mode: ExecutionMode = ExecutionMode.DRY_RUN,
     ) -> UUID:
-        with self._session_factory() as db:
-            uow = SyncSqlAlchemyUnitOfWork(db)
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
             cs = uow.session_repo.create_session(
                 session_name=name,
                 status=SessionStatus.CREATED,
@@ -122,25 +139,25 @@ class SyncControlPlane:
             return cs.id
 
     def get_session(self, session_id: UUID) -> SessionState | None:
-        with self._session_factory() as db:
-            uow = SyncSqlAlchemyUnitOfWork(db)
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
             return uow.session_repo.get_session(session_id)
 
     def check_budget(self, session_id: UUID, cost: Decimal = Decimal("0"), action_count: int = 1) -> bool:
-        with self._session_factory() as db:
-            uow = SyncSqlAlchemyUnitOfWork(db)
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
             info = uow.session_repo.get_budget(session_id)
             return cost <= info.remaining_cost and action_count <= info.remaining_count
 
     def increment_budget(self, session_id: UUID, cost: Decimal, action_count: int = 1) -> None:
-        with self._session_factory() as db:
-            uow = SyncSqlAlchemyUnitOfWork(db)
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
             uow.session_repo.increment_budget(session_id, cost, action_count)
             uow.commit()
 
     def get_remaining_budget(self, session_id: UUID) -> dict[str, Decimal | int]:
-        with self._session_factory() as db:
-            uow = SyncSqlAlchemyUnitOfWork(db)
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
             info = uow.session_repo.get_budget(session_id)
             return {
                 "remaining_cost": info.remaining_cost,
@@ -164,8 +181,8 @@ class SyncControlPlane:
         routing_reason: str | None = None,
         idempotency_key: str | None = None,
     ) -> int:
-        with self._session_factory() as db:
-            uow = SyncSqlAlchemyUnitOfWork(db)
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
             seq = uow.event_repo.append(
                 session_id=session_id,
                 event_kind=event_kind,
@@ -181,8 +198,8 @@ class SyncControlPlane:
             return seq
 
     def replay_events(self, session_id: UUID, *, after_seq: int = 0, limit: int = 100) -> list[EventFrame]:
-        with self._session_factory() as db:
-            uow = SyncSqlAlchemyUnitOfWork(db)
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
             return uow.event_repo.replay(session_id, after_seq=after_seq, limit=limit)
 
     def emit_app_event(
@@ -216,8 +233,8 @@ class SyncControlPlane:
         )
 
     def complete_session(self, session_id: UUID) -> SessionLifecycleResult:
-        with self._session_factory() as db:
-            uow = SyncSqlAlchemyUnitOfWork(db)
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
             uow.session_repo.update_session(
                 session_id,
                 status=SessionStatus.COMPLETED,
@@ -237,8 +254,8 @@ class SyncControlPlane:
         reason: str = "Session aborted",
         abort_reason: AbortReason = AbortReason.OPERATOR_REQUEST,
     ) -> SessionLifecycleResult:
-        with self._session_factory() as db:
-            uow = SyncSqlAlchemyUnitOfWork(db)
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
             uow.session_repo.update_session(
                 session_id,
                 status=SessionStatus.ABORTED,
@@ -266,8 +283,8 @@ class SyncControlPlane:
         session_id: UUID | None = None,
         reason: str = "Kill switch triggered",
     ) -> KillResultDTO:
-        with self._session_factory() as db:
-            uow = SyncSqlAlchemyUnitOfWork(db)
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
 
             if scope == KillSwitchScope.SESSION_ABORT:
                 if session_id is None:
@@ -344,8 +361,20 @@ class ControlPlaneFacade:
         *,
         mapper: AppEventMapper | None = None,
         unknown_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.RAISE,
+        engine: Engine | None = None,
+        session_factory: sessionmaker[Session] | None = None,
+        registry: RegistryProtocol | None = None,
+        uow_factory: Callable[[Session], SyncSqlAlchemyUnitOfWork] | None = None,
+        register_reference_models: bool = True,
     ) -> ControlPlaneFacade:
-        cp = SyncControlPlane(database_url=database_url)
+        cp = SyncControlPlane(
+            database_url=database_url,
+            engine=engine,
+            session_factory=session_factory,
+            registry=registry,
+            uow_factory=uow_factory,
+            register_reference_models=register_reference_models,
+        )
         return cls(cp, mapper=mapper, unknown_policy=unknown_policy)
 
     def setup(self) -> None:

@@ -2,12 +2,23 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-03-06
+
 ### Changed
 
 - `ControlPlaneFacade.close_session()` now defaults to `final_event_kind=None` to avoid accidental double-emits.
 - `ControlPlaneFacade.emit(...)` now accepts the same attribution/state-bearing options as low-level sync emit paths.
 - `EventFrame` now includes `state_bearing`.
 - SQLAlchemy async/sync event repositories now persist and hydrate `state_bearing` as a first-class field.
+
+### Added
+
+- `AsyncControlPlaneFacade` for async-native integration paths.
+- `ScopedModelRegistry` and `registry_scope(...)` for instance-scoped registry isolation.
+- Facade constructor injection for engine/session factory/UoW factory/registry in sync and async entrypoints.
+- Lightweight builders:
+  - `build_session_event_budget(...)`
+  - `build_kill_switch_stack(...)`
 
 ## [0.5.1] - 2026-03-06
 
