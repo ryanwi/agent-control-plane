@@ -11,14 +11,10 @@ Note: for the default SQLite URL below, install `aiosqlite` first:
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
 from decimal import Decimal
-from uuid import UUID, uuid4
+from uuid import uuid4
 
-from sqlalchemy import DECIMAL, JSON, ForeignKey, String, Text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.sql.sqltypes import Uuid
 
 from agent_control_plane import (
     ActionTier,
@@ -30,165 +26,16 @@ from agent_control_plane import (
     ProposalRouter,
     SessionManager,
 )
-from agent_control_plane.models.registry import ModelRegistry
+from agent_control_plane.models.reference import (
+    ActionProposal,
+    Base,
+    register_models,
+)
 from agent_control_plane.types.enums import ApprovalDecisionType, ProposalStatus
 from agent_control_plane.types.policies import PolicySnapshotDTO
 from agent_control_plane.types.proposals import ActionProposalDTO
 
-
-class Base(DeclarativeBase):
-    """Base class for example-only SQLAlchemy models."""
-
-
-class ControlSession(Base):
-    """Portable subset of ControlSessionMixin fields."""
-
-    __tablename__ = "control_sessions"
-
-    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_name: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="created", server_default="created")
-    execution_mode: Mapped[str] = mapped_column(String(20), nullable=False)
-    asset_scope: Mapped[str | None] = mapped_column(String(50), nullable=True)
-
-    max_cost: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), nullable=False)
-    used_cost: Mapped[Decimal] = mapped_column(
-        DECIMAL(15, 2),
-        nullable=False,
-        default=Decimal("0"),
-        server_default="0",
-    )
-    max_action_count: Mapped[int] = mapped_column(nullable=False)
-    used_action_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
-
-    active_policy_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
-    active_cycle_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
-    dry_run_session_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
-
-    abort_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    abort_details: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    created_at: Mapped[datetime] = mapped_column(
-        nullable=False,
-        default=lambda: datetime.now(UTC),
-        server_default="CURRENT_TIMESTAMP",
-    )
-    updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
-
-
-class SessionSeqCounter(Base):
-    """Portable subset of SessionSeqCounterMixin fields."""
-
-    __tablename__ = "session_seq_counters"
-
-    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
-    next_seq: Mapped[int] = mapped_column(nullable=False, default=1)
-
-
-class ControlEvent(Base):
-    """Portable subset of ControlEventMixin fields."""
-
-    __tablename__ = "control_events"
-
-    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
-    seq: Mapped[int] = mapped_column(nullable=False)
-    event_kind: Mapped[str] = mapped_column(String(50), nullable=False)
-    agent_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    correlation_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
-    payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    routing_decision: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    routing_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        nullable=False,
-        default=lambda: datetime.now(UTC),
-        server_default="CURRENT_TIMESTAMP",
-    )
-
-
-class PolicySnapshot(Base):
-    """Portable subset of PolicySnapshotMixin fields."""
-
-    __tablename__ = "policy_snapshots"
-
-    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    action_tiers: Mapped[dict] = mapped_column(JSON, nullable=False)
-    risk_limits: Mapped[dict] = mapped_column(JSON, nullable=False)
-    asset_scope: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    execution_mode: Mapped[str] = mapped_column(String(20), nullable=False)
-    approval_timeout_seconds: Mapped[int] = mapped_column(nullable=False)
-    auto_approve_conditions: Mapped[dict] = mapped_column(JSON, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        nullable=False,
-        default=lambda: datetime.now(UTC),
-        server_default="CURRENT_TIMESTAMP",
-    )
-
-
-class ActionProposal(Base):
-    """Portable subset of ActionProposalMixin fields."""
-
-    __tablename__ = "action_proposals"
-
-    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
-    cycle_event_seq: Mapped[int | None] = mapped_column(nullable=True)
-
-    resource_id: Mapped[str] = mapped_column(String(50), nullable=False)
-    resource_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    decision: Mapped[str] = mapped_column(String(20), nullable=False)
-    reasoning: Mapped[str] = mapped_column(Text, nullable=False)
-    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-
-    weight: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False)
-    score: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
-
-    action_tier: Mapped[str] = mapped_column(String(20), nullable=False)
-    risk_level: Mapped[str] = mapped_column(String(10), nullable=False)
-    status: Mapped[str] = mapped_column(String(20), nullable=False)
-
-    created_at: Mapped[datetime] = mapped_column(
-        nullable=False,
-        default=lambda: datetime.now(UTC),
-        server_default="CURRENT_TIMESTAMP",
-    )
-
-
-class ApprovalTicket(Base):
-    """Portable subset of ApprovalTicketMixin fields."""
-
-    __tablename__ = "approval_tickets"
-
-    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
-    proposal_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("action_proposals.id"), nullable=False)
-
-    status: Mapped[str] = mapped_column(String(20), nullable=False)
-    decision_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
-    decided_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    decision_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    decided_at: Mapped[datetime | None] = mapped_column(nullable=True)
-    timeout_at: Mapped[datetime | None] = mapped_column(nullable=True)
-
-    scope_resource_ids: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    scope_max_cost: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 2), nullable=True)
-    scope_max_count: Mapped[int | None] = mapped_column(nullable=True)
-    scope_expiry: Mapped[datetime | None] = mapped_column(nullable=True)
-
-
 DATABASE_URL = "sqlite+aiosqlite:///./agent_control_plane_example.db"
-
-
-def _register_models() -> None:
-    """Register concrete models for control-plane engines."""
-    ModelRegistry.register("PolicySnapshot", PolicySnapshot)
-    ModelRegistry.register("ControlSession", ControlSession)
-    ModelRegistry.register("SessionSeqCounter", SessionSeqCounter)
-    ModelRegistry.register("ControlEvent", ControlEvent)
-    ModelRegistry.register("ActionProposal", ActionProposal)
-    ModelRegistry.register("ApprovalTicket", ApprovalTicket)
 
 
 def _seed_models() -> PolicySnapshotDTO:
@@ -215,7 +62,7 @@ def _seed_models() -> PolicySnapshotDTO:
 
 async def run_control_flow(db: AsyncSession) -> None:
     """Run a complete proposal through governance + execution guardrails."""
-    _register_models()
+    register_models()
 
     session_manager = SessionManager()
     event_store = EventStore()

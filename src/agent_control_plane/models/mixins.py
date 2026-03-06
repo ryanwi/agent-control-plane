@@ -12,8 +12,8 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import DECIMAL, JSON, TIMESTAMP, VARCHAR, Text, func
-from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql.sqltypes import Uuid
 
 
 class PolicySnapshotMixin:
@@ -46,8 +46,12 @@ class ControlSessionMixin:
     max_action_count: Mapped[int] = mapped_column(nullable=False, default=50)
     used_action_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
 
+    # References
+    active_policy_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    dry_run_session_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+
     # Cycle tracking
-    active_cycle_id: Mapped[UUID | None] = mapped_column(PostgresUUID(as_uuid=True), nullable=True)
+    active_cycle_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
 
     # Abort info
     abort_reason: Mapped[str | None] = mapped_column(VARCHAR(50), nullable=True)
@@ -75,7 +79,7 @@ class ControlEventMixin:
     seq: Mapped[int] = mapped_column(nullable=False)
     event_kind: Mapped[str] = mapped_column(VARCHAR(50), nullable=False)
     agent_id: Mapped[str | None] = mapped_column(VARCHAR(100), nullable=True)
-    correlation_id: Mapped[UUID | None] = mapped_column(PostgresUUID(as_uuid=True), nullable=True)
+    correlation_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     routing_decision: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     routing_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
