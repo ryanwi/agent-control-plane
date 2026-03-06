@@ -3,6 +3,8 @@
 from decimal import Decimal
 from uuid import uuid4
 
+import pytest
+
 from agent_control_plane.engine.policy_engine import (
     DefaultAssetClassifier,
     DefaultRiskClassifier,
@@ -181,31 +183,35 @@ class TestPolicyEngine:
 
 
 class TestProposalRouter:
-    def test_route_blocked(self):
+    @pytest.mark.asyncio
+    async def test_route_blocked(self):
         router = ProposalRouter(PolicyEngine(_policy()))
         proposal = _proposal(decision=ActionName.BAN)
-        decision = router.route(proposal)
+        decision = await router.route(proposal)
         assert decision.tier == ActionTier.BLOCKED
         assert decision.resolution_step == "explicit_assignment"
 
-    def test_route_auto_approve(self):
+    @pytest.mark.asyncio
+    async def test_route_auto_approve(self):
         router = ProposalRouter(PolicyEngine(_policy()))
         proposal = _proposal(decision=ActionName.STATUS, weight=Decimal("1.0"), score=Decimal("0.9"))
-        decision = router.route(proposal)
+        decision = await router.route(proposal)
         assert decision.tier == ActionTier.AUTO_APPROVE
         assert decision.risk_level == RiskLevel.LOW
         assert decision.resolution_step == "policy_list_match"
 
-    def test_route_always_approve_medium(self):
+    @pytest.mark.asyncio
+    async def test_route_always_approve_medium(self):
         router = ProposalRouter(PolicyEngine(_policy()))
         proposal = _proposal(decision=ActionName.REFUND, weight=Decimal("3.0"), score=Decimal("0.8"))
-        decision = router.route(proposal)
+        decision = await router.route(proposal)
         assert decision.tier == ActionTier.ALWAYS_APPROVE
         assert decision.risk_level == RiskLevel.MEDIUM
 
-    def test_route_always_approve_high(self):
+    @pytest.mark.asyncio
+    async def test_route_always_approve_high(self):
         router = ProposalRouter(PolicyEngine(_policy()))
         proposal = _proposal(decision=ActionName.REFUND, weight=Decimal("6.0"), score=Decimal("0.9"))
-        decision = router.route(proposal)
+        decision = await router.route(proposal)
         assert decision.tier == ActionTier.ALWAYS_APPROVE
         assert decision.risk_level == RiskLevel.HIGH
