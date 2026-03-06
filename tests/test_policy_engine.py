@@ -194,7 +194,7 @@ class TestProposalRouter:
         decision = router.route(proposal)
         assert decision.tier == ActionTier.AUTO_APPROVE
         assert decision.risk_level == RiskLevel.LOW
-        assert decision.resolution_step == "risk_tier_match"
+        assert decision.resolution_step == "policy_list_match"
 
     def test_route_always_approve_medium(self):
         router = ProposalRouter(PolicyEngine(_policy()))

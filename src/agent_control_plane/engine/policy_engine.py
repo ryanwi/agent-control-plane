@@ -4,6 +4,7 @@ import logging
 from decimal import Decimal
 from typing import Protocol
 
+from agent_control_plane.engine.action_policy import ActionPolicyHandler, ActionPolicyRegistry
 from agent_control_plane.types.enums import ActionName, ActionTier, ExecutionMode, RiskLevel
 from agent_control_plane.types.policies import PolicySnapshotDTO
 from agent_control_plane.types.proposals import ActionProposalDTO
@@ -83,6 +84,7 @@ class PolicyEngine:
         self.policy = policy
         self._asset_classifier = asset_classifier
         self._risk_classifier = risk_classifier or DefaultRiskClassifier(asset_classifier)
+        self._action_registry = ActionPolicyRegistry(policy)
 
     def classify_risk_level(self, proposal: ActionProposalDTO) -> RiskLevel:
         """Classify a proposal's risk level using the configured risk classifier."""
@@ -121,25 +123,36 @@ class PolicyEngine:
             )
             return ActionTier.BLOCKED
 
-        # 3. Explicit Policy Lists
-        if proposal.decision in self.policy.action_tiers.always_approve:
-            return ActionTier.ALWAYS_APPROVE
+        handler = self.get_action_handler(proposal)
+        return handler.classify_tier(
+            proposal=proposal,
+            risk_level=risk_level,
+            policy=self.policy,
+            can_auto_approve=self._can_auto_approve(risk_level),
+        )
 
-        if proposal.decision in self.policy.action_tiers.auto_approve:
-            return ActionTier.AUTO_APPROVE if self._can_auto_approve(risk_level) else ActionTier.ALWAYS_APPROVE
+    def get_action_handler(self, proposal: ActionProposalDTO) -> ActionPolicyHandler:
+        """Resolve the action handler for a proposal."""
+        return self._action_registry.resolve(proposal.decision)
 
-        # 4. Risk tier mapping (risk_tier_match)
-        if risk_level == RiskLevel.LOW:
-            return ActionTier.AUTO_APPROVE if self._can_auto_approve(risk_level) else ActionTier.ALWAYS_APPROVE
-
-        # Default for medium/high risk
-        return ActionTier.ALWAYS_APPROVE
+    def build_routing_reason(
+        self,
+        proposal: ActionProposalDTO,
+        risk_level: RiskLevel,
+        tier: ActionTier,
+    ) -> tuple[str, str]:
+        """Build routing reason + resolution step via polymorphic handlers."""
+        if not self._passes_asset_scope(proposal):
+            return (
+                f"Action blocked by asset scope (resource={proposal.resource_id}, scope={self.policy.asset_scope})",
+                "capability_match",
+            )
+        handler = self.get_action_handler(proposal)
+        return handler.build_routing_reason(proposal, risk_level, tier)
 
     def _is_blocked(self, proposal: ActionProposalDTO) -> bool:
         """Check if the proposal's action is in the blocked list."""
-        if proposal.decision == ActionName.UNKNOWN:
-            return True
-        return proposal.decision in self.policy.action_tiers.blocked
+        return proposal.decision == ActionName.UNKNOWN or proposal.decision in self.policy.action_tiers.blocked
 
     def _passes_asset_scope(self, proposal: ActionProposalDTO) -> bool:
         """Check if the proposal passes the asset scope filter."""

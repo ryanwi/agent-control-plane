@@ -31,19 +31,7 @@ class ProposalRouter:
         risk_level = self.policy_engine.classify_risk_level(proposal)
         tier = self.policy_engine.classify_action_tier(proposal, risk_level)
 
-        # Determine which step resolved the decision
-        if tier == ActionTier.BLOCKED:
-            resolution = "explicit_assignment"
-            reason = f"Action blocked by policy (resource={proposal.resource_id})"
-        elif tier == ActionTier.AUTO_APPROVE:
-            resolution = "risk_tier_match"
-            reason = f"LOW risk auto-approve (score={proposal.score}, weight={proposal.weight})"
-        elif tier == ActionTier.ALWAYS_APPROVE:
-            resolution = "risk_tier_match"
-            reason = f"{risk_level.value.upper()} risk requires human approval"
-        else:
-            resolution = "default_agent"
-            reason = "Default routing"
+        reason, resolution = self.policy_engine.build_routing_reason(proposal, risk_level, tier)
 
         decision = RoutingDecision(
             tier=tier,
