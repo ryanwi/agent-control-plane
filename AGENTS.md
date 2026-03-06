@@ -25,6 +25,29 @@ uv run pytest
 
 Use `uv run pytest -q` for quick verification.
 
+## Developer quickstart
+
+Use the `Makefile` targets so commands always run in the project-managed `uv` environment:
+
+```bash
+make sync
+make test
+make lint
+make format
+make typecheck
+make check
+```
+
+Equivalent direct commands:
+
+```bash
+uv sync --extra dev
+uv run pytest -q
+uv run ruff check src tests
+uv run ruff format src tests
+uv run mypy src
+```
+
 ## Required workflow for edits
 
 - Prefer minimal, targeted changes.
@@ -77,4 +100,3 @@ Before publishing:
   - `README.md`
   - `docs/architecture.md`
   - `CHANGELOG.md`
-

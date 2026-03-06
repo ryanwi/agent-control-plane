@@ -38,6 +38,26 @@ Who this is less useful for:
 pip install agent-control-plane
 ```
 
+## Local development setup
+
+Preferred workflow (consistent interpreter + dependencies):
+
+```bash
+uv sync --extra dev
+uv run pytest -q
+```
+
+If you prefer bare `python`/`pytest` commands, install the package in editable mode:
+
+```bash
+python -m pip install -e ".[dev]"
+pytest -q
+```
+
+The repo uses a `src/` layout. If you run commands with a Python interpreter that does not have
+the package installed (or you do not use `uv run`), imports like `import agent_control_plane`
+will fail with `ModuleNotFoundError`.
+
 ## Quick architecture overview
 
 For the full reference design, see [docs/architecture.md](docs/architecture.md).
@@ -122,6 +142,18 @@ session_manager.create_policy(...)
 crash_recovery.run_recovery(...)
 timeout_escalation.scan_and_recover(...)
 ```
+
+## Troubleshooting
+
+`ModuleNotFoundError: No module named 'agent_control_plane'`
+
+- Cause: running `python` directly without an editable install and outside `uv run`.
+- Fix: run with `uv run ...` or execute `python -m pip install -e ".[dev]"`.
+
+`python -m pytest` says `No module named pytest`
+
+- Cause: dependencies not installed in that interpreter.
+- Fix: run `uv sync --extra dev` and use `uv run pytest`, or install `.[dev]` into that interpreter.
 
 ## 5-minute integration sketch
 
