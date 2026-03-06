@@ -42,6 +42,8 @@
 
 - `SessionManager.create_policy()` returns a `UUID`.
 - `PolicyEngine.classify_action_tier()` respects explicit `always_approve` and `auto_approve` lists.
+- Policy/action flow now uses typed enums (`ActionName`) internally with exact matching.
+- Unknown actions are fail-closed (`ActionName.UNKNOWN`) and classified as blocked.
 - Public package exports include storage protocols/backends, reference models, and sync API.
 - Documentation updated to reflect async/sync UnitOfWork integration patterns.
 

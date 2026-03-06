@@ -12,6 +12,55 @@ class ActionTier(StrEnum):
     UNRESTRICTED = "unrestricted"
 
 
+class ActionName(StrEnum):
+    """Canonical action identifiers."""
+
+    UNKNOWN = "unknown"
+    BAN = "ban"
+    UNBAN = "unban"
+    STATUS = "status"
+    REFUND = "refund"
+    CHANGE_ADDRESS = "change_address"
+    CHECK_BALANCE = "check_balance"
+    CLOSE_ACCOUNT = "close_account"
+    EXECUTE_TRADE = "execute_trade"
+    WIRE_TRANSFER = "wire_transfer"
+    LOG_INCIDENT = "log_incident"
+    LOG_VIOLATION = "log_violation"
+    RESET_PASSWORD = "reset_password"
+    RESET_CREDENTIALS = "reset_credentials"
+    BLOCK_IP = "block_ip"
+    BAN_USER = "ban_user"
+    HIDE_POST = "hide_post"
+    ISOLATE_HOST = "isolate_host"
+    CHECK_ORDER_STATUS = "check_order_status"
+    FETCH_METRICS = "fetch_metrics"
+    GET_LOGS = "get_logs"
+    SCAN_VULNERABILITY = "scan_vulnerability"
+    FETCH_LOGS = "fetch_logs"
+    FLAG_CONTENT = "flag_content"
+    DELETE_CLUSTER = "delete_cluster"
+    WIPE_DISK = "wipe_disk"
+    RESTART_POD = "restart_pod"
+    SCALE_UP = "scale_up"
+    DESCRIBE_RESOURCES = "describe_resources"
+    LIST_INSTANCES = "list_instances"
+    STOP_INSTANCE = "stop_instance"
+    START_INSTANCE = "start_instance"
+    REBOOT_INSTANCE = "reboot_instance"
+    TERMINATE_INSTANCE = "terminate_instance"
+    WIPE_DATABASE = "wipe_database"
+    DELETE_VBC = "delete_vbc"
+
+
+def parse_action_name(value: ActionName | str) -> ActionName:
+    """Parse user input into a known action enum; unknown values fail-closed."""
+    if isinstance(value, ActionName):
+        return value
+    normalized = value.strip().lower()
+    return ActionName(normalized) if normalized in ActionName._value2member_map_ else ActionName.UNKNOWN
+
+
 class SessionStatus(StrEnum):
     """Control session lifecycle states."""
 

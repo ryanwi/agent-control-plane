@@ -25,7 +25,15 @@ from agent_control_plane.engine.router import ProposalRouter
 from agent_control_plane.engine.session_manager import SessionManager
 from agent_control_plane.models.reference import ActionProposal, Base, register_models
 from agent_control_plane.storage.sqlalchemy_async import AsyncSqlAlchemyUnitOfWork
-from agent_control_plane.types.enums import ActionTier, ApprovalDecisionType, ProposalStatus
+from agent_control_plane.types.enums import (
+    ActionName,
+    ActionTier,
+    ApprovalDecisionType,
+    EventKind,
+    ExecutionMode,
+    ProposalStatus,
+    RiskLevel,
+)
 from agent_control_plane.types.policies import PolicySnapshotDTO
 from agent_control_plane.types.proposals import ActionProposalDTO
 
@@ -35,16 +43,16 @@ DATABASE_URL = "sqlite+aiosqlite:///./agent_control_plane_example.db"
 def _seed_policy() -> PolicySnapshotDTO:
     return PolicySnapshotDTO(
         action_tiers={
-            "blocked": ["ban"],
-            "always_approve": ["refund"],
-            "auto_approve": ["status"],
+            "blocked": [ActionName.BAN],
+            "always_approve": [ActionName.REFUND],
+            "auto_approve": [ActionName.STATUS],
             "unrestricted": [],
         },
         risk_limits={"max_risk_score": "10000", "max_weight_pct": "5.0", "custom": {}},
-        execution_mode="dry_run",
+        execution_mode=ExecutionMode.DRY_RUN,
         approval_timeout_seconds=300,
         auto_approve_conditions={
-            "max_risk_tier": "LOW",
+            "max_risk_tier": RiskLevel.LOW,
             "dry_run_only": True,
             "max_weight": "2.5",
             "min_score": "0.7",
@@ -81,7 +89,7 @@ async def run_control_flow(uow: AsyncSqlAlchemyUnitOfWork) -> None:
         session_id=session.id,
         resource_id="ticket-123",
         resource_type="support_ticket",
-        decision="refund",
+        decision=ActionName.REFUND,
         reasoning="Customer request under policy",
         metadata={"customer": "alice"},
         weight=Decimal("1.5"),
@@ -138,7 +146,7 @@ async def run_control_flow(uow: AsyncSqlAlchemyUnitOfWork) -> None:
     try:
         await event_store.append(
             session_id=session.id,
-            event_kind="proposal.executed",
+            event_kind=EventKind.EXECUTION_COMPLETED,
             payload={"resource_id": proposal.resource_id},
             state_bearing=True,
             agent_id="quickstart-agent",

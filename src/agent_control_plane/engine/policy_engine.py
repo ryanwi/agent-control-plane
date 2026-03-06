@@ -4,7 +4,7 @@ import logging
 from decimal import Decimal
 from typing import Protocol
 
-from agent_control_plane.types.enums import ActionTier, RiskLevel
+from agent_control_plane.types.enums import ActionName, ActionTier, ExecutionMode, RiskLevel
 from agent_control_plane.types.policies import PolicySnapshotDTO
 from agent_control_plane.types.proposals import ActionProposalDTO
 
@@ -102,8 +102,6 @@ class PolicyEngine:
         4. capability_match - asset scope enforcement
         5. default_agent - ALWAYS_APPROVE
         """
-        decision_str = str(proposal.decision).lower()
-
         # 1. Check if action is blocked
         if self._is_blocked(proposal):
             logger.info(
@@ -124,30 +122,24 @@ class PolicyEngine:
             return ActionTier.BLOCKED
 
         # 3. Explicit Policy Lists
-        always_approve = [a.lower() for a in self.policy.action_tiers.always_approve]
-        auto_approve = [a.lower() for a in self.policy.action_tiers.auto_approve]
-
-        if any(action in decision_str for action in always_approve):
+        if proposal.decision in self.policy.action_tiers.always_approve:
             return ActionTier.ALWAYS_APPROVE
 
-        # If in auto_approve list, it's a candidate for AUTO_APPROVE,
-        # but it should still pass the global risk classification if we want safety.
-        # However, the 'auto_approve' list usually implies "bypass risk check for these specific actions".
-        # Let's keep it that way but respect the execution mode (dry_run_only).
-        if any(action in decision_str for action in auto_approve):
-            return ActionTier.AUTO_APPROVE if self._can_auto_approve() else ActionTier.ALWAYS_APPROVE
+        if proposal.decision in self.policy.action_tiers.auto_approve:
+            return ActionTier.AUTO_APPROVE if self._can_auto_approve(risk_level) else ActionTier.ALWAYS_APPROVE
 
         # 4. Risk tier mapping (risk_tier_match)
         if risk_level == RiskLevel.LOW:
-            return ActionTier.AUTO_APPROVE if self._can_auto_approve() else ActionTier.ALWAYS_APPROVE
+            return ActionTier.AUTO_APPROVE if self._can_auto_approve(risk_level) else ActionTier.ALWAYS_APPROVE
 
         # Default for medium/high risk
         return ActionTier.ALWAYS_APPROVE
 
     def _is_blocked(self, proposal: ActionProposalDTO) -> bool:
         """Check if the proposal's action is in the blocked list."""
-        blocked = self.policy.action_tiers.blocked
-        return any(action in str(proposal.decision).lower() for action in blocked)
+        if proposal.decision == ActionName.UNKNOWN:
+            return True
+        return proposal.decision in self.policy.action_tiers.blocked
 
     def _passes_asset_scope(self, proposal: ActionProposalDTO) -> bool:
         """Check if the proposal passes the asset scope filter."""
@@ -155,10 +147,22 @@ class PolicyEngine:
             return self._is_matched_asset(proposal.resource_id)
         return True
 
-    def _can_auto_approve(self) -> bool:
-        """Check if auto-approval is allowed by policy."""
+    def _can_auto_approve(self, risk_level: RiskLevel) -> bool:
+        """Check if auto-approval is allowed by policy for this risk level."""
         auto_cond = self.policy.auto_approve_conditions
-        return not (auto_cond.dry_run_only and self.policy.execution_mode.value != "dry_run")
+
+        # 1. Mode check
+        if auto_cond.dry_run_only and self.policy.execution_mode != ExecutionMode.DRY_RUN:
+            return False
+
+        # 2. Risk tier check
+        levels = [RiskLevel.LOW, RiskLevel.MEDIUM, RiskLevel.HIGH]
+        try:
+            allowed_idx = levels.index(auto_cond.max_risk_tier)
+            actual_idx = levels.index(risk_level)
+            return actual_idx <= allowed_idx
+        except ValueError:
+            return risk_level == RiskLevel.LOW
 
     def _is_matched_asset(self, resource_id: str) -> bool:
         """Check if a resource matches the configured asset classifier."""

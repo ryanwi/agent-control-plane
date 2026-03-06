@@ -64,6 +64,7 @@ from agent_control_plane.types.approvals import (
 )
 from agent_control_plane.types.enums import (
     AbortReason,
+    ActionName,
     ActionTier,
     ApprovalDecisionType,
     ApprovalStatus,
@@ -93,6 +94,7 @@ from agent_control_plane.types.sessions import BudgetInfo, SessionCreate, Sessio
 __all__ = [
     # Enums
     "AbortReason",
+    "ActionName",
     "ActionTier",
     "ApprovalDecisionType",
     "ApprovalStatus",

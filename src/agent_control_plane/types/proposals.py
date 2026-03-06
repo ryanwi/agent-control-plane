@@ -5,13 +5,15 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .enums import (
+    ActionName,
     ActionTier,
     ExecutionIntentStatus,
     ProposalStatus,
     RiskLevel,
+    parse_action_name,
 )
 
 
@@ -25,7 +27,7 @@ class ActionProposalDTO(BaseModel):
     # Proposal content
     resource_id: str
     resource_type: str
-    decision: str
+    decision: ActionName
     reasoning: str
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -41,6 +43,11 @@ class ActionProposalDTO(BaseModel):
     status: ProposalStatus = ProposalStatus.PENDING
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @field_validator("decision", mode="before")
+    @classmethod
+    def _parse_decision(cls, value: ActionName | str) -> ActionName:
+        return parse_action_name(value)
 
 
 class RiskDecisionDTO(BaseModel):

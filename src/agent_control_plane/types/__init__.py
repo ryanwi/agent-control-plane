@@ -3,6 +3,7 @@
 from .approvals import ApprovalDecisionRequest, ApprovalScopeDTO, ApprovalTicketDTO
 from .enums import (
     AbortReason,
+    ActionName,
     ActionTier,
     ApprovalDecisionType,
     ApprovalStatus,
@@ -21,6 +22,7 @@ from .sessions import SessionCreate, SessionState, SessionSummary
 
 __all__ = [
     "AbortReason",
+    "ActionName",
     "ActionProposalDTO",
     "ActionTier",
     "ActionTiers",

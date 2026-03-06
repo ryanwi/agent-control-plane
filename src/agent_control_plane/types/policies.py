@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from .enums import ExecutionMode
+from .enums import ActionName, ExecutionMode, RiskLevel, parse_action_name
 
 
 class RiskLimits(BaseModel):
@@ -20,19 +20,31 @@ class RiskLimits(BaseModel):
 class AutoApproveConditions(BaseModel):
     """Conditions under which proposals can be auto-approved."""
 
-    max_risk_tier: str = "LOW"
+    max_risk_tier: RiskLevel = RiskLevel.LOW
     dry_run_only: bool = True
     max_weight: Decimal = Decimal("2.5")
     min_score: Decimal = Decimal("0.7")
+
+    @field_validator("max_risk_tier", mode="before")
+    @classmethod
+    def _parse_risk_tier(cls, value: RiskLevel | str) -> RiskLevel:
+        if isinstance(value, RiskLevel):
+            return value
+        return RiskLevel(value.strip().lower())
 
 
 class ActionTiers(BaseModel):
     """Action classification tiers."""
 
-    blocked: list[str] = Field(default_factory=list)
-    always_approve: list[str] = Field(default_factory=list)
-    auto_approve: list[str] = Field(default_factory=list)
-    unrestricted: list[str] = Field(default_factory=list)
+    blocked: list[ActionName] = Field(default_factory=list)
+    always_approve: list[ActionName] = Field(default_factory=list)
+    auto_approve: list[ActionName] = Field(default_factory=list)
+    unrestricted: list[ActionName] = Field(default_factory=list)
+
+    @field_validator("blocked", "always_approve", "auto_approve", "unrestricted", mode="before")
+    @classmethod
+    def _parse_actions(cls, value: list[ActionName | str]) -> list[ActionName]:
+        return [parse_action_name(item) for item in value]
 
 
 class PolicySnapshotDTO(BaseModel):

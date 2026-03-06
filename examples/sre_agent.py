@@ -15,6 +15,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
+    ActionName,
     ActionTier,
     AsyncSqlAlchemyUnitOfWork,
     ConcurrencyGuard,
@@ -22,6 +23,7 @@ from agent_control_plane import (
     PolicySnapshotDTO,
     ProposalRouter,
     ReferenceBase,
+    RiskLevel,
     SessionManager,
     register_models,
 )
@@ -46,14 +48,14 @@ async def main():
         # 1. Define Policy
         policy = PolicySnapshotDTO(
             action_tiers={
-                "blocked": ["delete_cluster", "wipe_disk"],
-                "always_approve": ["fetch_metrics", "get_logs"],
-                "auto_approve": [],
-                "unrestricted": ["restart_pod", "scale_up"],
+                ActionTier.BLOCKED: [ActionName.DELETE_CLUSTER, ActionName.WIPE_DISK],
+                ActionTier.ALWAYS_APPROVE: [ActionName.FETCH_METRICS, ActionName.GET_LOGS],
+                ActionTier.AUTO_APPROVE: [],
+                ActionTier.UNRESTRICTED: [ActionName.RESTART_POD, ActionName.SCALE_UP],
             },
             risk_limits={"max_weight_pct": Decimal("50.0")},
             auto_approve_conditions={
-                "max_risk_tier": "low",
+                "max_risk_tier": RiskLevel.LOW,
                 "max_weight": "10.0",
                 "min_score": "0.7",
                 "dry_run_only": False,
@@ -70,8 +72,8 @@ async def main():
 
         # 3. Scenarios
         tasks = [
-            ("restart_pod", "pod-web-01", 1.0, 0.9),  # Auto (Low Risk)
-            ("delete_cluster", "prod-db-cluster", 1.0, 0.5),  # BLOCKED
+            (ActionName.RESTART_POD, "pod-web-01", 1.0, 0.9),  # Auto (Low Risk)
+            (ActionName.DELETE_CLUSTER, "prod-db-cluster", 1.0, 0.5),  # BLOCKED
         ]
 
         for action, res, weight, score in tasks:

@@ -14,6 +14,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
+    ActionName,
     ActionProposal,
     ActionTier,
     ApprovalGate,
@@ -24,6 +25,7 @@ from agent_control_plane import (
     ProposalRouter,
     ProposalStatus,
     ReferenceBase,
+    RiskLevel,
     SessionManager,
     register_models,
 )
@@ -48,13 +50,13 @@ async def main():
         # 1. Define Policy
         policy = PolicySnapshotDTO(
             action_tiers={
-                "always_approve": ["flag_content", "log_violation"],
-                "auto_approve": [],
-                "unrestricted": ["hide_post", "ban_user"],
+                ActionTier.ALWAYS_APPROVE: [ActionName.FLAG_CONTENT, ActionName.LOG_VIOLATION],
+                ActionTier.AUTO_APPROVE: [],
+                ActionTier.UNRESTRICTED: [ActionName.HIDE_POST, ActionName.BAN_USER],
             },
             risk_limits={"max_weight_pct": Decimal("20.0")},
             auto_approve_conditions={
-                "max_risk_tier": "low",
+                "max_risk_tier": RiskLevel.LOW,
                 "max_weight": "5.0",
                 "min_score": "0.95",
                 "dry_run_only": False,
@@ -71,8 +73,8 @@ async def main():
 
         # 3. Scenarios
         tasks = [
-            ("hide_post", "post-123", 1.0, 0.98),  # Auto (Low Risk)
-            ("ban_user", "user-456", 10.0, 0.4),  # Gate (High Risk/Manual)
+            (ActionName.HIDE_POST, "post-123", 1.0, 0.98),  # Auto (Low Risk)
+            (ActionName.BAN_USER, "user-456", 10.0, 0.4),  # Gate (High Risk/Manual)
         ]
 
         for action, res, weight, score in tasks:
@@ -82,6 +84,7 @@ async def main():
                 resource_id=res,
                 resource_type="user",
                 decision=action,
+                reasoning=f"moderation action for {res}",
                 weight=Decimal(str(weight)),
                 score=Decimal(str(score)),
             )

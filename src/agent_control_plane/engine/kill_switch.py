@@ -70,7 +70,7 @@ class KillSwitch:
             payload={"reason": reason, "tickets_denied": denied},
             state_bearing=True,
         )
-        return {"scope": "session_abort", "session_id": str(session_id), "tickets_denied": denied}
+        return {"scope": KillSwitchScope.SESSION_ABORT, "session_id": str(session_id), "tickets_denied": denied}
 
     async def _abort_agent(self, agent_id: str | None, reason: str) -> dict:
         """Pause active execution across all sessions for an agent-abort event."""
@@ -88,13 +88,13 @@ class KillSwitch:
             await self.event_store.append(
                 session_id=cs.id,
                 event_kind=EventKind.KILL_SWITCH_TRIGGERED,
-                payload={"scope": "agent_abort", "agent_id": agent_id, "reason": reason},
+                payload={"scope": KillSwitchScope.AGENT_ABORT, "agent_id": agent_id, "reason": reason},
                 state_bearing=False,
             )
             affected += 1
 
         return {
-            "scope": "agent_abort",
+            "scope": KillSwitchScope.AGENT_ABORT,
             "agent_id": agent_id,
             "sessions_affected": affected,
             "tickets_denied": denied,
@@ -113,13 +113,13 @@ class KillSwitch:
             await self.event_store.append(
                 session_id=cs.id,
                 event_kind=EventKind.KILL_SWITCH_TRIGGERED,
-                payload={"scope": "system_halt", "reason": reason},
+                payload={"scope": KillSwitchScope.SYSTEM_HALT, "reason": reason},
                 state_bearing=True,
             )
             aborted += 1
 
         logger.critical("SYSTEM HALT: Aborted %d sessions, denied %d tickets", aborted, total_denied)
-        return {"scope": "system_halt", "sessions_aborted": aborted, "tickets_denied": total_denied}
+        return {"scope": KillSwitchScope.SYSTEM_HALT, "sessions_aborted": aborted, "tickets_denied": total_denied}
 
     async def _budget_halt(self, session_id: UUID | None, reason: str) -> dict:
         """Auto-triggered when session budget is exhausted."""
@@ -136,7 +136,7 @@ class KillSwitch:
             state_bearing=True,
         )
         return {
-            "scope": "budget_auto_halt",
+            "scope": KillSwitchScope.BUDGET_AUTO_HALT,
             "session_id": str(session_id),
             "tickets_denied": denied,
         }

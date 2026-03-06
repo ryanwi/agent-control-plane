@@ -22,6 +22,7 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
+    ActionName,
     ActionProposal,
     ActionTier,
     ApprovalDecisionType,
@@ -29,12 +30,14 @@ from agent_control_plane import (
     AsyncSqlAlchemyUnitOfWork,
     BudgetTracker,
     ConcurrencyGuard,
+    EventKind,
     EventStore,
     PolicyEngine,
     PolicySnapshotDTO,
     ProposalRouter,
     ProposalStatus,
     ReferenceBase,
+    RiskLevel,
     SessionManager,
     register_models,
 )
@@ -51,9 +54,9 @@ def create_security_policy() -> PolicySnapshotDTO:
     """Define the security governance policy."""
     return PolicySnapshotDTO(
         action_tiers={
-            "blocked": ["delete_all_logs"],  # Strictly forbidden
-            "always_approve": ["log_incident"],  # Low risk, always allowed
-            "auto_approve": ["reset_password"],  # Can be auto-approved based on conditions
+            "blocked": [ActionName.UNKNOWN],  # Strictly forbidden (demonstrating unknown mapping)
+            "always_approve": [ActionName.LOG_INCIDENT],  # Low risk, always allowed
+            "auto_approve": [ActionName.RESET_PASSWORD],  # Can be auto-approved based on conditions
             "unrestricted": [],
         },
         risk_limits={
@@ -64,7 +67,7 @@ def create_security_policy() -> PolicySnapshotDTO:
         execution_mode="live",
         approval_timeout_seconds=60,
         auto_approve_conditions={
-            "max_risk_tier": "low",
+            "max_risk_tier": RiskLevel.LOW,
             "dry_run_only": False,
             "max_weight": "5.0",
             "min_score": "0.8",
@@ -108,7 +111,7 @@ class SecurityAgent:
         self,
         resource_id: str,
         resource_type: str,
-        action_name: str,
+        action_name: ActionName,
         reason: str,
         risk_score: float = 0.5,
         weight: float = 1.0,
@@ -159,7 +162,7 @@ class SecurityAgent:
 
         # 4. Handle based on tier
         if route.tier == ActionTier.ALWAYS_APPROVE or (
-            route.tier == ActionTier.AUTO_APPROVE and route.risk_level.value == "LOW"
+            route.tier == ActionTier.AUTO_APPROVE and route.risk_level.value == "low"
         ):
             # Auto-approvable
             logger.info(f"Action {action_name} auto-approved.")
@@ -213,7 +216,7 @@ class SecurityAgent:
             # Record event
             await self.event_store.append(
                 session_id=self.session.id,
-                event_kind="action.executed",
+                event_kind=EventKind.EXECUTION_COMPLETED,
                 payload={
                     "action": action.decision,
                     "resource_id": action.resource_id,
@@ -253,7 +256,7 @@ async def main():
         await agent.propose_action(
             resource_id="login-log-001",
             resource_type="audit_log",
-            action_name="log_incident",
+            action_name=ActionName.LOG_INCIDENT,
             reason="Detected multiple failed login attempts from IP 1.2.3.4",
             risk_score=0.1,
             weight=0.1,
@@ -263,7 +266,7 @@ async def main():
         await agent.propose_action(
             resource_id="user-ryan",
             resource_type="user_account",
-            action_name="reset_password",
+            action_name=ActionName.RESET_PASSWORD,
             reason="Suspicious login patterns, resetting password as precaution",
             risk_score=0.75,  # High score but we'll see how policy handles it
             weight=1.0,
@@ -274,7 +277,7 @@ async def main():
         await agent.propose_action(
             resource_id="ip-1.2.3.4",
             resource_type="firewall_rule",
-            action_name="block_ip",
+            action_name=ActionName.BLOCK_IP,
             reason="IP 1.2.3.4 confirmed brute force source",
             risk_score=0.9,
             weight=5.0,
@@ -284,7 +287,7 @@ async def main():
         await agent.propose_action(
             resource_id="system-logs",
             resource_type="storage",
-            action_name="delete_all_logs",
+            action_name=ActionName.UNKNOWN,  # Blocked in our policy
             reason="Cleaning up space",
             risk_score=1.0,
             weight=100.0,
@@ -296,7 +299,7 @@ async def main():
             await agent.propose_action(
                 resource_id=f"ip-10.0.0.{i}",
                 resource_type="firewall_rule",
-                action_name="block_ip",
+                action_name=ActionName.BLOCK_IP,
                 reason="Brute force attack",
                 risk_score=0.9,
                 weight=5.0,  # Total 11 * 5.0 = 55.0 > 50.0

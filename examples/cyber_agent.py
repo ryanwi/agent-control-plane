@@ -14,6 +14,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
+    ActionName,
     ActionProposal,
     ActionTier,
     ApprovalGate,
@@ -24,6 +25,7 @@ from agent_control_plane import (
     ProposalRouter,
     ProposalStatus,
     ReferenceBase,
+    RiskLevel,
     SessionManager,
     register_models,
 )
@@ -48,13 +50,13 @@ async def main():
         # 1. Define Policy
         policy = PolicySnapshotDTO(
             action_tiers={
-                "always_approve": ["scan_vulnerability", "fetch_logs"],
-                "auto_approve": [],
-                "unrestricted": ["isolate_host", "reset_credentials"],
+                ActionTier.ALWAYS_APPROVE: [ActionName.SCAN_VULNERABILITY, ActionName.FETCH_LOGS],
+                ActionTier.AUTO_APPROVE: [],
+                ActionTier.UNRESTRICTED: [ActionName.ISOLATE_HOST, ActionName.RESET_CREDENTIALS],
             },
             risk_limits={"max_weight_pct": Decimal("50.0")},
             auto_approve_conditions={
-                "max_risk_tier": "low",
+                "max_risk_tier": RiskLevel.LOW,
                 "max_weight": "20.0",
                 "min_score": "0.8",
                 "dry_run_only": False,
@@ -71,8 +73,8 @@ async def main():
 
         # 3. Scenarios
         tasks = [
-            ("isolate_host", "host-77", 10.0, 0.9),  # Auto (Low Risk < 20)
-            ("reset_credentials", "admin-01", 5.0, 0.3),  # Gate (High Risk / Low Confidence)
+            (ActionName.ISOLATE_HOST, "host-77", 10.0, 0.9),  # Auto (Low Risk < 20)
+            (ActionName.RESET_CREDENTIALS, "admin-01", 5.0, 0.3),  # Gate (High Risk / Low Confidence)
         ]
 
         for action, res, weight, score in tasks:

@@ -14,17 +14,20 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
+    ActionName,
     ActionProposal,
     ActionTier,
     ApprovalGate,
     AsyncSqlAlchemyUnitOfWork,
     BudgetTracker,
     EventStore,
+    ExecutionMode,
     PolicyEngine,
     PolicySnapshotDTO,
     ProposalRouter,
     ProposalStatus,
     ReferenceBase,
+    RiskLevel,
     SessionManager,
     register_models,
 )
@@ -49,18 +52,18 @@ async def main():
         # 1. Define Policy
         policy = PolicySnapshotDTO(
             action_tiers={
-                "always_approve": ["check_order_status"],
+                "always_approve": [ActionName.CHECK_ORDER_STATUS],
                 "auto_approve": [],
-                "unrestricted": ["issue_refund", "change_address"],
+                "unrestricted": [ActionName.REFUND, ActionName.CHANGE_ADDRESS],
             },
             risk_limits={"max_weight_pct": Decimal("100.0")},  # High limit for total refund
             auto_approve_conditions={
-                "max_risk_tier": "low",
+                "max_risk_tier": RiskLevel.LOW,
                 "max_weight": "50.0",
                 "min_score": "0.8",
                 "dry_run_only": False,
             },
-            execution_mode="live",
+            execution_mode=ExecutionMode.LIVE,
         )
 
         # 2. Initialize Engines
@@ -73,9 +76,9 @@ async def main():
 
         # 3. Scenarios
         tasks = [
-            ("issue_refund", "order-99", 45.0, 0.9),  # Auto (Low Risk < 50)
-            ("issue_refund", "order-101", 150.0, 0.5),  # Gate (High Risk > 100)
-            ("change_address", "user-ryan", 1.0, 0.5),  # Gate (Medium Risk)
+            (ActionName.REFUND, "order-99", 45.0, 0.9),  # Auto (Low Risk < 50)
+            (ActionName.REFUND, "order-101", 150.0, 0.5),  # Gate (High Risk > 100)
+            (ActionName.CHANGE_ADDRESS, "user-ryan", 1.0, 0.5),  # Gate (Medium Risk)
         ]
 
         for action, res, weight, score in tasks:
@@ -85,6 +88,7 @@ async def main():
                 resource_id=res,
                 resource_type="order",
                 decision=action,
+                reasoning=f"support workflow for {res}",
                 weight=Decimal(str(weight)),
                 score=Decimal(str(score)),
             )
