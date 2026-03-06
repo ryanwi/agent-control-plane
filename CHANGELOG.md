@@ -56,7 +56,8 @@
   - `idempotency_key`
 - README now highlights importing `UnknownAppEventPolicy` from `agent_control_plane.types`.
 
-## [0.4.0] - 2026-03-06
+### Additional scope included in 0.1.4
+
 
 ### Added
 
@@ -151,7 +152,8 @@
 
 - Removed remaining string comparisons in examples and policy/router tests where enum comparisons are now authoritative.
 
-## [0.2.0] - 2026-03-06
+### Additional scope included in 0.1.1
+
 
 ### Added
 
