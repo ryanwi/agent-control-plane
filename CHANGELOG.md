@@ -4,6 +4,23 @@
 
 - No unreleased changes.
 
+## [0.5.0] - 2026-03-06
+
+### Added
+
+- `SessionLifecycleResult` DTO for sync lifecycle operations.
+- `SyncControlPlane.complete_session()` and `SyncControlPlane.abort_session()` now return `SessionLifecycleResult`.
+- `ControlPlaneFacade.close_session()` and `ControlPlaneFacade.abort_session()` now return `SessionLifecycleResult`.
+
+### Changed
+
+- `emit_app_event(...)` and `ControlPlaneFacade.emit_app(...)` now accept optional overrides for:
+  - `state_bearing`
+  - `agent_id`
+  - `correlation_id`
+  - `idempotency_key`
+- README now highlights importing `UnknownAppEventPolicy` from `agent_control_plane.types`.
+
 ## [0.4.0] - 2026-03-06
 
 ### Added
