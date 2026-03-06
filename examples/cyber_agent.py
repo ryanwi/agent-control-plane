@@ -95,6 +95,7 @@ async def main():
                 resource_id=res,
                 resource_type="cyber",
                 decision=action,
+                reasoning=dto.reasoning,
                 weight=dto.weight,
                 score=dto.score,
                 action_tier=route.tier.value,
