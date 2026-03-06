@@ -4,6 +4,38 @@
 
 - No unreleased changes.
 
+## [0.4.0] - 2026-03-06
+
+### Added
+
+- New embedded MCP gateway module: `agent_control_plane.mcp`.
+- `McpGateway` for governed MCP tool-call execution.
+- Typed MCP gateway interfaces:
+  - `ToolCallContext`
+  - `ToolCallResult`
+  - `ToolExecutor`
+  - `ToolPolicyMap`
+  - `McpGatewayConfig`
+  - `McpEventMapper`
+- Typed MCP event enum: `McpEventName`.
+- Typed MCP governance errors:
+  - `McpGovernanceError`
+  - `PolicyDeniedError`
+  - `ApprovalRequiredError`
+  - `BudgetDeniedError`
+  - `KillSwitchActiveError`
+  - `ToolExecutionError`
+- MCP gateway example: `examples/mcp_tool_gateway.py`.
+- MCP gateway tests: `tests/test_mcp_gateway.py`.
+
+### Changed
+
+- `SyncControlPlane` now exposes:
+  - `session_scope()` for extension flows that need a raw session context.
+  - `get_session(session_id)` for typed session-state reads.
+- `ControlPlaneFacade` now exposes `get_session(session_id)`.
+- README expanded with MCP tool-call gateway integration guidance.
+
 ## [0.3.1] - 2026-03-06
 
 ### Changed

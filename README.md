@@ -91,6 +91,7 @@ flowchart LR
 - `ConcurrencyGuard` blocks duplicate work for the same session and resource.
 - `EventStore` writes monotonic events and supports non-state-bearing buffering on DB failures.
 - `SessionManager`, `CrashRecovery`, and `TimeoutEscalation` preserve continuity after failures.
+- `McpGateway` governs MCP tool calls before execution (policy, approvals, budget, audit).
 
 ## Control-plane lifecycle
 
@@ -239,6 +240,41 @@ For a native sync host, use `SyncControlPlane` or `ControlPlaneFacade` and `exam
 `SyncControlPlane.emit_event()` / `replay_events()` provide first-class sync event operations.
 `SyncControlPlane.emit_app_event()` supports boundary mapping via `AppEventMapper`/`DictEventMapper`.
 
+## MCP tool-call gateway (v0.4)
+
+Use `McpGateway` to enforce governance before MCP tool execution.
+
+```python
+from decimal import Decimal
+from agent_control_plane.mcp import McpGateway, McpGatewayConfig, ToolCallContext, ToolCallResult, ToolPolicyMap
+from agent_control_plane.sync import SyncControlPlane
+from agent_control_plane.types.enums import ActionName
+from agent_control_plane.types.policies import ActionTiers, PolicySnapshotDTO
+
+cp = SyncControlPlane("sqlite:///./control_plane.db")
+cp.setup()
+session_id = cp.create_session("mcp-runtime", max_cost=Decimal("100"), max_action_count=50)
+
+policy = PolicySnapshotDTO(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+
+class Executor:
+    def execute(self, context):
+        return ToolCallResult(ok=True, output={"status": "ok"}, cost=Decimal("0.2"))
+
+gateway = McpGateway(
+    cp,
+    Executor(),
+    ToolPolicyMap({"status": ActionName.STATUS}),
+    config=McpGatewayConfig(policy_snapshot=policy),
+)
+
+result = gateway.handle_tool_call(
+    ToolCallContext(tool_name="status", session_id=session_id, estimated_cost=Decimal("0.1"))
+)
+```
+
+Unknown tools are denied by default (fail-closed).
+
 ## ORM integration
 
 Mixin examples and full schema details are in `agent_control_plane/models/mixins.py`.
@@ -287,6 +323,7 @@ class ControlEvent(Base, ControlEventMixin):
   - Asset Scoping: [`examples/compliance_agent.py`](examples/compliance_agent.py)
 - Utilities:
   - Audit Trail Replay: [`examples/audit_viewer.py`](examples/audit_viewer.py)
+  - MCP Gateway Demo: [`examples/mcp_tool_gateway.py`](examples/mcp_tool_gateway.py)
 
 ## License
 
