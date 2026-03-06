@@ -83,6 +83,7 @@ async def main():
                 resource_id=res,
                 resource_type="pod",
                 decision=action,
+                reasoning=f"sre remediation for {res}",
                 weight=Decimal(str(weight)),
                 score=Decimal(str(score)),
             )
