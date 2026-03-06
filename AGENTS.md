@@ -52,7 +52,7 @@ uv run mypy src
 
 - Prefer minimal, targeted changes.
 - Preserve API/behavior in public exports under `src/agent_control_plane/__init__.py`.
-- When editing engine behavior, keep backward compatibility at the public API level.
+- When editing engine behavior, maintain a clean and consistent public API surface.
 - Add/adjust tests for any behavior changes, especially:
   - approval/risk/budget/guidance paths,
   - kill-switch and recovery paths,

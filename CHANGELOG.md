@@ -2,25 +2,7 @@
 
 ## [Unreleased]
 
-### Changed
-
-- **Breaking:** Generalized domain-specific naming to be domain-agnostic:
-  - Renamed budget fields: `notional`/`max_notional`/`used_notional` → `cost`/`max_cost`/`used_cost` across DTOs, mixins, and engines.
-  - Renamed proposal fields: `allocation_pct` → `weight`, `confidence` → `score`. Both are now optional (default `0`).
-  - Removed `time_horizon`, `max_allocation`, `max_concentration_pct`, `max_single_allocation_pct` fields.
-  - Renamed `ExecutionIntentDTO.quantity` → `parameters` (dict).
-  - Removed `scope_symbols` and `security_id` backward-compat shims; use `resource_id` and `scope_resource_ids` only.
-  - Removed `InstrumentLockedError` alias and `check_instrument_lock()`; use `ResourceLockedError` and `check_resource_lock()`.
-  - Emptied `ActionTiers` defaults — users define their own tier lists.
-- Added pluggable `RiskClassifier` protocol and `DefaultRiskClassifier` to `PolicyEngine`, replacing hardcoded allocation/confidence thresholds.
-- Clarified persistence contract: v0.1 remains SQLAlchemy-first with durable, transaction-backed state.
-  - Added architecture/readme notes and planned adapter path for future pluggable backends.
-
-### Added
-
-- `RiskClassifier` protocol for domain-specific risk classification.
-- `DefaultRiskClassifier` using generic `weight`/`score` thresholds.
-- `examples/quickstart.py` with a runnable, dependency-light SQLite walkthrough of a proposal through policy, approval, budget, concurrency, and event persistence flows.
+- No unreleased changes.
 
 ## [0.1.0] - 2026-03-05
 
@@ -42,6 +24,12 @@
 - Integration primitives:
   - `ModelRegistry` and SQLAlchemy mixins for host-application model composition.
   - Typed DTOs and enums for approvals, proposals, sessions, events, and policy definitions.
+- Policy and classification features:
+  - Pluggable `RiskClassifier` protocol and `DefaultRiskClassifier`.
+  - Generic proposal scoring fields (`weight`, `score`) and resource-scoped approvals (`resource_id`, `scope_resource_ids`).
+  - Generic execution parameters via `ExecutionIntentDTO.parameters`.
+- Developer and adoption assets:
+  - `examples/quickstart.py` with a runnable SQLite control-flow walkthrough.
 - Test coverage:
   - Added regression tests for approval scope behavior, timeout escalation, and event buffering/failure handling.
 
@@ -50,6 +38,7 @@
 - Control-plane behavior is documented in terms of explicit governance versus execution separation.
 - Failure semantics were clarified and aligned across engine boundaries for safer failure handling.
 - Public docs and architecture references were expanded for external integration use.
+- Public terminology and API names are domain-agnostic for multi-domain agent workloads.
 
 ### Documentation
 

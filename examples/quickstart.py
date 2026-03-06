@@ -69,7 +69,9 @@ class ControlSession(Base):
     abort_details: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
-        nullable=False, default_factory=lambda: datetime.now(UTC), server_default="CURRENT_TIMESTAMP"
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default="CURRENT_TIMESTAMP",
     )
     updated_at: Mapped[datetime | None] = mapped_column(nullable=True)
 
@@ -102,7 +104,9 @@ class ControlEvent(Base):
     routing_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
-        nullable=False, default_factory=lambda: datetime.now(UTC), server_default="CURRENT_TIMESTAMP"
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default="CURRENT_TIMESTAMP",
     )
 
 
@@ -119,7 +123,9 @@ class PolicySnapshot(Base):
     approval_timeout_seconds: Mapped[int] = mapped_column(nullable=False)
     auto_approve_conditions: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        nullable=False, default_factory=lambda: datetime.now(UTC), server_default="CURRENT_TIMESTAMP"
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default="CURRENT_TIMESTAMP",
     )
 
 
@@ -146,7 +152,9 @@ class ActionProposal(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
-        nullable=False, default_factory=lambda: datetime.now(UTC), server_default="CURRENT_TIMESTAMP"
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        server_default="CURRENT_TIMESTAMP",
     )
 
 
@@ -198,7 +206,12 @@ def _seed_models() -> PolicySnapshotDTO:
         asset_scope=None,
         execution_mode="dry_run",
         approval_timeout_seconds=300,
-        auto_approve_conditions={"max_risk_tier": "LOW", "dry_run_only": True, "max_weight": "2.5", "min_score": "0.7"},
+        auto_approve_conditions={
+            "max_risk_tier": "LOW",
+            "dry_run_only": True,
+            "max_weight": "2.5",
+            "min_score": "0.7",
+        },
     )
 
 
@@ -214,7 +227,11 @@ async def run_control_flow(db: AsyncSession) -> None:
         action_tiers=policy_snapshot.action_tiers.model_dump(),
         risk_limits=policy_snapshot.risk_limits.model_dump(),
         asset_scope=policy_snapshot.asset_scope,
-        execution_mode=policy_snapshot.execution_mode.value if hasattr(policy_snapshot.execution_mode, "value") else policy_snapshot.execution_mode,
+        execution_mode=(
+            policy_snapshot.execution_mode.value
+            if hasattr(policy_snapshot.execution_mode, "value")
+            else policy_snapshot.execution_mode
+        ),
         approval_timeout_seconds=policy_snapshot.approval_timeout_seconds,
         auto_approve_conditions=policy_snapshot.auto_approve_conditions.model_dump(),
     )
@@ -329,6 +346,14 @@ async def run_control_flow(db: AsyncSession) -> None:
 
 
 async def main() -> None:
+    if DATABASE_URL.startswith("sqlite+aiosqlite"):
+        try:
+            import aiosqlite  # noqa: F401
+        except ModuleNotFoundError as exc:
+            raise SystemExit(
+                "Missing optional dependency 'aiosqlite'. Install with: uv pip install aiosqlite"
+            ) from exc
+
     engine = create_async_engine(DATABASE_URL, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
