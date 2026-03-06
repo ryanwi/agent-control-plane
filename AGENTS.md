@@ -5,6 +5,7 @@
 This repository is the standalone `agent-control-plane` package:
 
 - A governance/control layer for autonomous-agent runtimes.
+- Embedded/self-hosted library (not a hosted control-plane SaaS).
 - Not a trading product, not a data-plane service, and not tied to any host domain schema.
 - Focused on policy, approvals, budgets, kill switches, event persistence, and recovery.
 
@@ -20,10 +21,8 @@ This repository is the standalone `agent-control-plane` package:
 
 ```bash
 uv sync --extra dev
-uv run pytest
+make check
 ```
-
-Use `uv run pytest -q` for quick verification.
 
 ## Developer quickstart
 
@@ -51,12 +50,19 @@ uv run mypy src
 ## Required workflow for edits
 
 - Prefer minimal, targeted changes.
-- Preserve API/behavior in public exports under `src/agent_control_plane/__init__.py`.
-- When editing engine behavior, maintain a clean and consistent public API surface.
+- Preserve API/behavior in public exports under `src/agent_control_plane/__init__.py` unless the change is intentional and versioned.
+- For intentional API changes, update tests, README, and `CHANGELOG.md` in the same change.
 - Add/adjust tests for any behavior changes, especially:
   - approval/risk/budget/guidance paths,
   - kill-switch and recovery paths,
   - event persistence and buffering semantics.
+
+## Task routing (progressive disclosure)
+
+- API/export changes: check `src/agent_control_plane/__init__.py`, `README.md`, and `CHANGELOG.md`.
+- Identity/security integration changes: check `docs/integration_identity.md` and `docs/security_model.md`.
+- Operational/recovery behavior changes: check `docs/operations_runbook.md` and `docs/architecture.md`.
+- MCP gateway changes: check `src/agent_control_plane/mcp/*` and MCP sections in `README.md`.
 
 ## Key runtime contracts
 
@@ -99,4 +105,7 @@ Before publishing:
 - Main references:
   - `README.md`
   - `docs/architecture.md`
+  - `docs/integration_identity.md`
+  - `docs/security_model.md`
+  - `docs/operations_runbook.md`
   - `CHANGELOG.md`
