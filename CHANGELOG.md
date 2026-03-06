@@ -4,6 +4,39 @@
 
 - No unreleased changes.
 
+## [0.2.0] - 2026-03-06
+
+### Added
+
+- **Agent Registry**: Central engine for managing registered agent identities, versions, and tags.
+- **Capability Governance**: Formalized agent capabilities (e.g., "I can isolate pods") mapped to allowed actions.
+- **Governed Delegation**: New `DelegationGuard` for secure task hand-off between agents with full audit trail.
+- **Polymorphic Routing**: Refactored `PolicyEngine` to use `ActionPolicyHandler` pattern for cleaner, extensible routing logic.
+- **Audit Viewer**: New `examples/audit_viewer.py` utility for replaying and formatting session event timelines.
+- **Identity-Validated Routing**: `ProposalRouter` now optionally validates that proposing agents are registered and authorized for specific actions.
+- **Advanced Stress-Test Examples**:
+  - `examples/zombie_agent.py`: Validates crash recovery.
+  - `examples/ghosted_agent.py`: Validates timeout escalation.
+  - `examples/panic_agent.py`: Validates global kill switch behavior.
+  - `examples/compliance_agent.py`: Validates regex-based asset scoping.
+  - `examples/rate_limited_agent.py`: Validates concurrency and budget limits.
+  - `examples/multi_agent_delegation.py`: Validates identity-linked delegation flows.
+
+### Changed
+
+- **Enum Migration**: Comprehensive refactor to use typed enums (`ActionName`, `RiskLevel`, `EventKind`, `ExecutionMode`) across all engines, DTOs, and repositories.
+- **Improved Type Safety**: Resolved all `mypy` strict type-checking issues across the entire `src/` directory.
+- **Kill Switch Metadata**: `KillSwitch` now returns `KillSwitchScope` enum values in metadata dictionaries for better consistency.
+- **Timeout Refactor**: `TimeoutEscalation` logic consolidated into `ApprovalGate.expire_timed_out_tickets()`.
+
+### Fixed
+
+- **SQL Timeout Reliability**: Replaced Python-side UTC comparisons with SQL `func.now()` for robust multi-timezone ticket expiration.
+- **Crash Recovery Constructor**: Added missing `event_repo` argument to `CrashRecovery` initialization.
+- **Session Policy Consistency**: Fixed `SessionManager.create_policy()` to return `UUID` directly, resolving SQLAlchemy persistence crashes.
+- **Policy Prioritization**: Improved `PolicyEngine` to correctly prioritize explicit `always_approve`/`auto_approve` lists over generic risk levels.
+- **Case-Insensitivity**: Policy list matching is now case-insensitive for better usability.
+
 ## [0.1.0] - 2026-03-06
 
 ### Added
