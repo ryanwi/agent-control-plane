@@ -14,6 +14,7 @@ from agent_control_plane.engine.router import ProposalRouter
 from agent_control_plane.types.enums import (
     ActionName,
     ActionTier,
+    AssetScope,
     ExecutionMode,
     RiskLevel,
     RoutingResolutionStep,
@@ -167,14 +168,14 @@ class TestPolicyEngine:
 
     def test_asset_scope_blocks_unmatched(self):
         ac = DefaultAssetClassifier(frozenset({"VIP"}))
-        policy = _policy(asset_scope="vip_only")
+        policy = _policy(asset_scope=AssetScope.MATCHED_ONLY)
         engine = PolicyEngine(policy, asset_classifier=ac)
         proposal = _proposal(resource_id="regular-user")
         assert engine.classify_action_tier(proposal, RiskLevel.LOW) == ActionTier.BLOCKED
 
     def test_asset_scope_passes_matched(self):
         ac = DefaultAssetClassifier(frozenset({"VIP"}))
-        policy = _policy(asset_scope="vip_only")
+        policy = _policy(asset_scope=AssetScope.MATCHED_ONLY)
         engine = PolicyEngine(policy, asset_classifier=ac)
         proposal = _proposal(resource_id="VIP-customer-42", decision="status")
         assert engine.classify_action_tier(proposal, RiskLevel.LOW) == ActionTier.AUTO_APPROVE
