@@ -66,21 +66,24 @@ For the full reference design, see [docs/architecture.md](docs/architecture.md).
 
 ```mermaid
 flowchart LR
-  A[Proposal] --> B[Policy Engine]
-  B --> C[Proposal Router]
-  C --> D[Approval Gate]
-  D --> E[Budget Tracker]
-  E --> F[Concurrency Guard]
-  F --> G[Kill Switch Check]
-  G --> H[Execution Plane]
-  H --> I[Event Store]
-  I --> J[Session Manager + Recovery]
+  A[Proposal] --> B[Agent Registry]
+  B --> C[Policy Engine]
+  C --> D[Proposal Router]
+  D --> E[Approval Gate]
+  E --> F[Budget Tracker]
+  F --> G[Concurrency Guard]
+  G --> H[Kill Switch Check]
+  H --> I[Execution Plane]
+  I --> J[Event Store]
+  J --> K[Session Manager + Recovery]
 ```
 
 ## Core components
 
-- `PolicyEngine` classifies risk, assigns action tier, and evaluates policy limits.
-- `ProposalRouter` resolves policy outcome and selected actor.
+- `AgentRegistry` manages registered agent identities, versions, and capability maps.
+- `PolicyEngine` classifies risk, assigns action tier via polymorphic handlers, and evaluates limits.
+- `ProposalRouter` resolves policy outcomes and validates agent authorization.
+- `DelegationGuard` oversees and audits task hand-offs between different agents.
 - `ApprovalGate` manages ticket creation, scoped approvals, expiry, and denial paths.
 - `BudgetTracker` enforces session-level cost/count ceilings.
 - `KillSwitch` provides session/system/budget emergency stop semantics.
@@ -90,16 +93,17 @@ flowchart LR
 
 ## Control-plane lifecycle
 
-1. Proposal enters the control plane with identity, intent, and resource scope.
-2. Policy is applied to classify risk and derive action tier.
-3. Router emits a routing decision and captures why it was chosen.
-4. Approvals are checked:
+1. Proposal enters the control plane with agent identity, intent, and resource scope.
+2. **Identity check**: Agent is verified against the `AgentRegistry` for valid capabilities.
+3. **Policy check**: Action is classified into a tier (Blocked, Auto-approve, Manual gate).
+4. **Router decision**: A deterministic routing decision is emitted with a clear reason.
+5. **Approvals**:
    1. If no human gate is needed, the proposal proceeds.
-   2. If scoped/session approval exists, it is consumed or rejected.
-5. Budgets are reserved atomically.
-6. Concurrency lock is acquired.
-7. Proposal is executed by the downstream data plane.
-8. Events are persisted, replayed, and used for recovery and audits.
+   2. If a manual gate is required, an `ApprovalTicket` is created.
+6. **Budgets**: Risk-weighted budget is reserved atomically.
+7. **Concurrency**: A resource-specific lock is acquired for the duration of the cycle.
+8. **Execution**: The proposal is executed by the downstream data plane.
+9. **Audit**: Every step emits a monotonic event to the `EventStore`.
 
 ## Failure semantics
 
@@ -158,9 +162,11 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_control_plane import (
+    ActionName,
     ApprovalGate,
     BudgetTracker,
     ConcurrencyGuard,
+    EventKind,
     EventStore,
     PolicyEngine,
     ProposalRouter,
@@ -196,23 +202,28 @@ async def handle_proposal(db_session: AsyncSession, request: dict) -> None:
 
     proposal = ActionProposalDTO(
         session_id=session.id,
+        agent_id=request.get("agent_id"),
         resource_id=request["resource_id"],
         resource_type=request.get("resource_type", "resource"),
-        decision=request["decision"],
+        decision=ActionName.REBOOT_INSTANCE,
         reasoning=request.get("reasoning", "auto proposal"),
-        metadata={"actor": request["actor"]},
         weight=Decimal(request.get("weight", "0")),
         score=Decimal(request.get("score", "0")),
     )
-    route = ProposalRouter(PolicyEngine(policy_snapshot)).route(proposal)
+    
+    # New: Router is now async and can validate agent identity
+    route = await ProposalRouter(PolicyEngine(policy_snapshot)).route(proposal)
+    
     await guard.check_resource_lock(session.id, proposal.resource_id)
-    if not await budget.check_budget(session.id, cost=proposal.weight, action_count=1):
+    if not await budget.check_budget(session.id, cost=proposal.weight):
         return
-    await budget.increment(session.id, cost=proposal.weight, action_count=1)
+        
+    await budget.increment(session.id, cost=proposal.weight)
     await guard.acquire_cycle(session.id, cycle_id=uuid4())
+    
     await event_store.append(
         session_id=session.id,
-        event_kind="cycle_started",
+        event_kind=EventKind.CYCLE_STARTED,
         payload={"proposal_id": str(proposal.id), "tier": route.tier.value},
         state_bearing=True,
     )
@@ -253,8 +264,23 @@ class ControlEvent(Base, ControlEventMixin):
 ## Docs and API
 
 - Architecture and lifecycle reference: [docs/architecture.md](docs/architecture.md)
-- Public API surface is exported from [`agent_control_plane/__init__.py`](src/agent_control_plane/__init__.py)
-- Runnable walkthrough: [`examples/quickstart.py`](examples/quickstart.py)
+- Public API surface: [`src/agent_control_plane/__init__.py`](src/agent_control_plane/__init__.py)
+- Domain Examples:
+  - Finance: [`examples/finance_agent.py`](examples/finance_agent.py)
+  - Cloud Ops: [`examples/cloud_ops_agent.py`](examples/cloud_ops_agent.py)
+  - Support: [`examples/support_agent.py`](examples/support_agent.py)
+  - SRE: [`examples/sre_agent.py`](examples/sre_agent.py)
+  - Content Moderation: [`examples/moderation_agent.py`](examples/moderation_agent.py)
+  - Cybersecurity: [`examples/cyber_agent.py`](examples/cyber_agent.py)
+- Validation & Stress Tests:
+  - Crash Recovery: [`examples/zombie_agent.py`](examples/zombie_agent.py)
+  - Kill Switches: [`examples/panic_agent.py`](examples/panic_agent.py)
+  - Timeout Escalation: [`examples/ghosted_agent.py`](examples/ghosted_agent.py)
+  - Multi-Agent Delegation: [`examples/multi_agent_delegation.py`](examples/multi_agent_delegation.py)
+  - Concurrency/Budget: [`examples/rate_limited_agent.py`](examples/rate_limited_agent.py)
+  - Asset Scoping: [`examples/compliance_agent.py`](examples/compliance_agent.py)
+- Utilities:
+  - Audit Trail Replay: [`examples/audit_viewer.py`](examples/audit_viewer.py)
 
 ## License
 

@@ -31,8 +31,10 @@ That mirrors standard networking/control-plane patterns:
 The package is organized around explicit layers:
 
 - `engine/`
-  - `policy_engine` — risk scoring and tiering
-  - `router` — deterministic routing and audit-ready routing decisions
+  - `agent_registry` — registered agent identities and capabilities
+  - `policy_engine` — risk scoring and tiering via polymorphic handlers
+  - `router` — deterministic routing with identity and capability validation
+  - `delegation_guard` — governed task hand-offs between agents
   - `approval_gate` — ticket lifecycle, scope handling, and timeout handling
   - `budget_tracker` — atomic session budget checks and increments
   - `session_manager` — session lifecycle and snapshots
@@ -54,6 +56,7 @@ sequenceDiagram
   autonumber
   participant App as App Service
   participant SP as SessionManager
+  participant REG as AgentRegistry
   participant PE as PolicyEngine
   participant RT as ProposalRouter
   participant AG as ApprovalGate
@@ -65,8 +68,9 @@ sequenceDiagram
   participant CR as Crash/Timeout Recovery
 
   App->>SP: create session + policy snapshot
+  App->>REG: register agent identity
   App->>PE: classify proposal intent
-  PE->>RT: classify risk + route
+  PE->>RT: classify risk + route (validate identity)
   RT-->>App: routing decision + reason
   App->>AG: check scoped approvals
   AG-->>App: ticket/None
@@ -99,25 +103,19 @@ sequenceDiagram
 4. Route long-running work through one control-plane entrypoint per proposal.
 5. Drive restart behavior through recovery runners before normal operation resumes.
 
-## 5b) Persistence coupling and abstraction roadmap
+## 5b) Persistence decoupling and abstraction
 
-Current design assumptions (v0.1):
+Current architecture (v0.2+):
 
-- Transactions and row-locking semantics are required for correctness in:
-  - active-cycle lock transitions,
-  - budget increment checks,
-  - session-scoped scope consumption,
-  - and event sequence allocation/replay.
-- `ModelRegistry` + `Session`-centric APIs are the concrete integration boundary for this release.
+- **Storage Protocols**: Narrow repository protocols (`SessionRepository`, `EventRepository`, etc.) decouple engines from database backends.
+- **SQLAlchemy Adapters**: Production-ready `AsyncSqlAlchemyUnitOfWork` and `SyncSqlAlchemyUnitOfWork` provide row-locking and transactional integrity.
+- **Model Registry**: Dynamic model resolution allows host applications to supply their own ORM classes while using standard mixins.
 
-Proposed v0.2 decoupling path:
+Proposed v0.3+ roadmap:
 
-1. Extract narrow storage protocols (session/proposal/approval/event interfaces).
-2. Move SQLAlchemy-specific model code into an adapter package (`adapters/sqlalchemy`).
-3. Provide optional non-SQL backends using an optimistic-increment strategy where row locking is unavailable.
-4. Keep durable audit semantics mandatory, even when implementation changes.
-
-This means the package remains usable for any domain; only the storage runtime is abstracted by adapter.
+1. **Native OpenTelemetry Integration**: Export control-plane events directly to OTel traces/logs for observability.
+2. **Non-SQL Backends**: Provide optional adapters for DynamoDB or Redis using optimistic concurrency where row locking is unavailable.
+3. **Optimistic-Increment Strategies**: Support high-velocity budget tracking without database serialization.
 
 ## 6) Suggested extension points
 
@@ -146,13 +144,13 @@ Exports are centralized through [agent_control_plane/__init__.py](../src/agent_c
 
 | Module | Public symbols | Stability contract |
 | --- | --- | --- |
-| `agent_control_plane` | `PolicyEngine`, `ProposalRouter`, `ApprovalGate`, `BudgetTracker`, `ConcurrencyGuard`, `KillSwitch`, `EventStore`, `SessionManager`, `CrashRecovery`, `TimeoutEscalation`, `ModelRegistry`, `RiskClassifier`, `DefaultRiskClassifier` | Core control-plane entry points for orchestration and recovery. |
-| `agent_control_plane` | `ActionTier`, `RiskLevel`, `ApprovalStatus`, `ApprovalDecisionType`, `ProposalStatus`, `SessionStatus`, `EventKind`, `ExecutionMode`, `AbortReason`, `KillSwitchScope` | Enumerations used by all engines; considered stable between minor releases. |
-| `agent_control_plane` | `ActionProposalDTO`, `SessionCreate`, `SessionSummary`, `PolicySnapshotDTO`, `ApprovalScopeDTO`, `ApprovalTicketDTO`, `RequestFrame`, `EventFrame`, `ResponseFrame` | DTOs are semantically stable; add optional fields in minor releases only. |
-| `agent_control_plane.models` | `ModelRegistry`, `ControlSessionMixin`, `ControlEventMixin`, `ApprovalTicketMixin`, `PolicySnapshotMixin` | Intended for embedding into host SQLAlchemy models and runtime bootstrapping. |
+| `agent_control_plane` | `PolicyEngine`, `ProposalRouter`, `ApprovalGate`, `BudgetTracker`, `ConcurrencyGuard`, `KillSwitch`, `EventStore`, `SessionManager`, `AgentRegistry`, `DelegationGuard`, `CrashRecovery`, `TimeoutEscalation`, `ModelRegistry`, `RiskClassifier`, `DefaultRiskClassifier` | Core control-plane entry points for orchestration and recovery. |
+| `agent_control_plane` | `ActionName`, `ActionTier`, `RiskLevel`, `ApprovalStatus`, `ApprovalDecisionType`, `ProposalStatus`, `SessionStatus`, `EventKind`, `ExecutionMode`, `AbortReason`, `KillSwitchScope` | Enumerations used by all engines; considered stable between minor releases. |
+| `agent_control_plane` | `ActionProposalDTO`, `AgentMetadata`, `AgentCapability`, `DelegationProposal`, `SessionCreate`, `SessionSummary`, `PolicySnapshotDTO`, `ApprovalScopeDTO`, `ApprovalTicketDTO`, `RequestFrame`, `EventFrame`, `ResponseFrame` | DTOs are semantically stable; add optional fields in minor releases only. |
+| `agent_control_plane.models` | `ModelRegistry`, `ControlSessionMixin`, `ControlEventMixin`, `ApprovalTicketMixin`, `PolicySnapshotMixin`, `AgentMixin`, `DelegationMixin` | Intended for embedding into host SQLAlchemy models and runtime bootstrapping. |
 | Private internals (non-API) | `engine.*`, `recovery.*`, `types.*`, `models.*` modules | Import by direct module path only when needed; avoid for long-term compatibility. |
 
-## 9) v0.1 packaging / release checklist
+## 9) v0.2 packaging / release checklist
 
 Recommended pre-release validation:
 
