@@ -83,6 +83,7 @@ flowchart LR
 - `AgentRegistry` manages registered agent identities, versions, and capability maps.
 - `PolicyEngine` classifies risk, assigns action tier via polymorphic handlers, and evaluates limits.
 - `ProposalRouter` resolves policy outcomes and validates agent authorization.
+- Routing decisions expose typed `RoutingResolutionStep` values for deterministic audit semantics.
 - `DelegationGuard` oversees and audits task hand-offs between different agents.
 - `ApprovalGate` manages ticket creation, scoped approvals, expiry, and denial paths.
 - `BudgetTracker` enforces session-level cost/count ceilings.
@@ -188,13 +189,13 @@ async def handle_proposal(db_session: AsyncSession, request: dict) -> None:
     policy_id = await session_manager.create_policy(
         action_tiers=policy_snapshot.action_tiers.model_dump(mode="json"),
         risk_limits=policy_snapshot.risk_limits.model_dump(mode="json"),
-        execution_mode=policy_snapshot.execution_mode.value,
+        execution_mode=policy_snapshot.execution_mode,
         approval_timeout_seconds=policy_snapshot.approval_timeout_seconds,
         auto_approve_conditions=policy_snapshot.auto_approve_conditions.model_dump(mode="json"),
     )
     session = await session_manager.create_session(
         session_name=f"demo-session-{uuid4()}",
-        execution_mode=policy_snapshot.execution_mode.value,
+        execution_mode=policy_snapshot.execution_mode,
         max_cost=Decimal("1000"),
         max_action_count=100,
         policy_id=policy_id,
@@ -232,6 +233,8 @@ async def handle_proposal(db_session: AsyncSession, request: dict) -> None:
 ```
 
 For a native sync host, use `SyncControlPlane` and `examples/quickstart_sync.py`.
+
+`SyncControlPlane.kill()` and `SyncControlPlane.kill_all()` return `KillResultDTO`.
 
 ## ORM integration
 

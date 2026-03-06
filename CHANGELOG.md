@@ -4,6 +4,35 @@
 
 - No unreleased changes.
 
+## [0.2.1] - 2026-03-06
+
+### Added
+
+- New finite-domain enums for stronger API typing:
+  - `RoutingResolutionStep`
+  - `AssetMatch`
+  - `AgentScope`
+- `KillResultDTO` for typed sync kill-switch responses.
+
+### Changed
+
+- Router decisions now use typed `RoutingResolutionStep` instead of raw string step names.
+- Asset classifier contract now returns `AssetMatch` instead of string values.
+- Event paths now use typed `EventKind` through:
+  - `EventStore`
+  - storage protocols
+  - async/sync SQLAlchemy repositories
+  - `EventFrame`
+- Session/proposal repository interfaces now use enum types for status/mode fields:
+  - `SessionStatus` for session filtering
+  - `ProposalStatus` for proposal status updates
+  - `ExecutionMode` in session creation paths (`SessionManager`, `SyncControlPlane`)
+- Sync API `kill()` / `kill_all()` now return `KillResultDTO` (typed scope and counters).
+
+### Fixed
+
+- Removed remaining string comparisons in examples and policy/router tests where enum comparisons are now authoritative.
+
 ## [0.2.0] - 2026-03-06
 
 ### Added
