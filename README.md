@@ -119,26 +119,19 @@ flowchart LR
 ### Storage note
 
 The control plane is designed around durable state transitions (sessions, tickets, budgets,
-cycle locks, and sequencing). This release ships with a SQLAlchemy-first persistence model:
+cycle locks, and sequencing. The engine/recovery layer depends on repository protocols, and the
+package ships SQLAlchemy async and sync implementations:
 
-- `ApprovalGate`
-- `BudgetTracker`
-- `SessionManager`
-- `ConcurrencyGuard`
-- `KillSwitch`
-- `EventStore`
-- `CrashRecovery`
-- `TimeoutEscalation`
-
-In-memory stores are not a drop-in replacement for this release because these components rely on
-transactional consistency and row-lock-style semantics for safe concurrent operation.
-A pluggable storage contract is planned so non-SQLAlchemy backends can be supported in a future
-release.
+- `AsyncSqlAlchemyUnitOfWork`
+- `SyncSqlAlchemyUnitOfWork`
+- `SyncControlPlane` convenience facade
 
 Recommended startup sequence:
 
 ```text
-ModelRegistry.register(...)
+register_models()
+build UnitOfWork (async or sync)
+construct engines with repos
 session_manager.create_session(...)
 session_manager.create_policy(...)
 crash_recovery.run_recovery(...)
@@ -157,49 +150,49 @@ timeout_escalation.scan_and_recover(...)
 - Cause: dependencies not installed in that interpreter.
 - Fix: run `uv sync --extra dev` and use `uv run pytest`, or install `.[dev]` into that interpreter.
 
-## 5-minute integration sketch
+## 5-minute integration sketch (async)
 
 ```python
 from decimal import Decimal
-from uuid import UUID, uuid4
+from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_control_plane import (
-    PolicyEngine,
-    ProposalRouter,
-    ActionTier,
-    AbortReason,
     ApprovalGate,
     BudgetTracker,
-    BudgetExhaustedError,
     ConcurrencyGuard,
     EventStore,
+    PolicyEngine,
+    ProposalRouter,
     SessionManager,
-    EventKind,
-    ProposalStatus,
+    AsyncSqlAlchemyUnitOfWork,
 )
 from agent_control_plane.types import ActionProposalDTO, PolicySnapshotDTO
 
 
 async def handle_proposal(db_session: AsyncSession, request: dict) -> None:
-    # ---- 1) bootstrap control-plane runtime ----
+    uow = AsyncSqlAlchemyUnitOfWork(db_session)
     policy_snapshot = PolicySnapshotDTO(**request["policy_snapshot"])
-    policy_engine = PolicyEngine(policy=policy_snapshot)
-    router = ProposalRouter(policy_engine=policy_engine)
-    session_manager = SessionManager()
-    event_store = EventStore()
+    session_manager = SessionManager(uow.session_repo)
+    event_store = EventStore(uow.event_repo)
+    approval_gate = ApprovalGate(event_store, uow.approval_repo, uow.proposal_repo)
+    budget = BudgetTracker(uow.session_repo)
+    guard = ConcurrencyGuard(uow.session_repo, uow.proposal_repo)
 
-    # Example: create control session + policy snapshot on startup
-    if request.get("session_id") is None:
-        session = await session_manager.create_session(
-            db_session,
-            session_name="demo-session",
-            execution_mode="dry_run",
-            max_cost=Decimal("1000"),
-            max_action_count=100,
-        )
-    else:
-        session = await session_manager.get_session(db_session, UUID(request["session_id"]))
+    policy_id = await session_manager.create_policy(
+        action_tiers=policy_snapshot.action_tiers.model_dump(mode="json"),
+        risk_limits=policy_snapshot.risk_limits.model_dump(mode="json"),
+        execution_mode=policy_snapshot.execution_mode.value,
+        approval_timeout_seconds=policy_snapshot.approval_timeout_seconds,
+        auto_approve_conditions=policy_snapshot.auto_approve_conditions.model_dump(mode="json"),
+    )
+    session = await session_manager.create_session(
+        session_name=f"demo-session-{uuid4()}",
+        execution_mode=policy_snapshot.execution_mode.value,
+        max_cost=Decimal("1000"),
+        max_action_count=100,
+        policy_id=policy_id,
+    )
 
     proposal = ActionProposalDTO(
         session_id=session.id,
@@ -211,73 +204,23 @@ async def handle_proposal(db_session: AsyncSession, request: dict) -> None:
         weight=Decimal(request.get("weight", "0")),
         score=Decimal(request.get("score", "0")),
     )
-
-    # ---- 2) policy + routing ----
-    route = router.route(proposal)
-    if route.tier == ActionTier.BLOCKED:
-        proposal.status = ProposalStatus.DENIED
-        await event_store.append(
-            db_session,
-            session_id=session.id,
-            event_kind=EventKind.APPROVAL_DENIED,
-            payload={"proposal_id": str(proposal.id), "reason": route.reason},
-            state_bearing=True,
-        )
+    route = ProposalRouter(PolicyEngine(policy_snapshot)).route(proposal)
+    await guard.check_resource_lock(session.id, proposal.resource_id)
+    if not await budget.check_budget(session.id, cost=proposal.weight, action_count=1):
         return
-
-    # ---- 3) optional session-scope approval ----
-    approval_gate = ApprovalGate(EventStore())
-    budget = BudgetTracker()
-    guard = ConcurrencyGuard()
-
-    if route.tier == ActionTier.ALWAYS_APPROVE:
-        ticket = await approval_gate.check_session_scope(
-            db_session,
-            session_id=session.id,
-            resource_id=proposal.resource_id,
-            cost=proposal.weight,
-        )
-        if ticket is None:
-            # If no broader scope was pre-approved, require explicit ticket workflow.
-            await approval_gate.create_ticket(db_session, session.id, proposal.id)
-            return
-
-    # ---- 4) budget + concurrency + execution ----
-    if not await budget.check_budget(db_session, session_id=session.id, cost=proposal.weight, action_count=1):
-        # In production, trigger KillSwitch(Scope.BUDGET_AUTO_HALT) here
-        return
-
-    try:
-        await budget.increment(db_session, session.id, cost=proposal.weight, action_count=1)
-        await guard.check_resource_lock(db_session, session_id=session.id, resource_id=proposal.resource_id)
-        await event_store.append(
-            db_session,
-            session_id=session.id,
-            event_kind=EventKind.CYCLE_STARTED,
-            payload={"proposal_id": str(proposal.id)},
-            state_bearing=True,
-        )
-        await guard.acquire_cycle(db_session, session_id=session.id, cycle_id=uuid4())
-
-        # your downstream execution plane call (tooling/API side effects)
-        await execute_action(proposal)
-
-        await event_store.append(
-            db_session,
-            session_id=session.id,
-            event_kind=EventKind.EXECUTION_COMPLETED,
-            payload={"proposal_id": str(proposal.id)},
-            state_bearing=True,
-        )
-    except BudgetExhaustedError:
-        await session_manager.abort_session(db_session, session.id, reason=AbortReason.BUDGET_EXHAUSTED)
-    finally:
-        await guard.release_cycle(db_session, session.id)
-
-    await db_session.commit()
+    await budget.increment(session.id, cost=proposal.weight, action_count=1)
+    await guard.acquire_cycle(session.id, cycle_id=uuid4())
+    await event_store.append(
+        session_id=session.id,
+        event_kind="cycle_started",
+        payload={"proposal_id": str(proposal.id), "tier": route.tier.value},
+        state_bearing=True,
+    )
+    await guard.release_cycle(session.id)
+    await uow.commit()
 ```
 
-This block is intentionally pseudocode. Replace proposal creation, persistence model registration, and `execute_action()` with your host harness plumbing.
+For a native sync host, use `SyncControlPlane` and `examples/quickstart_sync.py`.
 
 ## ORM integration
 

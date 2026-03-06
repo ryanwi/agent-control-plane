@@ -95,10 +95,13 @@ class PolicyEngine:
 
         Resolution order (deterministic, logged):
         1. explicit_assignment - blocked actions check
-        2. risk_tier_match - risk level maps to tier
-        3. capability_match - asset scope enforcement
-        4. default_agent - ALWAYS_APPROVE
+        2. policy_list_match - always_approve or auto_approve lists
+        3. risk_tier_match - risk level maps to tier
+        4. capability_match - asset scope enforcement
+        5. default_agent - ALWAYS_APPROVE
         """
+        decision_str = str(proposal.decision).lower()
+
         # 1. Check if action is blocked
         if self._is_blocked(proposal):
             logger.info(
@@ -118,14 +121,21 @@ class PolicyEngine:
             )
             return ActionTier.BLOCKED
 
-        # 3. Risk tier mapping
-        if risk_level == RiskLevel.LOW and self._can_auto_approve():
-            return ActionTier.AUTO_APPROVE
+        # 3. Explicit Policy Lists
+        if any(action in decision_str for action in self.policy.action_tiers.always_approve):
+            return ActionTier.ALWAYS_APPROVE
+
+        if any(action in decision_str for action in self.policy.action_tiers.auto_approve):
+            return ActionTier.AUTO_APPROVE if self._can_auto_approve() else ActionTier.ALWAYS_APPROVE
+
+        # 4. Risk tier mapping
+        if risk_level == RiskLevel.LOW:
+            return ActionTier.AUTO_APPROVE if self._can_auto_approve() else ActionTier.ALWAYS_APPROVE
 
         if risk_level in (RiskLevel.MEDIUM, RiskLevel.HIGH):
             return ActionTier.ALWAYS_APPROVE
 
-        # 4. Default
+        # 5. Default
         return ActionTier.ALWAYS_APPROVE
 
     def _is_blocked(self, proposal: ActionProposalDTO) -> bool:

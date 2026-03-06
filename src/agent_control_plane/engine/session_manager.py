@@ -134,16 +134,9 @@ class SessionManager:
         cs = await self._get_session_or_raise(session_id)
         return cs.active_cycle_id is not None
 
-    async def create_policy(self, **kwargs: Any) -> Any:
+    async def create_policy(self, **kwargs: Any) -> UUID:
         """Create an immutable policy snapshot. Returns the policy ID."""
-        policy_id = await self._repo.create_policy(**kwargs)
-
-        # Return a simple namespace with .id for backwards compat
-        class _PolicyRef:
-            def __init__(self, id: UUID):
-                self.id = id
-
-        return _PolicyRef(policy_id)
+        return await self._repo.create_policy(**kwargs)
 
     async def _get_session_or_raise(self, session_id: UUID) -> SessionState:
         """Get session or raise ValueError."""

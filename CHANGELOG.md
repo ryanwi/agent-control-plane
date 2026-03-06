@@ -4,6 +4,34 @@
 
 - No unreleased changes.
 
+## [0.2.0] - 2026-03-06
+
+### Added
+
+- Repository-driven storage architecture with async/sync protocol boundaries:
+  - `SessionRepository`, `EventRepository`, `ApprovalRepository`, `ProposalRepository`
+  - `AsyncUnitOfWork` and `SyncUnitOfWork`
+- First-class SQLAlchemy backends:
+  - `AsyncSqlAlchemyUnitOfWork` and async repository implementations
+  - `SyncSqlAlchemyUnitOfWork` and sync repository implementations
+- Reference ORM exports from `agent_control_plane.models` for easier host integration.
+- `SyncControlPlane` facade (`src/agent_control_plane/sync.py`) for synchronous hosts.
+- `examples/quickstart_sync.py` demonstrating native sync usage without an event-loop bridge.
+- `examples/security_agent.py` end-to-end governance example for autonomous security actions.
+
+### Changed
+
+- Engine/recovery wiring now composes through repositories and unit-of-work integration.
+- `SessionManager.create_policy()` now returns a `UUID` directly.
+- `PolicyEngine.classify_action_tier()` now honors explicit `always_approve` and
+  `auto_approve` action lists before defaulting.
+- Public package exports now include storage backends/protocols, reference models, and sync API.
+- README integration guidance updated for async/sync UnitOfWork patterns.
+
+### Removed
+
+- Removed legacy `examples/sync_adapter.py` thread-loop bridge example.
+
 ## [0.1.2] - 2026-03-05
 
 ### Added
