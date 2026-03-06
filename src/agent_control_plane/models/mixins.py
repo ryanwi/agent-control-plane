@@ -210,3 +210,32 @@ class ReleaseCandidateMixin:
         default=func.current_timestamp(),
         server_default=func.current_timestamp(),
     )
+
+
+class AgentMixin:
+    """Mixin for agent identity model."""
+
+    name: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)
+    version: Mapped[str] = mapped_column(VARCHAR(50), nullable=False, default="1.0.0")
+    tags: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    capabilities: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        default=func.current_timestamp(),
+        server_default=func.current_timestamp(),
+    )
+
+
+class DelegationMixin:
+    """Mixin for delegation record model."""
+
+    source_agent_id: Mapped[str] = mapped_column(VARCHAR(100), nullable=False)
+    target_agent_id: Mapped[str] = mapped_column(VARCHAR(100), nullable=False)
+    task_description: Mapped[str] = mapped_column(Text, nullable=False)
+    risk_score: Mapped[float] = mapped_column(nullable=False, default=0.5)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        default=func.current_timestamp(),
+        server_default=func.current_timestamp(),
+    )

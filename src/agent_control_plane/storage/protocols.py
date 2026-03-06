@@ -11,6 +11,7 @@ from decimal import Decimal
 from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
+from agent_control_plane.types.agents import AgentMetadata, DelegationProposal
 from agent_control_plane.types.approvals import ApprovalTicketDTO
 from agent_control_plane.types.frames import EventFrame
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
@@ -141,6 +142,28 @@ class AsyncProposalRepository(Protocol):
     async def has_pending_for_resource(self, session_id: UUID, resource_id: str) -> bool: ...
 
 
+...
+# ---------------------------------------------------------------------------
+# Agent repositories
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class AgentRepository(Protocol):
+    def register_agent(self, agent: AgentMetadata) -> None: ...
+    def get_agent(self, agent_id: str) -> AgentMetadata | None: ...
+    def list_agents(self, tags: list[str] | None = None) -> list[AgentMetadata]: ...
+    def record_delegation(self, delegation: DelegationProposal) -> None: ...
+
+
+@runtime_checkable
+class AsyncAgentRepository(Protocol):
+    async def register_agent(self, agent: AgentMetadata) -> None: ...
+    async def get_agent(self, agent_id: str) -> AgentMetadata | None: ...
+    async def list_agents(self, tags: list[str] | None = None) -> list[AgentMetadata]: ...
+    async def record_delegation(self, delegation: DelegationProposal) -> None: ...
+
+
 # ---------------------------------------------------------------------------
 # Unit of Work
 # ---------------------------------------------------------------------------
@@ -152,6 +175,7 @@ class SyncUnitOfWork(Protocol):
     event_repo: EventRepository
     approval_repo: ApprovalRepository
     proposal_repo: ProposalRepository
+    agent_repo: AgentRepository
 
     def commit(self) -> None: ...
     def rollback(self) -> None: ...
@@ -163,6 +187,7 @@ class AsyncUnitOfWork(Protocol):
     event_repo: AsyncEventRepository
     approval_repo: AsyncApprovalRepository
     proposal_repo: AsyncProposalRepository
+    agent_repo: AsyncAgentRepository
 
     async def commit(self) -> None: ...
     async def rollback(self) -> None: ...

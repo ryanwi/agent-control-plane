@@ -22,6 +22,7 @@ class ActionProposalDTO(BaseModel):
 
     id: UUID = Field(default_factory=uuid4)
     session_id: UUID
+    agent_id: str | None = None
     cycle_event_seq: int | None = None
 
     # Proposal content

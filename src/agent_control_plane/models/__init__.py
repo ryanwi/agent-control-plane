@@ -2,10 +2,12 @@
 
 from agent_control_plane.models.reference import (
     ActionProposal,
+    AgentRecord,
     ApprovalTicket,
     Base,
     ControlEvent,
     ControlSession,
+    DelegationRecord,
     PolicySnapshot,
     SessionSeqCounter,
     create_tables,
@@ -14,10 +16,12 @@ from agent_control_plane.models.reference import (
 
 __all__ = [
     "ActionProposal",
+    "AgentRecord",
     "ApprovalTicket",
     "Base",
     "ControlEvent",
     "ControlSession",
+    "DelegationRecord",
     "PolicySnapshot",
     "SessionSeqCounter",
     "create_tables",

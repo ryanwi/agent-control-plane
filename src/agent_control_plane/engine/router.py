@@ -2,10 +2,14 @@
 
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from agent_control_plane.engine.policy_engine import PolicyEngine
 from agent_control_plane.types.enums import ActionTier, RiskLevel
 from agent_control_plane.types.proposals import ActionProposalDTO
+
+if TYPE_CHECKING:
+    from agent_control_plane.engine.agent_registry import AgentRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +27,27 @@ class RoutingDecision:
 class ProposalRouter:
     """Routes proposals through the policy engine with full audit trail."""
 
-    def __init__(self, policy_engine: PolicyEngine) -> None:
+    def __init__(self, policy_engine: PolicyEngine, agent_registry: AgentRegistry | None = None) -> None:
         self.policy_engine = policy_engine
+        self.agent_registry = agent_registry
 
-    def route(self, proposal: ActionProposalDTO) -> RoutingDecision:
+    async def route(self, proposal: ActionProposalDTO) -> RoutingDecision:
         """Route a proposal and return the decision with audit trail."""
+        # 1. Identity Check
+        if self.agent_registry and proposal.agent_id:
+            agent = await self.agent_registry.get_agent(proposal.agent_id)
+            if not agent:
+                logger.warning("Proposal from unregistered agent: %s", proposal.agent_id)
+            else:
+                # Validate capabilities
+                capable = any(c.action == proposal.decision for c in agent.capabilities)
+                if not capable:
+                    logger.warning(
+                        "Agent %s is not registered for action %s",
+                        proposal.agent_id,
+                        proposal.decision,
+                    )
+
         risk_level = self.policy_engine.classify_risk_level(proposal)
         tier = self.policy_engine.classify_action_tier(proposal, risk_level)
 

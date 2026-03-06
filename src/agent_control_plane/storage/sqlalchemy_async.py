@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_control_plane.engine.budget_tracker import BudgetExhaustedError
 from agent_control_plane.models.registry import ModelRegistry
+from agent_control_plane.types.agents import AgentCapability, AgentMetadata, DelegationProposal
 from agent_control_plane.types.approvals import ApprovalTicketDTO
 from agent_control_plane.types.enums import ApprovalDecisionType, ApprovalStatus, ProposalStatus
 from agent_control_plane.types.frames import EventFrame
@@ -381,8 +382,82 @@ class AsyncSqlAlchemyProposalRepo:
         return result.scalar_one_or_none() is not None
 
 
+class AsyncSqlAlchemyAgentRepo:
+    """Async SQLAlchemy implementation of AsyncAgentRepository."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def register_agent(self, agent: AgentMetadata) -> None:
+        agent_record_model = ModelRegistry.get("AgentRecord")
+        existing = await self._session.get(agent_record_model, agent.id)
+        if existing:
+            existing.name = agent.name
+            existing.version = agent.version
+            existing.tags = agent.tags
+            existing.capabilities = [c.model_dump(mode="json") for c in agent.capabilities]
+        else:
+            record = agent_record_model(
+                id=agent.id,
+                name=agent.name,
+                version=agent.version,
+                tags=agent.tags,
+                capabilities=[c.model_dump(mode="json") for c in agent.capabilities],
+            )
+            self._session.add(record)
+        await self._session.flush()
+
+    async def get_agent(self, agent_id: str) -> AgentMetadata | None:
+        agent_record_model = ModelRegistry.get("AgentRecord")
+        row = await self._session.get(agent_record_model, agent_id)
+        if not row:
+            return None
+        return AgentMetadata(
+            id=row.id,
+            name=row.name,
+            version=row.version,
+            tags=row.tags,
+            capabilities=[AgentCapability(**c) for c in row.capabilities],
+            created_at=row.created_at,
+        )
+
+    async def list_agents(self, tags: list[str] | None = None) -> list[AgentMetadata]:
+        agent_record_model = ModelRegistry.get("AgentRecord")
+        query = select(agent_record_model)
+        result = await self._session.execute(query)
+        rows = result.scalars().all()
+        agents = [
+            AgentMetadata(
+                id=row.id,
+                name=row.name,
+                version=row.version,
+                tags=row.tags,
+                capabilities=[AgentCapability(**c) for c in row.capabilities],
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
+        if tags:
+            return [a for a in agents if any(t in a.tags for t in tags)]
+        return agents
+
+    async def record_delegation(self, delegation: DelegationProposal) -> None:
+        delegation_record_model = ModelRegistry.get("DelegationRecord")
+        record = delegation_record_model(
+            id=delegation.id,
+            source_agent_id=delegation.source_agent_id,
+            target_agent_id=delegation.target_agent_id,
+            task_description=delegation.task_description,
+            risk_score=delegation.risk_score,
+            metadata_json=delegation.metadata,
+            created_at=delegation.created_at,
+        )
+        self._session.add(record)
+        await self._session.flush()
+
+
 class AsyncSqlAlchemyUnitOfWork:
-    """Wraps a single AsyncSession, exposing all 4 repos."""
+    """Wraps a single AsyncSession, exposing all repositories."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -390,6 +465,7 @@ class AsyncSqlAlchemyUnitOfWork:
         self.event_repo = AsyncSqlAlchemyEventRepo(session)
         self.approval_repo = AsyncSqlAlchemyApprovalRepo(session)
         self.proposal_repo = AsyncSqlAlchemyProposalRepo(session)
+        self.agent_repo = AsyncSqlAlchemyAgentRepo(session)
 
     async def commit(self) -> None:
         await self._session.commit()

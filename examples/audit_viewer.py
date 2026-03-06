@@ -32,9 +32,9 @@ async def view_audit(session_id: UUID):
 
         events = await store.replay(session_id)
 
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"AUDIT TRAIL FOR SESSION: {session_id}")
-        print(f"{'='*80}\n")
+        print(f"{'=' * 80}\n")
 
         if not events:
             print("No events found for this session.")
@@ -49,9 +49,9 @@ async def view_audit(session_id: UUID):
                 print(f"    └─ ROUTING: Tier={e.routing_decision.get('tier')} | Step={e.routing_step or 'unknown'}")
                 print(f"    └─ REASON:  {e.routing_reason}")
 
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print(f"END OF REPORT ({len(events)} events)")
-        print(f"{'='*80}\n")
+        print(f"{'=' * 80}\n")
 
     await engine.dispose()
 

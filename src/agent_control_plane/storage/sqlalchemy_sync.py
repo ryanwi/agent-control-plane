@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from agent_control_plane.engine.budget_tracker import BudgetExhaustedError
 from agent_control_plane.models.registry import ModelRegistry
+from agent_control_plane.types.agents import AgentCapability, AgentMetadata, DelegationProposal
 from agent_control_plane.types.approvals import ApprovalTicketDTO
 from agent_control_plane.types.enums import ApprovalDecisionType, ApprovalStatus, ProposalStatus
 from agent_control_plane.types.frames import EventFrame
@@ -368,8 +369,82 @@ class SyncSqlAlchemyProposalRepo:
         return result.scalar_one_or_none() is not None
 
 
+class SyncSqlAlchemyAgentRepo:
+    """Sync SQLAlchemy implementation of AgentRepository."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def register_agent(self, agent: AgentMetadata) -> None:
+        agent_record_model = ModelRegistry.get("AgentRecord")
+        existing = self._session.get(agent_record_model, agent.id)
+        if existing:
+            existing.name = agent.name
+            existing.version = agent.version
+            existing.tags = agent.tags
+            existing.capabilities = [c.model_dump(mode="json") for c in agent.capabilities]
+        else:
+            record = agent_record_model(
+                id=agent.id,
+                name=agent.name,
+                version=agent.version,
+                tags=agent.tags,
+                capabilities=[c.model_dump(mode="json") for c in agent.capabilities],
+            )
+            self._session.add(record)
+        self._session.flush()
+
+    def get_agent(self, agent_id: str) -> AgentMetadata | None:
+        agent_record_model = ModelRegistry.get("AgentRecord")
+        row = self._session.get(agent_record_model, agent_id)
+        if not row:
+            return None
+        return AgentMetadata(
+            id=row.id,
+            name=row.name,
+            version=row.version,
+            tags=row.tags,
+            capabilities=[AgentCapability(**c) for c in row.capabilities],
+            created_at=row.created_at,
+        )
+
+    def list_agents(self, tags: list[str] | None = None) -> list[AgentMetadata]:
+        agent_record_model = ModelRegistry.get("AgentRecord")
+        query = select(agent_record_model)
+        result = self._session.execute(query)
+        rows = result.scalars().all()
+        agents = [
+            AgentMetadata(
+                id=row.id,
+                name=row.name,
+                version=row.version,
+                tags=row.tags,
+                capabilities=[AgentCapability(**c) for c in row.capabilities],
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
+        if tags:
+            return [a for a in agents if any(t in a.tags for t in tags)]
+        return agents
+
+    def record_delegation(self, delegation: DelegationProposal) -> None:
+        delegation_record_model = ModelRegistry.get("DelegationRecord")
+        record = delegation_record_model(
+            id=delegation.id,
+            source_agent_id=delegation.source_agent_id,
+            target_agent_id=delegation.target_agent_id,
+            task_description=delegation.task_description,
+            risk_score=delegation.risk_score,
+            metadata_json=delegation.metadata,
+            created_at=delegation.created_at,
+        )
+        self._session.add(record)
+        self._session.flush()
+
+
 class SyncSqlAlchemyUnitOfWork:
-    """Wraps a single sync Session, exposing all 4 repos."""
+    """Wraps a single sync Session, exposing all repositories."""
 
     def __init__(self, session: Session) -> None:
         self._session = session
@@ -377,6 +452,7 @@ class SyncSqlAlchemyUnitOfWork:
         self.event_repo = SyncSqlAlchemyEventRepo(session)
         self.approval_repo = SyncSqlAlchemyApprovalRepo(session)
         self.proposal_repo = SyncSqlAlchemyProposalRepo(session)
+        self.agent_repo = SyncSqlAlchemyAgentRepo(session)
 
     def commit(self) -> None:
         self._session.commit()

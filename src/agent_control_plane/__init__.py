@@ -1,5 +1,6 @@
 """agent-control-plane: Embeddable governance framework for agentic AI."""
 
+from agent_control_plane.engine.agent_registry import AgentRegistry, DelegationGuard
 from agent_control_plane.engine.approval_gate import ApprovalGate
 from agent_control_plane.engine.budget_tracker import BudgetExhaustedError, BudgetTracker
 from agent_control_plane.engine.concurrency import (
@@ -20,9 +21,11 @@ from agent_control_plane.engine.router import ProposalRouter, RoutingDecision
 from agent_control_plane.engine.session_manager import SessionManager
 from agent_control_plane.models import (
     ActionProposal,
+    AgentRecord,
     ApprovalTicket,
     ControlEvent,
     ControlSession,
+    DelegationRecord,
     PolicySnapshot,
     SessionSeqCounter,
     create_tables,
@@ -57,6 +60,11 @@ from agent_control_plane.storage import (
     SyncUnitOfWork,
 )
 from agent_control_plane.sync import SyncControlPlane
+from agent_control_plane.types.agents import (
+    AgentCapability,
+    AgentMetadata,
+    DelegationProposal,
+)
 from agent_control_plane.types.approvals import (
     ApprovalDecisionRequest,
     ApprovalScopeDTO,
@@ -101,6 +109,11 @@ __all__ = [
     "ActionTier",
     # Policy DTOs
     "ActionTiers",
+    # Agent Registry
+    "AgentCapability",
+    "AgentMetadata",
+    "AgentRecord",
+    "AgentRegistry",
     # Approval DTOs
     "ApprovalDecisionRequest",
     "ApprovalDecisionType",
@@ -135,6 +148,9 @@ __all__ = [
     "CycleAlreadyActiveError",
     "DefaultAssetClassifier",
     "DefaultRiskClassifier",
+    "DelegationGuard",
+    "DelegationProposal",
+    "DelegationRecord",
     # Frames
     "EventFrame",
     "EventKind",
