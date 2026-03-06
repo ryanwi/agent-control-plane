@@ -43,6 +43,7 @@ class EventFrame(BaseModel):
     agent_id: str | None = None
     correlation_id: UUID | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
+    state_bearing: bool = False
     routing_decision: dict[str, Any] | None = None
     routing_reason: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

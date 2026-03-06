@@ -34,6 +34,7 @@ def test_sync_control_plane_emit_and_replay_round_trip(tmp_path: Path):
     assert len(events) == 1
     assert events[0].event_kind == EventKind.CYCLE_STARTED
     assert events[0].payload["phase"] == "begin"
+    assert events[0].state_bearing is True
     cp.close()
 
 
@@ -87,6 +88,7 @@ def test_sync_control_plane_emit_app_event_mapper_and_unknown_policy(tmp_path: P
 
     tagged_event = cp.replay_events(sid, after_seq=1)[0]
     assert tagged_event.agent_id == "agent-42"
+    assert tagged_event.state_bearing is True
     cp.close()
 
 
@@ -114,14 +116,23 @@ def test_control_plane_facade_session_budget_and_replay(tmp_path: Path):
 
     seq = facade.emit_app(sid, "scan_started", {"resource": "host-1"}, state_bearing=True, agent_id="sec-agent")
     assert seq == 1
-    close_result = facade.close_session(sid, payload={"done": True})
-    assert close_result.events_appended == 1
+    close_result = facade.close_session(sid)
+    assert close_result.events_appended == 0
     assert close_result.session.status.value == "completed"
 
     events = facade.replay(sid)
-    assert len(events) == 2
+    assert len(events) == 1
     assert events[0].event_kind == EventKind.CYCLE_STARTED
-    assert events[1].event_kind == EventKind.CYCLE_COMPLETED
+    assert events[0].state_bearing is True
+
+    emitted = facade.emit(
+        sid,
+        EventKind.CYCLE_COMPLETED,
+        {"done": True},
+        state_bearing=True,
+        agent_id="sec-agent",
+    )
+    assert emitted == 2
 
     sid2 = facade.open_session("abort-demo", max_cost=Decimal("5"), max_action_count=1)
     abort_result = facade.abort_session(sid2, reason="operator stop")

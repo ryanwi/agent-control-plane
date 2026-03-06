@@ -85,6 +85,7 @@ class ControlEventMixin:
     routing_decision: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     routing_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     idempotency_key: Mapped[str | None] = mapped_column(VARCHAR(255), nullable=True)
+    state_bearing: Mapped[bool] = mapped_column(nullable=False, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         default=func.current_timestamp(),

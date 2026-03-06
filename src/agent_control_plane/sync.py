@@ -373,7 +373,7 @@ class ControlPlaneFacade:
         self,
         session_id: UUID,
         *,
-        final_event_kind: EventKind | None = EventKind.CYCLE_COMPLETED,
+        final_event_kind: EventKind | None = None,
         payload: dict[str, Any] | None = None,
     ) -> SessionLifecycleResult:
         appended = 0
@@ -386,8 +386,30 @@ class ControlPlaneFacade:
     def abort_session(self, session_id: UUID, *, reason: str = "Session aborted") -> SessionLifecycleResult:
         return self._cp.abort_session(session_id, reason=reason)
 
-    def emit(self, session_id: UUID, event_kind: EventKind, payload: dict[str, Any]) -> int:
-        return self._cp.emit_event(session_id, event_kind, payload)
+    def emit(
+        self,
+        session_id: UUID,
+        event_kind: EventKind,
+        payload: dict[str, Any],
+        *,
+        state_bearing: bool = False,
+        agent_id: str | None = None,
+        correlation_id: UUID | None = None,
+        routing_decision: dict[str, Any] | None = None,
+        routing_reason: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> int:
+        return self._cp.emit_event(
+            session_id,
+            event_kind,
+            payload,
+            state_bearing=state_bearing,
+            agent_id=agent_id,
+            correlation_id=correlation_id,
+            routing_decision=routing_decision,
+            routing_reason=routing_reason,
+            idempotency_key=idempotency_key,
+        )
 
     def emit_app(
         self,

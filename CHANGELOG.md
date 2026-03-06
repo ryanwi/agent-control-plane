@@ -2,7 +2,12 @@
 
 ## [Unreleased]
 
-- No unreleased changes.
+### Changed
+
+- `ControlPlaneFacade.close_session()` now defaults to `final_event_kind=None` to avoid accidental double-emits.
+- `ControlPlaneFacade.emit(...)` now accepts the same attribution/state-bearing options as low-level sync emit paths.
+- `EventFrame` now includes `state_bearing`.
+- SQLAlchemy async/sync event repositories now persist and hydrate `state_bearing` as a first-class field.
 
 ## [0.5.1] - 2026-03-06
 

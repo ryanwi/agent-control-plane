@@ -96,7 +96,7 @@ def test_event_append_and_replay(db_session: Session):
     )
     session_repo.create_seq_counter(cs.id)
 
-    seq1 = event_repo.append(cs.id, "cycle_started", {"test": True})
+    seq1 = event_repo.append(cs.id, "cycle_started", {"test": True}, state_bearing=True)
     assert seq1 == 1
 
     seq2 = event_repo.append(cs.id, "cycle_completed", {})
@@ -104,10 +104,13 @@ def test_event_append_and_replay(db_session: Session):
 
     events = event_repo.replay(cs.id)
     assert len(events) == 2
+    assert events[0].state_bearing is True
+    assert events[1].state_bearing is False
 
     last = event_repo.get_last_event(cs.id)
     assert last is not None
     assert last.seq == 2
+    assert last.state_bearing is False
 
 
 def test_approval_lifecycle(db_session: Session):
