@@ -26,13 +26,14 @@ class ActionProposalDTO(BaseModel):
     resource_id: str
     resource_type: str
     decision: str
-    allocation_pct: Decimal
-    confidence: Decimal
     reasoning: str
-    supporting_signals: list[str] = Field(default_factory=list)
-    risk_factors: list[str] = Field(default_factory=list)
-    time_horizon: str
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    # Optional scoring (domain-specific classifiers can use these)
+    weight: Decimal = Decimal("0")
+    score: Decimal = Decimal("0")
+    risk_factors: list[str] = Field(default_factory=list)
+    supporting_signals: list[str] = Field(default_factory=list)
 
     # Classification
     action_tier: ActionTier = ActionTier.ALWAYS_APPROVE
@@ -50,7 +51,6 @@ class RiskDecisionDTO(BaseModel):
 
     # Risk metrics
     risk_score: Decimal
-    max_allocation: Decimal
     risk_details: dict[str, Any] = Field(default_factory=dict)
 
     risk_warnings: list[str] = Field(default_factory=list)
@@ -69,8 +69,7 @@ class ExecutionIntentDTO(BaseModel):
 
     resource_id: str
     action: str
-    quantity: Decimal
-    metadata: dict[str, Any] = Field(default_factory=dict)
+    parameters: dict[str, Any] = Field(default_factory=dict)
 
     status: ExecutionIntentStatus = ExecutionIntentStatus.PENDING
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

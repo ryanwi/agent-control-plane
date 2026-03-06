@@ -37,7 +37,7 @@ class ProposalRouter:
             reason = f"Action blocked by policy (resource={proposal.resource_id})"
         elif tier == ActionTier.AUTO_APPROVE:
             resolution = "risk_tier_match"
-            reason = f"LOW risk auto-approve (confidence={proposal.confidence}, allocation={proposal.allocation_pct}%)"
+            reason = f"LOW risk auto-approve (score={proposal.score}, weight={proposal.weight})"
         elif tier == ActionTier.ALWAYS_APPROVE:
             resolution = "risk_tier_match"
             reason = f"{risk_level.value.upper()} risk requires human approval"

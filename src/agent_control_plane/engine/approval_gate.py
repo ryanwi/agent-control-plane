@@ -75,7 +75,7 @@ class ApprovalGate:
         decided_by: str = "operator",
         reason: str | None = None,
         scope_resource_ids: list[str] | None = None,
-        scope_max_notional: Decimal | None = None,
+        scope_max_cost: Decimal | None = None,
         scope_max_count: int | None = None,
         scope_expiry: datetime | None = None,
     ) -> Any:
@@ -91,7 +91,7 @@ class ApprovalGate:
         # Set scope constraints for allow_for_session
         if decision_type == ApprovalDecisionType.ALLOW_FOR_SESSION:
             ticket.scope_resource_ids = scope_resource_ids
-            ticket.scope_max_notional = scope_max_notional
+            ticket.scope_max_cost = scope_max_cost
             ticket.scope_max_count = scope_max_count
             ticket.scope_expiry = scope_expiry
 
@@ -202,21 +202,15 @@ class ApprovalGate:
         self,
         db_session: AsyncSession,
         session_id: UUID,
-        resource_id: str | None = None,
-        security_id: str | None = None,
-        risk_level: RiskLevel | None = None,
-        notional: Decimal | None = None,
+        resource_id: str,
+        risk_level: RiskLevel = RiskLevel.MEDIUM,
+        cost: Decimal = Decimal("0"),
     ) -> Any | None:
         """Check if an existing allow_for_session scope covers this proposal.
 
         Returns the matching ticket if scope applies, None otherwise.
         Critically: scope waives the human click, NOT the policy/risk checks.
         """
-        if notional is None:
-            raise ValueError("notional is required")
-        if risk_level is None:
-            risk_level = RiskLevel.MEDIUM
-
         ApprovalTicket = ModelRegistry.get("ApprovalTicket")
         is_sqlalchemy_model = hasattr(ApprovalTicket, "__table__") or hasattr(ApprovalTicket, "__mapper__")
 
@@ -242,21 +236,16 @@ class ApprovalGate:
                 and ticket.decision_type == ApprovalDecisionType.ALLOW_FOR_SESSION
             ]
 
-        scope_id = resource_id if resource_id is not None else security_id
-        if scope_id is None:
-            raise ValueError("Either security_id or resource_id is required")
-
         now = datetime.now(UTC)
         for ticket in tickets:
             # Check expiry
             if ticket.scope_expiry and ticket.scope_expiry <= now:
                 continue
             # Check resource scope
-            ticket_scope = getattr(ticket, "scope_resource_ids", None) or getattr(ticket, "scope_symbols", None)
-            if ticket_scope and scope_id not in ticket_scope:
+            if ticket.scope_resource_ids and resource_id not in ticket.scope_resource_ids:
                 continue
-            # Check notional scope
-            if ticket.scope_max_notional and notional > ticket.scope_max_notional:
+            # Check cost scope
+            if ticket.scope_max_cost and cost > ticket.scope_max_cost:
                 continue
             # Check count scope (stored as remaining approvals)
             if ticket.scope_max_count is not None:

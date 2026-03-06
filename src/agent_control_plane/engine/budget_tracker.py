@@ -18,13 +18,13 @@ class BudgetExhaustedError(Exception):
 
 
 class BudgetTracker:
-    """Atomic notional/count budget management per session."""
+    """Atomic cost/count budget management per session."""
 
     async def check_budget(
         self,
         session: AsyncSession,
         session_id: UUID,
-        notional_amount: Decimal = Decimal("0"),
+        cost: Decimal = Decimal("0"),
         action_count: int = 1,
     ) -> bool:
         """Check if the proposed action fits within session budget.
@@ -32,15 +32,15 @@ class BudgetTracker:
         Returns True if within budget, False otherwise.
         """
         cs = await self._get_session(session, session_id)
-        remaining_notional = cs.max_notional - cs.used_notional
+        remaining_cost = cs.max_cost - cs.used_cost
         remaining_count = cs.max_action_count - cs.used_action_count
-        return notional_amount <= remaining_notional and action_count <= remaining_count
+        return cost <= remaining_cost and action_count <= remaining_count
 
     async def increment(
         self,
         session: AsyncSession,
         session_id: UUID,
-        notional_amount: Decimal,
+        cost: Decimal,
         action_count: int = 1,
     ) -> None:
         """Atomically increment used budget within a transaction.
@@ -52,24 +52,24 @@ class BudgetTracker:
         result = await session.execute(select(ControlSession).where(ControlSession.id == session_id).with_for_update())
         cs = result.scalar_one()
 
-        new_notional = cs.used_notional + notional_amount
+        new_cost = cs.used_cost + cost
         new_count = cs.used_action_count + action_count
 
-        if new_notional > cs.max_notional:
-            raise BudgetExhaustedError(f"Notional budget exceeded: {new_notional} > {cs.max_notional}")
+        if new_cost > cs.max_cost:
+            raise BudgetExhaustedError(f"Cost budget exceeded: {new_cost} > {cs.max_cost}")
         if new_count > cs.max_action_count:
             raise BudgetExhaustedError(f"Action count budget exceeded: {new_count} > {cs.max_action_count}")
 
         await session.execute(
             update(ControlSession)
             .where(ControlSession.id == session_id)
-            .values(used_notional=new_notional, used_action_count=new_count)
+            .values(used_cost=new_cost, used_action_count=new_count)
         )
         logger.debug(
-            "Budget updated for session %s: notional=%s/%s, count=%d/%d",
+            "Budget updated for session %s: cost=%s/%s, count=%d/%d",
             session_id,
-            new_notional,
-            cs.max_notional,
+            new_cost,
+            cs.max_cost,
             new_count,
             cs.max_action_count,
         )
@@ -78,11 +78,11 @@ class BudgetTracker:
         """Get remaining budget for a session."""
         cs = await self._get_session(session, session_id)
         return {
-            "remaining_notional": cs.max_notional - cs.used_notional,
+            "remaining_cost": cs.max_cost - cs.used_cost,
             "remaining_count": cs.max_action_count - cs.used_action_count,
-            "used_notional": cs.used_notional,
+            "used_cost": cs.used_cost,
             "used_count": cs.used_action_count,
-            "max_notional": cs.max_notional,
+            "max_cost": cs.max_cost,
             "max_count": cs.max_action_count,
         }
 

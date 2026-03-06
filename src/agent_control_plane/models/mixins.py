@@ -41,10 +41,8 @@ class ControlSessionMixin:
     asset_scope: Mapped[str | None] = mapped_column(VARCHAR(50), nullable=True)
 
     # Budget tracking
-    max_notional: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), nullable=False, default=Decimal("100000"))
-    used_notional: Mapped[Decimal] = mapped_column(
-        DECIMAL(15, 2), nullable=False, default=Decimal("0"), server_default="0"
-    )
+    max_cost: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), nullable=False, default=Decimal("100000"))
+    used_cost: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), nullable=False, default=Decimal("0"), server_default="0")
     max_action_count: Mapped[int] = mapped_column(nullable=False, default=50)
     used_action_count: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
 
@@ -98,11 +96,12 @@ class ActionProposalMixin:
     resource_id: Mapped[str] = mapped_column(VARCHAR(50), nullable=False)
     resource_type: Mapped[str] = mapped_column(VARCHAR(50), nullable=False)
     decision: Mapped[str] = mapped_column(VARCHAR(20), nullable=False)
-    allocation_pct: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False)
-    confidence: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False)
     reasoning: Mapped[str] = mapped_column(Text, nullable=False)
-    time_horizon: Mapped[str] = mapped_column(VARCHAR(20), nullable=False)
     metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+    # Scoring (domain-specific)
+    weight: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False, default=Decimal("0"))
+    score: Mapped[Decimal] = mapped_column(DECIMAL(5, 4), nullable=False, default=Decimal("0"))
 
     # Classification
     action_tier: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="always_approve")
@@ -121,7 +120,6 @@ class RiskDecisionMixin:
 
     # Risk metrics
     risk_score: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), nullable=False)
-    max_allocation: Mapped[Decimal] = mapped_column(DECIMAL(8, 4), nullable=False)
     risk_details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     passed: Mapped[bool] = mapped_column(nullable=False, default=True)
@@ -137,7 +135,7 @@ class ApprovalTicketMixin:
     """Mixin for approval ticket model."""
 
     # Scope constraints
-    scope_max_notional: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 2), nullable=True)
+    scope_max_cost: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 2), nullable=True)
     scope_max_count: Mapped[int | None] = mapped_column(nullable=True)
     scope_expiry: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
@@ -162,9 +160,8 @@ class ExecutionIntentMixin:
     executor_type: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="dry_run")
 
     resource_id: Mapped[str] = mapped_column(VARCHAR(50), nullable=False)
-    action: Mapped[str] = mapped_column(VARCHAR(10), nullable=False)
-    quantity: Mapped[Decimal] = mapped_column(DECIMAL(15, 4), nullable=False)
-    metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    action: Mapped[str] = mapped_column(VARCHAR(20), nullable=False)
+    parameters_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
     status: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="pending", server_default="pending")
     created_at: Mapped[datetime] = mapped_column(

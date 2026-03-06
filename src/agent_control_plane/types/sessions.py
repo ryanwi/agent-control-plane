@@ -15,7 +15,7 @@ class SessionCreate(BaseModel):
     session_name: str
     execution_mode: ExecutionMode = ExecutionMode.DRY_RUN
     asset_scope: str | None = None
-    max_notional: Decimal = Decimal("100000")
+    max_cost: Decimal = Decimal("100000")
     max_action_count: int = 50
     policy_id: UUID | None = None
     dry_run_session_id: UUID | None = None
@@ -31,8 +31,8 @@ class SessionState(BaseModel):
     asset_scope: str | None
 
     # Budget
-    max_notional: Decimal
-    used_notional: Decimal = Decimal("0")
+    max_cost: Decimal
+    used_cost: Decimal = Decimal("0")
     max_action_count: int
     used_action_count: int = 0
 
@@ -56,8 +56,8 @@ class SessionSummary(BaseModel):
     session_name: str
     status: SessionStatus
     execution_mode: ExecutionMode
-    used_notional: Decimal = Decimal("0")
-    max_notional: Decimal
+    used_cost: Decimal = Decimal("0")
+    max_cost: Decimal
     used_action_count: int = 0
     max_action_count: int
     created_at: datetime

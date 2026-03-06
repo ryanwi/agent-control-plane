@@ -13,9 +13,8 @@ class RiskLimits(BaseModel):
     """Risk limit thresholds for a policy."""
 
     max_risk_score: Decimal = Decimal("10000")
-    max_single_allocation_pct: Decimal = Decimal("5.0")
-    max_duration: Decimal = Decimal("10.0")
-    max_concentration_pct: Decimal = Decimal("25.0")
+    max_weight_pct: Decimal = Decimal("5.0")
+    custom: dict[str, Decimal] = Field(default_factory=dict)
 
 
 class AutoApproveConditions(BaseModel):
@@ -23,36 +22,17 @@ class AutoApproveConditions(BaseModel):
 
     max_risk_tier: str = "LOW"
     dry_run_only: bool = True
-    max_allocation_pct: Decimal = Decimal("2.5")
-    min_confidence: Decimal = Decimal("0.7")
+    max_weight: Decimal = Decimal("2.5")
+    min_score: Decimal = Decimal("0.7")
 
 
 class ActionTiers(BaseModel):
     """Action classification tiers."""
 
     blocked: list[str] = Field(default_factory=list)
-    always_approve: list[str] = Field(
-        default_factory=lambda: [
-            "action_proposal_medium_risk",
-            "action_proposal_high_risk",
-            "workflow_transition",
-            "config_update",
-        ]
-    )
-    auto_approve: list[str] = Field(
-        default_factory=lambda: [
-            "action_proposal_low_risk",
-            "signal_calculation",
-            "data_fetch",
-        ]
-    )
-    unrestricted: list[str] = Field(
-        default_factory=lambda: [
-            "read_query",
-            "status_check",
-            "health_monitoring",
-        ]
-    )
+    always_approve: list[str] = Field(default_factory=list)
+    auto_approve: list[str] = Field(default_factory=list)
+    unrestricted: list[str] = Field(default_factory=list)
 
 
 class PolicySnapshotDTO(BaseModel):

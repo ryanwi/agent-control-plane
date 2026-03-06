@@ -13,7 +13,7 @@ class ApprovalScopeDTO(BaseModel):
     """Scope constraints for an approval decision."""
 
     resource_ids: list[str] = Field(default_factory=list)
-    max_notional: Decimal | None = None
+    max_cost: Decimal | None = None
     max_count: int | None = None
     expiry: datetime | None = None
 
