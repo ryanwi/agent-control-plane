@@ -62,7 +62,7 @@ async def concurrent_task(task_id, session_maker, session_id, resource_id, resul
         except ResourceLockedError:
             results.append(f"Task {task_id}: Blocked by ConcurrencyGuard (Resource Locked)")
         except Exception as e:
-            results.append(f"Task {task_id}: Error - {str(e)}")
+            results.append(f"Task {task_id}: Error - {e!s}")
 
 
 async def main():
