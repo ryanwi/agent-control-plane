@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Protocol, runtime_checkable
@@ -10,7 +11,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from agent_control_plane.models.reference import Base, register_models
 from agent_control_plane.storage.sqlalchemy_sync import SyncSqlAlchemyUnitOfWork
@@ -23,6 +24,7 @@ from agent_control_plane.types.enums import (
     UnknownAppEventPolicy,
 )
 from agent_control_plane.types.frames import EventFrame
+from agent_control_plane.types.sessions import SessionState
 
 
 class KillResultDTO(BaseModel):
@@ -85,6 +87,12 @@ class SyncControlPlane:
     def close(self) -> None:
         self._engine.dispose()
 
+    @contextmanager
+    def session_scope(self) -> Iterator[Session]:
+        """Context manager exposing a raw sync SQLAlchemy session."""
+        with self._session_factory() as db:
+            yield db
+
     def create_session(
         self,
         name: str,
@@ -105,6 +113,11 @@ class SyncControlPlane:
             uow.session_repo.create_seq_counter(cs.id)
             uow.commit()
             return cs.id
+
+    def get_session(self, session_id: UUID) -> SessionState | None:
+        with self._session_factory() as db:
+            uow = SyncSqlAlchemyUnitOfWork(db)
+            return uow.session_repo.get_session(session_id)
 
     def check_budget(self, session_id: UUID, cost: Decimal = Decimal("0"), action_count: int = 1) -> bool:
         with self._session_factory() as db:
@@ -367,6 +380,9 @@ class ControlPlaneFacade:
 
     def replay(self, session_id: UUID, *, after_seq: int = 0, limit: int = 100) -> list[EventFrame]:
         return self._cp.replay_events(session_id, after_seq=after_seq, limit=limit)
+
+    def get_session(self, session_id: UUID) -> SessionState | None:
+        return self._cp.get_session(session_id)
 
     def check_budget(self, session_id: UUID, *, cost: Decimal = Decimal("0"), action_count: int = 1) -> bool:
         return self._cp.check_budget(session_id, cost=cost, action_count=action_count)
