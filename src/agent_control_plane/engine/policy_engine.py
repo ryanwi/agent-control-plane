@@ -55,9 +55,11 @@ class DefaultRiskClassifier:
         is_matched = self._is_matched_asset(proposal.resource_id)
         auto_cond = policy.auto_approve_conditions
 
+        # LOW risk if asset matches AND (weight/score are within auto-approve bounds)
         if is_matched and proposal.weight <= auto_cond.max_weight and proposal.score >= auto_cond.min_score:
             return RiskLevel.LOW
 
+        # HIGH risk if weight exceeds global policy limit OR score is very low
         if proposal.weight >= policy.risk_limits.max_weight_pct or proposal.score < Decimal("0.5"):
             return RiskLevel.HIGH
 
@@ -122,20 +124,24 @@ class PolicyEngine:
             return ActionTier.BLOCKED
 
         # 3. Explicit Policy Lists
-        if any(action in decision_str for action in self.policy.action_tiers.always_approve):
+        always_approve = [a.lower() for a in self.policy.action_tiers.always_approve]
+        auto_approve = [a.lower() for a in self.policy.action_tiers.auto_approve]
+
+        if any(action in decision_str for action in always_approve):
             return ActionTier.ALWAYS_APPROVE
 
-        if any(action in decision_str for action in self.policy.action_tiers.auto_approve):
+        # If in auto_approve list, it's a candidate for AUTO_APPROVE,
+        # but it should still pass the global risk classification if we want safety.
+        # However, the 'auto_approve' list usually implies "bypass risk check for these specific actions".
+        # Let's keep it that way but respect the execution mode (dry_run_only).
+        if any(action in decision_str for action in auto_approve):
             return ActionTier.AUTO_APPROVE if self._can_auto_approve() else ActionTier.ALWAYS_APPROVE
 
-        # 4. Risk tier mapping
+        # 4. Risk tier mapping (risk_tier_match)
         if risk_level == RiskLevel.LOW:
             return ActionTier.AUTO_APPROVE if self._can_auto_approve() else ActionTier.ALWAYS_APPROVE
 
-        if risk_level in (RiskLevel.MEDIUM, RiskLevel.HIGH):
-            return ActionTier.ALWAYS_APPROVE
-
-        # 5. Default
+        # Default for medium/high risk
         return ActionTier.ALWAYS_APPROVE
 
     def _is_blocked(self, proposal: ActionProposalDTO) -> bool:
