@@ -239,6 +239,7 @@ For a native sync host, use `SyncControlPlane` or `ControlPlaneFacade` and `exam
 `SyncControlPlane.kill()` and `SyncControlPlane.kill_all()` return `KillResultDTO`.
 `SyncControlPlane.emit_event()` / `replay_events()` provide first-class sync event operations.
 `SyncControlPlane.emit_app_event()` supports boundary mapping via `AppEventMapper`/`DictEventMapper`.
+`SyncControlPlane.complete_session()` / `abort_session()` return `SessionLifecycleResult`.
 
 ## MCP tool-call gateway (v0.4)
 
@@ -274,6 +275,12 @@ result = gateway.handle_tool_call(
 ```
 
 Unknown tools are denied by default (fail-closed).
+
+Import enums from `agent_control_plane.types`:
+
+```python
+from agent_control_plane.types import EventKind, UnknownAppEventPolicy
+```
 
 ## ORM integration
 

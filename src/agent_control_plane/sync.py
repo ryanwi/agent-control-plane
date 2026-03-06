@@ -34,6 +34,13 @@ class KillResultDTO(BaseModel):
     tickets_denied: int = 0
 
 
+class SessionLifecycleResult(BaseModel):
+    """Lifecycle operation result with updated session state."""
+
+    session: SessionState
+    events_appended: int = 0
+
+
 class MappedEventDTO(BaseModel):
     """Resolved control-plane event details produced by an app-event mapper."""
 
@@ -186,6 +193,10 @@ class SyncControlPlane:
         *,
         mapper: AppEventMapper,
         unknown_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.RAISE,
+        state_bearing: bool | None = None,
+        agent_id: str | None = None,
+        correlation_id: UUID | None = None,
+        idempotency_key: str | None = None,
     ) -> int | None:
         mapped = mapper.map_event(event_name, payload)
         if mapped is None:
@@ -196,15 +207,15 @@ class SyncControlPlane:
             session_id=session_id,
             event_kind=mapped.event_kind,
             payload=mapped.payload,
-            state_bearing=mapped.state_bearing,
-            agent_id=mapped.agent_id,
-            correlation_id=mapped.correlation_id,
+            state_bearing=mapped.state_bearing if state_bearing is None else state_bearing,
+            agent_id=mapped.agent_id if agent_id is None else agent_id,
+            correlation_id=mapped.correlation_id if correlation_id is None else correlation_id,
             routing_decision=mapped.routing_decision,
             routing_reason=mapped.routing_reason,
-            idempotency_key=mapped.idempotency_key,
+            idempotency_key=mapped.idempotency_key if idempotency_key is None else idempotency_key,
         )
 
-    def complete_session(self, session_id: UUID) -> None:
+    def complete_session(self, session_id: UUID) -> SessionLifecycleResult:
         with self._session_factory() as db:
             uow = SyncSqlAlchemyUnitOfWork(db)
             uow.session_repo.update_session(
@@ -214,6 +225,10 @@ class SyncControlPlane:
                 updated_at=datetime.now(UTC),
             )
             uow.commit()
+            session = uow.session_repo.get_session(session_id)
+            if session is None:
+                raise ValueError(f"Session not found after completion: {session_id}")
+            return SessionLifecycleResult(session=session)
 
     def abort_session(
         self,
@@ -221,7 +236,7 @@ class SyncControlPlane:
         *,
         reason: str = "Session aborted",
         abort_reason: AbortReason = AbortReason.OPERATOR_REQUEST,
-    ) -> None:
+    ) -> SessionLifecycleResult:
         with self._session_factory() as db:
             uow = SyncSqlAlchemyUnitOfWork(db)
             uow.session_repo.update_session(
@@ -233,6 +248,10 @@ class SyncControlPlane:
                 updated_at=datetime.now(UTC),
             )
             uow.commit()
+            session = uow.session_repo.get_session(session_id)
+            if session is None:
+                raise ValueError(f"Session not found after abort: {session_id}")
+            return SessionLifecycleResult(session=session)
 
     def kill(self, session_id: UUID, reason: str = "Kill switch triggered") -> KillResultDTO:
         return self._trigger_kill(KillSwitchScope.SESSION_ABORT, session_id=session_id, reason=reason)
@@ -356,18 +375,31 @@ class ControlPlaneFacade:
         *,
         final_event_kind: EventKind | None = EventKind.CYCLE_COMPLETED,
         payload: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> SessionLifecycleResult:
+        appended = 0
         if final_event_kind is not None:
             self._cp.emit_event(session_id, final_event_kind, payload or {}, state_bearing=True)
-        self._cp.complete_session(session_id)
+            appended = 1
+        result = self._cp.complete_session(session_id)
+        return SessionLifecycleResult(session=result.session, events_appended=result.events_appended + appended)
 
-    def abort_session(self, session_id: UUID, *, reason: str = "Session aborted") -> None:
-        self._cp.abort_session(session_id, reason=reason)
+    def abort_session(self, session_id: UUID, *, reason: str = "Session aborted") -> SessionLifecycleResult:
+        return self._cp.abort_session(session_id, reason=reason)
 
     def emit(self, session_id: UUID, event_kind: EventKind, payload: dict[str, Any]) -> int:
         return self._cp.emit_event(session_id, event_kind, payload)
 
-    def emit_app(self, session_id: UUID, event_name: str, payload: Mapping[str, Any]) -> int | None:
+    def emit_app(
+        self,
+        session_id: UUID,
+        event_name: str,
+        payload: Mapping[str, Any],
+        *,
+        state_bearing: bool | None = None,
+        agent_id: str | None = None,
+        correlation_id: UUID | None = None,
+        idempotency_key: str | None = None,
+    ) -> int | None:
         if self._mapper is None:
             raise ValueError("No app event mapper configured")
         return self._cp.emit_app_event(
@@ -376,6 +408,10 @@ class ControlPlaneFacade:
             payload=payload,
             mapper=self._mapper,
             unknown_policy=self._unknown_policy,
+            state_bearing=state_bearing,
+            agent_id=agent_id,
+            correlation_id=correlation_id,
+            idempotency_key=idempotency_key,
         )
 
     def replay(self, session_id: UUID, *, after_seq: int = 0, limit: int = 100) -> list[EventFrame]:

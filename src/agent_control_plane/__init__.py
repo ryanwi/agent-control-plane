@@ -80,6 +80,7 @@ from agent_control_plane.sync import (
     DictEventMapper,
     KillResultDTO,
     MappedEventDTO,
+    SessionLifecycleResult,
     SyncControlPlane,
     UnknownAppEventError,
 )
@@ -226,6 +227,7 @@ __all__ = [
     "RoutingResolutionStep",
     # Session DTOs
     "SessionCreate",
+    "SessionLifecycleResult",
     "SessionManager",
     "SessionRepository",
     "SessionSeqCounter",

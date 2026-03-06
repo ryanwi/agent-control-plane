@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
 
@@ -70,6 +71,22 @@ def test_sync_control_plane_emit_app_event_mapper_and_unknown_policy(tmp_path: P
             mapper=mapper,
             unknown_policy=UnknownAppEventPolicy.RAISE,
         )
+
+    tagged_seq = cp.emit_app_event(
+        sid,
+        "plan_started",
+        {"plan_id": "p2"},
+        mapper=mapper,
+        unknown_policy=UnknownAppEventPolicy.RAISE,
+        state_bearing=True,
+        agent_id="agent-42",
+        correlation_id=uuid4(),
+        idempotency_key="idem-1",
+    )
+    assert tagged_seq == 2
+
+    tagged_event = cp.replay_events(sid, after_seq=1)[0]
+    assert tagged_event.agent_id == "agent-42"
     cp.close()
 
 
@@ -95,12 +112,18 @@ def test_control_plane_facade_session_budget_and_replay(tmp_path: Path):
     assert facade.check_budget(sid, cost=Decimal("10"), action_count=1) is True
     facade.increment_budget(sid, cost=Decimal("10"), action_count=1)
 
-    seq = facade.emit_app(sid, "scan_started", {"resource": "host-1"})
+    seq = facade.emit_app(sid, "scan_started", {"resource": "host-1"}, state_bearing=True, agent_id="sec-agent")
     assert seq == 1
-    facade.close_session(sid, payload={"done": True})
+    close_result = facade.close_session(sid, payload={"done": True})
+    assert close_result.events_appended == 1
+    assert close_result.session.status.value == "completed"
 
     events = facade.replay(sid)
     assert len(events) == 2
     assert events[0].event_kind == EventKind.CYCLE_STARTED
     assert events[1].event_kind == EventKind.CYCLE_COMPLETED
+
+    sid2 = facade.open_session("abort-demo", max_cost=Decimal("5"), max_action_count=1)
+    abort_result = facade.abort_session(sid2, reason="operator stop")
+    assert abort_result.session.status.value == "aborted"
     facade.close()
