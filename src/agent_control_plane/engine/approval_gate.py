@@ -210,7 +210,9 @@ class ApprovalGate:
 
         Returns the matching ticket if scope applies, None otherwise.
         Critically: scope waives the human click, NOT the policy/risk checks.
+        Note: risk_level is accepted for API compatibility and future policy hooks.
         """
+        _ = risk_level
         ApprovalTicket = ModelRegistry.get("ApprovalTicket")
         is_sqlalchemy_model = hasattr(ApprovalTicket, "__table__") or hasattr(ApprovalTicket, "__mapper__")
 

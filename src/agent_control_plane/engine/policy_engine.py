@@ -1,6 +1,7 @@
 """Action classification, risk tiering, and asset scope enforcement."""
 
 import logging
+from decimal import Decimal
 from typing import Protocol
 
 from agent_control_plane.types.enums import ActionTier, RiskLevel
@@ -56,8 +57,6 @@ class DefaultRiskClassifier:
 
         if is_matched and proposal.weight <= auto_cond.max_weight and proposal.score >= auto_cond.min_score:
             return RiskLevel.LOW
-
-        from decimal import Decimal
 
         if proposal.weight >= policy.risk_limits.max_weight_pct or proposal.score < Decimal("0.5"):
             return RiskLevel.HIGH

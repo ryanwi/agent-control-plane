@@ -70,7 +70,11 @@ class KillSwitch:
         return {"scope": "session_abort", "session_id": str(session_id), "tickets_denied": denied}
 
     async def _abort_agent(self, db_session: AsyncSession, agent_id: str | None, reason: str) -> dict:
-        """Pause/stop one agent across all active sessions."""
+        """Pause active execution across all sessions for an agent-abort event.
+
+        This scope intentionally affects every active/created session as a
+        safety-first halt. `agent_id` is recorded for audit/logical grouping.
+        """
         if agent_id is None:
             raise ValueError("agent_id required for agent_abort")
 

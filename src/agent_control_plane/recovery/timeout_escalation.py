@@ -91,6 +91,8 @@ class TimeoutEscalation:
                 state_bearing=False,
             )
         except Exception:
+            # Keep broad on purpose: timeout escalation should never crash the watchdog loop
+            # due to non-critical telemetry append failures.
             logger.exception("Failed to append timeout escalation event for session %s", cs.id)
 
     async def _get_last_event(self, db_session: AsyncSession, session_id: UUID) -> Any | None:

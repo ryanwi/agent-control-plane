@@ -87,6 +87,8 @@ class EventStore:
                     "payload": payload,
                     "agent_id": agent_id,
                     "correlation_id": correlation_id,
+                    "routing_decision": routing_decision,
+                    "routing_reason": routing_reason,
                     "buffered_at": datetime.now(UTC).isoformat(),
                 }
             )
@@ -102,6 +104,8 @@ class EventStore:
                     "payload": payload,
                     "agent_id": agent_id,
                     "correlation_id": correlation_id,
+                    "routing_decision": routing_decision,
+                    "routing_reason": routing_reason,
                     "buffered_at": datetime.now(UTC).isoformat(),
                 }
             )
@@ -117,7 +121,9 @@ class EventStore:
         result = await session.execute(
             select(SessionSeqCounter).where(SessionSeqCounter.session_id == session_id).with_for_update()
         )
-        counter = result.scalar_one()
+        counter = result.scalar_one_or_none()
+        if counter is None:
+            raise ValueError(f"No sequence counter for session {session_id}")
         allocated = counter.next_seq
         await session.execute(
             update(SessionSeqCounter)
@@ -162,6 +168,8 @@ class EventStore:
                     payload=item["payload"],
                     agent_id=item.get("agent_id"),
                     correlation_id=item.get("correlation_id"),
+                    routing_decision=item.get("routing_decision"),
+                    routing_reason=item.get("routing_reason"),
                     state_bearing=False,
                 )
                 flushed += 1

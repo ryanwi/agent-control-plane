@@ -224,8 +224,8 @@ async def run_control_flow(db: AsyncSession) -> None:
     policy_snapshot = _seed_models()
     policy = await session_manager.create_policy(
         db,
-        action_tiers=policy_snapshot.action_tiers.model_dump(),
-        risk_limits=policy_snapshot.risk_limits.model_dump(),
+        action_tiers=policy_snapshot.action_tiers.model_dump(mode="json"),
+        risk_limits=policy_snapshot.risk_limits.model_dump(mode="json"),
         asset_scope=policy_snapshot.asset_scope,
         execution_mode=(
             policy_snapshot.execution_mode.value
@@ -233,7 +233,7 @@ async def run_control_flow(db: AsyncSession) -> None:
             else policy_snapshot.execution_mode
         ),
         approval_timeout_seconds=policy_snapshot.approval_timeout_seconds,
-        auto_approve_conditions=policy_snapshot.auto_approve_conditions.model_dump(),
+        auto_approve_conditions=policy_snapshot.auto_approve_conditions.model_dump(mode="json"),
     )
 
     session = await session_manager.create_session(
@@ -266,6 +266,14 @@ async def run_control_flow(db: AsyncSession) -> None:
         print("Blocked by policy:", route.reason)
         return
 
+    # Check resource lock before persisting a pending proposal row to avoid self-locking in the example flow.
+    guard = ConcurrencyGuard()
+    await guard.check_resource_lock(
+        db,
+        session_id=session.id,
+        resource_id=proposal.resource_id,
+    )
+
     route_decision = ActionProposal(
         session_id=proposal.session_id,
         resource_id=proposal.resource_id,
@@ -283,12 +291,6 @@ async def run_control_flow(db: AsyncSession) -> None:
     await db.flush()
 
     approval_gate = ApprovalGate(event_store)
-    guard = ConcurrencyGuard()
-    await guard.check_resource_lock(
-        db,
-        session_id=session.id,
-        resource_id=proposal.resource_id,
-    )
 
     ticket = await approval_gate.create_ticket(db, session.id, route_decision.id)
     await approval_gate.approve(

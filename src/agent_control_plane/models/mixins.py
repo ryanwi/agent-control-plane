@@ -135,6 +135,7 @@ class ApprovalTicketMixin:
     """Mixin for approval ticket model."""
 
     # Scope constraints
+    scope_resource_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     scope_max_cost: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 2), nullable=True)
     scope_max_count: Mapped[int | None] = mapped_column(nullable=True)
     scope_expiry: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)

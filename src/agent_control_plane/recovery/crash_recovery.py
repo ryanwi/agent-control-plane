@@ -49,7 +49,7 @@ class CrashRecovery:
             try:
                 await self._recover_session(db_session, cs)
                 recovered += 1
-            except Exception as e:
+            except (RuntimeError, ValueError) as e:
                 logger.error("Failed to recover session %s: %s", cs.id, e)
                 await self.session_manager.abort_session(
                     db_session,
