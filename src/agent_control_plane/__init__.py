@@ -59,7 +59,15 @@ from agent_control_plane.storage import (
     SyncSqlAlchemyUnitOfWork,
     SyncUnitOfWork,
 )
-from agent_control_plane.sync import KillResultDTO, SyncControlPlane
+from agent_control_plane.sync import (
+    AppEventMapper,
+    ControlPlaneFacade,
+    DictEventMapper,
+    KillResultDTO,
+    MappedEventDTO,
+    SyncControlPlane,
+    UnknownAppEventError,
+)
 from agent_control_plane.types.agents import (
     AgentCapability,
     AgentMetadata,
@@ -86,6 +94,7 @@ from agent_control_plane.types.enums import (
     RiskLevel,
     RoutingResolutionStep,
     SessionStatus,
+    UnknownAppEventPolicy,
 )
 from agent_control_plane.types.frames import EventFrame, RequestFrame, ResponseFrame
 from agent_control_plane.types.policies import (
@@ -118,6 +127,7 @@ __all__ = [
     "AgentRecord",
     "AgentRegistry",
     "AgentScope",
+    "AppEventMapper",
     # Approval DTOs
     "ApprovalDecisionRequest",
     "ApprovalDecisionType",
@@ -147,6 +157,7 @@ __all__ = [
     "BudgetTracker",
     "ConcurrencyGuard",
     "ControlEvent",
+    "ControlPlaneFacade",
     "ControlSession",
     # Recovery
     "CrashRecovery",
@@ -156,6 +167,7 @@ __all__ = [
     "DelegationGuard",
     "DelegationProposal",
     "DelegationRecord",
+    "DictEventMapper",
     # Frames
     "EventFrame",
     "EventKind",
@@ -168,6 +180,7 @@ __all__ = [
     "KillResultDTO",
     "KillSwitch",
     "KillSwitchScope",
+    "MappedEventDTO",
     # Models
     "ModelRegistry",
     "PolicyEngine",
@@ -202,6 +215,8 @@ __all__ = [
     "SyncSqlAlchemyUnitOfWork",
     "SyncUnitOfWork",
     "TimeoutEscalation",
+    "UnknownAppEventError",
+    "UnknownAppEventPolicy",
     "create_tables",
     "register_models",
 ]

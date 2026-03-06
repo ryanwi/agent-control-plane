@@ -188,3 +188,10 @@ class AgentScope(StrEnum):
     AGENT_ABORT = "agent_abort"
     SYSTEM_HALT = "system_halt"
     AGENT_TIMEOUT = "agent_timeout"
+
+
+class UnknownAppEventPolicy(StrEnum):
+    """How to handle app-level events the mapper cannot resolve."""
+
+    RAISE = "raise"
+    IGNORE = "ignore"

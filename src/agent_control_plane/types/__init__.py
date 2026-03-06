@@ -17,6 +17,7 @@ from .enums import (
     RiskLevel,
     RoutingResolutionStep,
     SessionStatus,
+    UnknownAppEventPolicy,
 )
 from .frames import EventFrame, RequestFrame, ResponseFrame
 from .policies import ActionTiers, AutoApproveConditions, PolicySnapshotDTO, RiskLimits
@@ -56,4 +57,5 @@ __all__ = [
     "SessionState",
     "SessionStatus",
     "SessionSummary",
+    "UnknownAppEventPolicy",
 ]

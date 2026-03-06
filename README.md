@@ -130,6 +130,7 @@ package ships SQLAlchemy async and sync implementations:
 - `AsyncSqlAlchemyUnitOfWork`
 - `SyncSqlAlchemyUnitOfWork`
 - `SyncControlPlane` convenience facade
+- `ControlPlaneFacade` high-level sync host wrapper
 
 Recommended startup sequence:
 
@@ -232,9 +233,11 @@ async def handle_proposal(db_session: AsyncSession, request: dict) -> None:
     await uow.commit()
 ```
 
-For a native sync host, use `SyncControlPlane` and `examples/quickstart_sync.py`.
+For a native sync host, use `SyncControlPlane` or `ControlPlaneFacade` and `examples/quickstart_sync.py`.
 
 `SyncControlPlane.kill()` and `SyncControlPlane.kill_all()` return `KillResultDTO`.
+`SyncControlPlane.emit_event()` / `replay_events()` provide first-class sync event operations.
+`SyncControlPlane.emit_app_event()` supports boundary mapping via `AppEventMapper`/`DictEventMapper`.
 
 ## ORM integration
 
