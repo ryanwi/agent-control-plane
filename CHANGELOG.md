@@ -4,6 +4,29 @@
 
 - No unreleased changes.
 
+## [0.3.0] - 2026-03-06
+
+### Added
+
+- First-class sync event APIs on `SyncControlPlane`:
+  - `emit_event(...)`
+  - `replay_events(...)`
+  - `emit_app_event(...)`
+- Typed app-event mapping surface:
+  - `AppEventMapper` protocol
+  - `DictEventMapper` registry mapper
+  - `MappedEventDTO`
+  - `UnknownAppEventError`
+  - `UnknownAppEventPolicy`
+- New `ControlPlaneFacade` high-level sync API for host application integration.
+- New tests for sync event APIs, mapper behavior, and facade lifecycle flow.
+
+### Changed
+
+- Sync APIs now support direct app-event-to-control-event mapping without thread-loop adapters.
+- Public API exports updated for sync facade and app-event mapping primitives.
+- README sync integration docs expanded with event/facade guidance.
+
 ## [0.2.1] - 2026-03-06
 
 ### Added
