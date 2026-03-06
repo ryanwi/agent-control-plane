@@ -48,16 +48,12 @@ class TestCheckBudget:
 
     @pytest.mark.asyncio
     async def test_exact_boundary_passes(self):
-        cs = _FakeSessionRow(
-            max_cost=Decimal("100"), used_cost=Decimal("90"), max_action_count=10, used_action_count=9
-        )
+        cs = _FakeSessionRow(max_cost=Decimal("100"), used_cost=Decimal("90"), max_action_count=10, used_action_count=9)
         assert await _tracker(cs).check_budget(AsyncMock(), cs.id, cost=Decimal("10"), action_count=1) is True
 
     @pytest.mark.asyncio
     async def test_one_over_boundary_fails(self):
-        cs = _FakeSessionRow(
-            max_cost=Decimal("100"), used_cost=Decimal("90"), max_action_count=10, used_action_count=9
-        )
+        cs = _FakeSessionRow(max_cost=Decimal("100"), used_cost=Decimal("90"), max_action_count=10, used_action_count=9)
         assert await _tracker(cs).check_budget(AsyncMock(), cs.id, cost=Decimal("10.01"), action_count=1) is False
 
     @pytest.mark.asyncio
@@ -69,9 +65,7 @@ class TestCheckBudget:
 
     @pytest.mark.asyncio
     async def test_both_limits_hit(self):
-        cs = _FakeSessionRow(
-            max_cost=Decimal("100"), used_cost=Decimal("100"), max_action_count=5, used_action_count=5
-        )
+        cs = _FakeSessionRow(max_cost=Decimal("100"), used_cost=Decimal("100"), max_action_count=5, used_action_count=5)
         assert await _tracker(cs).check_budget(AsyncMock(), cs.id, cost=Decimal("1"), action_count=1) is False
 
 

@@ -118,9 +118,7 @@ class SyncControlPlane:
 
         async def _check():
             async with self._session_factory() as db:
-                return await self._budget_tracker.check_budget(
-                    db, session_id, cost=cost, action_count=action_count
-                )
+                return await self._budget_tracker.check_budget(db, session_id, cost=cost, action_count=action_count)
 
         return self._run(_check())
 
