@@ -175,14 +175,8 @@ class PolicyEngine:
         if auto_cond.dry_run_only and self.policy.execution_mode != ExecutionMode.DRY_RUN:
             return False
 
-        # 2. Risk tier check
-        levels = [RiskLevel.LOW, RiskLevel.MEDIUM, RiskLevel.HIGH]
-        try:
-            allowed_idx = levels.index(auto_cond.max_risk_tier)
-            actual_idx = levels.index(risk_level)
-            return actual_idx <= allowed_idx
-        except ValueError:
-            return risk_level == RiskLevel.LOW
+        # 2. Risk tier check (using comparable enum)
+        return risk_level <= auto_cond.max_risk_tier
 
     def _is_matched_asset(self, resource_id: str) -> bool:
         """Check if a resource matches the configured asset classifier."""

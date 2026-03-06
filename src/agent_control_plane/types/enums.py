@@ -136,6 +136,36 @@ class RiskLevel(StrEnum):
     MEDIUM = "medium"
     HIGH = "high"
 
+    @property
+    def rank(self) -> int:
+        """Numeric rank for comparison (higher is more risky)."""
+        ranks = {
+            RiskLevel.LOW: 1,
+            RiskLevel.MEDIUM: 2,
+            RiskLevel.HIGH: 3,
+        }
+        return ranks[self]
+
+    def __le__(self, other: object) -> bool:
+        if not isinstance(other, RiskLevel):
+            return NotImplemented
+        return self.rank <= other.rank
+
+    def __ge__(self, other: object) -> bool:
+        if not isinstance(other, RiskLevel):
+            return NotImplemented
+        return self.rank >= other.rank
+
+    def __lt__(self, other: object) -> bool:
+        if not isinstance(other, RiskLevel):
+            return NotImplemented
+        return self.rank < other.rank
+
+    def __gt__(self, other: object) -> bool:
+        if not isinstance(other, RiskLevel):
+            return NotImplemented
+        return self.rank > other.rank
+
 
 class ExecutionMode(StrEnum):
     """Execution mode for agent sessions."""
@@ -195,3 +225,14 @@ class UnknownAppEventPolicy(StrEnum):
 
     RAISE = "raise"
     IGNORE = "ignore"
+
+
+class McpEventName(StrEnum):
+    """Canonical MCP gateway app-level events."""
+
+    TOOL_CALL_RECEIVED = "tool_call_received"
+    TOOL_CALL_ALLOWED = "tool_call_allowed"
+    TOOL_CALL_BLOCKED = "tool_call_blocked"
+    TOOL_CALL_APPROVAL_REQUIRED = "tool_call_approval_required"
+    TOOL_CALL_EXECUTED = "tool_call_executed"
+    TOOL_CALL_FAILED = "tool_call_failed"

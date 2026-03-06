@@ -4,6 +4,17 @@
 
 - No unreleased changes.
 
+## [0.3.1] - 2026-03-06
+
+### Changed
+
+- **Comparable RiskLevel**: Refactored `RiskLevel` to be a comparable enum with numeric ranking. This enables safer, more readable threshold checks (e.g., `risk_level <= max_risk_tier`).
+- **Simplified Policy Engine**: Removed fragile list-index based risk comparisons in favor of direct enum comparison operators.
+
+### Added
+
+- New unit tests for risk level comparison logic in `tests/test_enums.py`.
+
 ## [0.3.0] - 2026-03-06
 
 ### Added
