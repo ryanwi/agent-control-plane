@@ -59,19 +59,13 @@ class SessionManager:
     async def get_session(self, session: AsyncSession, session_id: UUID) -> Any | None:
         """Get a session by ID."""
         ControlSession = ModelRegistry.get("ControlSession")
-        result = await session.execute(
-            select(ControlSession).where(ControlSession.id == session_id)
-        )
+        result = await session.execute(select(ControlSession).where(ControlSession.id == session_id))
         return result.scalar_one_or_none()
 
-    async def get_session_by_name(
-        self, session: AsyncSession, session_name: str
-    ) -> Any | None:
+    async def get_session_by_name(self, session: AsyncSession, session_name: str) -> Any | None:
         """Get a session by name."""
         ControlSession = ModelRegistry.get("ControlSession")
-        result = await session.execute(
-            select(ControlSession).where(ControlSession.session_name == session_name)
-        )
+        result = await session.execute(select(ControlSession).where(ControlSession.session_name == session_name))
         return result.scalar_one_or_none()
 
     async def list_sessions(
@@ -149,9 +143,7 @@ class SessionManager:
         logger.warning("Aborted session %s: %s", session_id, reason)
         return cs
 
-    async def set_active_cycle(
-        self, session: AsyncSession, session_id: UUID, cycle_id: UUID | None
-    ) -> None:
+    async def set_active_cycle(self, session: AsyncSession, session_id: UUID, cycle_id: UUID | None) -> None:
         """Set or clear the active cycle for a session."""
         ControlSession = ModelRegistry.get("ControlSession")
         await session.execute(
@@ -191,9 +183,7 @@ class SessionManager:
         await session.flush()
         return policy
 
-    async def _get_session_or_raise(
-        self, session: AsyncSession, session_id: UUID
-    ) -> Any:
+    async def _get_session_or_raise(self, session: AsyncSession, session_id: UUID) -> Any:
         """Get session or raise ValueError."""
         cs = await self.get_session(session, session_id)
         if cs is None:

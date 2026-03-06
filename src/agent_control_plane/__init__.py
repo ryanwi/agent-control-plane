@@ -31,11 +31,11 @@ from agent_control_plane.types.enums import (
     ApprovalStatus,
     EventKind,
     ExecutionIntentStatus,
+    ExecutionMode,
     KillSwitchScope,
     ProposalStatus,
     RiskLevel,
     SessionStatus,
-    ExecutionMode,
 )
 from agent_control_plane.types.frames import EventFrame, RequestFrame, ResponseFrame
 from agent_control_plane.types.policies import (

@@ -49,22 +49,16 @@ class BudgetTracker:
         """
         ControlSession = ModelRegistry.get("ControlSession")
         # Lock the row for atomic update
-        result = await session.execute(
-            select(ControlSession).where(ControlSession.id == session_id).with_for_update()
-        )
+        result = await session.execute(select(ControlSession).where(ControlSession.id == session_id).with_for_update())
         cs = result.scalar_one()
 
         new_notional = cs.used_notional + notional_amount
         new_count = cs.used_action_count + action_count
 
         if new_notional > cs.max_notional:
-            raise BudgetExhaustedError(
-                f"Notional budget exceeded: {new_notional} > {cs.max_notional}"
-            )
+            raise BudgetExhaustedError(f"Notional budget exceeded: {new_notional} > {cs.max_notional}")
         if new_count > cs.max_action_count:
-            raise BudgetExhaustedError(
-                f"Action count budget exceeded: {new_count} > {cs.max_action_count}"
-            )
+            raise BudgetExhaustedError(f"Action count budget exceeded: {new_count} > {cs.max_action_count}")
 
         await session.execute(
             update(ControlSession)
@@ -92,11 +86,9 @@ class BudgetTracker:
             "max_count": cs.max_action_count,
         }
 
-    async def _get_session(self, session: AsyncSession, session_id: UUID) -> object:
+    async def _get_session(self, session: AsyncSession, session_id: UUID) -> Any:
         ControlSession = ModelRegistry.get("ControlSession")
-        result = await session.execute(
-            select(ControlSession).where(ControlSession.id == session_id)
-        )
+        result = await session.execute(select(ControlSession).where(ControlSession.id == session_id))
         cs = result.scalar_one_or_none()
         if cs is None:
             raise ValueError(f"Session {session_id} not found")

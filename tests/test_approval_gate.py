@@ -1,6 +1,7 @@
-import pytest
 from decimal import Decimal
 from uuid import uuid4
+
+import pytest
 
 from agent_control_plane.engine.approval_gate import ApprovalGate
 from agent_control_plane.engine.event_store import EventStore
@@ -114,7 +115,7 @@ async def test_check_session_scope_blocks_when_count_is_exhausted():
     result = await gate.check_session_scope(
         session,
         session_id=session_id,
-        security_id="AAPL",
+        resource_id="AAPL",
         risk_level=RiskLevel.MEDIUM,
         notional=Decimal("10"),
     )

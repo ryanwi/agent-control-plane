@@ -108,10 +108,7 @@ class PolicyEngine:
     def _is_blocked(self, proposal: ActionProposalDTO) -> bool:
         """Check if the proposal's action is in the blocked list."""
         blocked = self.policy.action_tiers.blocked
-        return any(
-            action in str(proposal.decision).lower()
-            for action in blocked
-        )
+        return any(action in str(proposal.decision).lower() for action in blocked)
 
     def _passes_asset_scope(self, proposal: ActionProposalDTO) -> bool:
         """Check if the proposal passes the asset scope filter."""

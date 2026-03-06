@@ -36,16 +36,12 @@ class ControlSessionMixin:
     """Mixin for control session model."""
 
     session_name: Mapped[str] = mapped_column(VARCHAR(255), nullable=False, unique=True)
-    status: Mapped[str] = mapped_column(
-        VARCHAR(20), nullable=False, default="created", server_default="created"
-    )
+    status: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="created", server_default="created")
     execution_mode: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="dry_run")
     asset_scope: Mapped[str | None] = mapped_column(VARCHAR(50), nullable=True)
 
     # Budget tracking
-    max_notional: Mapped[Decimal] = mapped_column(
-        DECIMAL(15, 2), nullable=False, default=Decimal("100000")
-    )
+    max_notional: Mapped[Decimal] = mapped_column(DECIMAL(15, 2), nullable=False, default=Decimal("100000"))
     used_notional: Mapped[Decimal] = mapped_column(
         DECIMAL(15, 2), nullable=False, default=Decimal("0"), server_default="0"
     )
@@ -111,9 +107,7 @@ class ActionProposalMixin:
     # Classification
     action_tier: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="always_approve")
     risk_level: Mapped[str] = mapped_column(VARCHAR(10), nullable=False, default="medium")
-    status: Mapped[str] = mapped_column(
-        VARCHAR(20), nullable=False, default="pending", server_default="pending"
-    )
+    status: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="pending", server_default="pending")
 
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
@@ -148,9 +142,7 @@ class ApprovalTicketMixin:
     scope_expiry: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
     # Decision
-    status: Mapped[str] = mapped_column(
-        VARCHAR(20), nullable=False, default="pending", server_default="pending"
-    )
+    status: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="pending", server_default="pending")
     decision_type: Mapped[str | None] = mapped_column(VARCHAR(30), nullable=True)
     decided_by: Mapped[str | None] = mapped_column(VARCHAR(100), nullable=True)
     decision_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -174,9 +166,7 @@ class ExecutionIntentMixin:
     quantity: Mapped[Decimal] = mapped_column(DECIMAL(15, 4), nullable=False)
     metadata_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
-    status: Mapped[str] = mapped_column(
-        VARCHAR(20), nullable=False, default="pending", server_default="pending"
-    )
+    status: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="pending", server_default="pending")
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         default=func.current_timestamp(),

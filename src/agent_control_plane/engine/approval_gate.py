@@ -100,9 +100,7 @@ class ApprovalGate:
         # Update proposal status
         ActionProposal = ModelRegistry.get("ActionProposal")
         await db_session.execute(
-            update(ActionProposal)
-            .where(ActionProposal.id == ticket.proposal_id)
-            .values(status=ProposalStatus.APPROVED)
+            update(ActionProposal).where(ActionProposal.id == ticket.proposal_id).values(status=ProposalStatus.APPROVED)
         )
 
         await self.event_store.append(
@@ -141,9 +139,7 @@ class ApprovalGate:
         # Update proposal status
         ActionProposal = ModelRegistry.get("ActionProposal")
         await db_session.execute(
-            update(ActionProposal)
-            .where(ActionProposal.id == ticket.proposal_id)
-            .values(status=ProposalStatus.DENIED)
+            update(ActionProposal).where(ActionProposal.id == ticket.proposal_id).values(status=ProposalStatus.DENIED)
         )
 
         await self.event_store.append(
@@ -206,8 +202,8 @@ class ApprovalGate:
         self,
         db_session: AsyncSession,
         session_id: UUID,
-        security_id: str | None = None,
         resource_id: str | None = None,
+        security_id: str | None = None,
         risk_level: RiskLevel | None = None,
         notional: Decimal | None = None,
     ) -> Any | None:
@@ -222,17 +218,17 @@ class ApprovalGate:
             risk_level = RiskLevel.MEDIUM
 
         ApprovalTicket = ModelRegistry.get("ApprovalTicket")
-        is_sqlalchemy_model = hasattr(ApprovalTicket, "__table__") or hasattr(
-            ApprovalTicket, "__mapper__"
-        )
+        is_sqlalchemy_model = hasattr(ApprovalTicket, "__table__") or hasattr(ApprovalTicket, "__mapper__")
 
         if is_sqlalchemy_model:
             result = await db_session.execute(
-                select(ApprovalTicket).where(
+                select(ApprovalTicket)
+                .where(
                     ApprovalTicket.session_id == session_id,
                     ApprovalTicket.status == ApprovalStatus.APPROVED,
                     ApprovalTicket.decision_type == ApprovalDecisionType.ALLOW_FOR_SESSION,
-                ).with_for_update()
+                )
+                .with_for_update()
             )
             tickets = list(result.scalars().all())
         else:
@@ -256,9 +252,7 @@ class ApprovalGate:
             if ticket.scope_expiry and ticket.scope_expiry <= now:
                 continue
             # Check resource scope
-            ticket_scope = getattr(ticket, "scope_resource_ids", None) or getattr(
-                ticket, "scope_symbols", None
-            )
+            ticket_scope = getattr(ticket, "scope_resource_ids", None) or getattr(ticket, "scope_symbols", None)
             if ticket_scope and scope_id not in ticket_scope:
                 continue
             # Check notional scope
@@ -290,9 +284,7 @@ class ApprovalGate:
         result = await db_session.execute(query)
         return list(result.scalars().all())
 
-    async def _get_pending_ticket(
-        self, db_session: AsyncSession, ticket_id: UUID
-    ) -> Any:
+    async def _get_pending_ticket(self, db_session: AsyncSession, ticket_id: UUID) -> Any:
         """Get a pending ticket or raise."""
         ApprovalTicket = ModelRegistry.get("ApprovalTicket")
         result = await db_session.execute(

@@ -52,16 +52,12 @@ class KillSwitch:
         else:
             raise ValueError(f"Unknown kill switch scope: {scope}")
 
-    async def _abort_session(
-        self, db_session: AsyncSession, session_id: UUID | None, reason: str
-    ) -> dict:
+    async def _abort_session(self, db_session: AsyncSession, session_id: UUID | None, reason: str) -> dict:
         """Stop one session and deny all pending tickets."""
         if session_id is None:
             raise ValueError("session_id required for session_abort")
 
-        await self.session_manager.abort_session(
-            db_session, session_id, AbortReason.KILL_SWITCH, reason
-        )
+        await self.session_manager.abort_session(db_session, session_id, AbortReason.KILL_SWITCH, reason)
         denied = await self._deny_pending_tickets(db_session, session_id)
 
         await self.event_store.append(
@@ -73,18 +69,14 @@ class KillSwitch:
         )
         return {"scope": "session_abort", "session_id": str(session_id), "tickets_denied": denied}
 
-    async def _abort_agent(
-        self, db_session: AsyncSession, agent_id: str | None, reason: str
-    ) -> dict:
+    async def _abort_agent(self, db_session: AsyncSession, agent_id: str | None, reason: str) -> dict:
         """Pause/stop one agent across all active sessions."""
         if agent_id is None:
             raise ValueError("agent_id required for agent_abort")
 
         ControlSession = ModelRegistry.get("ControlSession")
         result = await db_session.execute(
-            select(ControlSession).where(
-                ControlSession.status.in_([SessionStatus.ACTIVE, SessionStatus.CREATED])
-            )
+            select(ControlSession).where(ControlSession.status.in_([SessionStatus.ACTIVE, SessionStatus.CREATED]))
         )
         sessions = list(result.scalars().all())
         denied = 0
@@ -114,18 +106,14 @@ class KillSwitch:
         """Emergency stop ALL execution system-wide."""
         ControlSession = ModelRegistry.get("ControlSession")
         result = await db_session.execute(
-            select(ControlSession).where(
-                ControlSession.status.in_([SessionStatus.ACTIVE, SessionStatus.CREATED])
-            )
+            select(ControlSession).where(ControlSession.status.in_([SessionStatus.ACTIVE, SessionStatus.CREATED]))
         )
         sessions = list(result.scalars().all())
 
         aborted = 0
         total_denied = 0
         for cs in sessions:
-            await self.session_manager.abort_session(
-                db_session, cs.id, AbortReason.KILL_SWITCH, reason
-            )
+            await self.session_manager.abort_session(db_session, cs.id, AbortReason.KILL_SWITCH, reason)
             denied = await self._deny_pending_tickets(db_session, cs.id)
             total_denied += denied
             await self.event_store.append(
@@ -137,21 +125,15 @@ class KillSwitch:
             )
             aborted += 1
 
-        logger.critical(
-            "SYSTEM HALT: Aborted %d sessions, denied %d tickets", aborted, total_denied
-        )
+        logger.critical("SYSTEM HALT: Aborted %d sessions, denied %d tickets", aborted, total_denied)
         return {"scope": "system_halt", "sessions_aborted": aborted, "tickets_denied": total_denied}
 
-    async def _budget_halt(
-        self, db_session: AsyncSession, session_id: UUID | None, reason: str
-    ) -> dict:
+    async def _budget_halt(self, db_session: AsyncSession, session_id: UUID | None, reason: str) -> dict:
         """Auto-triggered when session budget is exhausted."""
         if session_id is None:
             raise ValueError("session_id required for budget_auto_halt")
 
-        await self.session_manager.abort_session(
-            db_session, session_id, AbortReason.BUDGET_EXHAUSTED, reason
-        )
+        await self.session_manager.abort_session(db_session, session_id, AbortReason.BUDGET_EXHAUSTED, reason)
         denied = await self._deny_pending_tickets(db_session, session_id)
 
         await self.event_store.append(

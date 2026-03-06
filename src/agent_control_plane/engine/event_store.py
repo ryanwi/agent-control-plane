@@ -115,9 +115,7 @@ class EventStore:
         """
         SessionSeqCounter = ModelRegistry.get("SessionSeqCounter")
         result = await session.execute(
-            select(SessionSeqCounter)
-            .where(SessionSeqCounter.session_id == session_id)
-            .with_for_update()
+            select(SessionSeqCounter).where(SessionSeqCounter.session_id == session_id).with_for_update()
         )
         counter = result.scalar_one()
         allocated = counter.next_seq

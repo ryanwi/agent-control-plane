@@ -97,9 +97,6 @@ class TimeoutEscalation:
         """Get the most recent event for a session."""
         ControlEvent = ModelRegistry.get("ControlEvent")
         result = await db_session.execute(
-            select(ControlEvent)
-            .where(ControlEvent.session_id == session_id)
-            .order_by(ControlEvent.seq.desc())
-            .limit(1)
+            select(ControlEvent).where(ControlEvent.session_id == session_id).order_by(ControlEvent.seq.desc()).limit(1)
         )
         return result.scalar_one_or_none()

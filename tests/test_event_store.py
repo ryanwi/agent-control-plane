@@ -1,6 +1,7 @@
+from uuid import uuid4
+
 import pytest
 from sqlalchemy.exc import OperationalError
-from uuid import uuid4
 
 from agent_control_plane.engine.event_store import EventStore
 
