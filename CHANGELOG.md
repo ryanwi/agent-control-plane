@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-03-06
+
+### Changed
+
+- `KillSwitch` now returns typed `KillSwitchResult` objects (replacing untyped dictionaries).
+- `KillResultDTO.session_id` is now `UUID | None` instead of string.
+- `RequestFrame.action` now uses typed `ActionName` values with fail-closed parsing.
+- `SessionState.abort_reason` now uses `AbortReason | None`.
+- `asset_scope` in session/policy DTOs now uses `AssetScope | None`.
+
+### Added
+
+- New enum: `AssetScope`.
+- New typed DTO: `KillSwitchResult`.
+
 ## [0.1.6] - 2026-03-06
 
 ### Changed
