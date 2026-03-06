@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from .enums import AbortReason, AssetScope, ExecutionMode, KillSwitchScope, SessionStatus
+from .ids import AgentId
 
 
 class SessionCreate(BaseModel):
@@ -79,7 +80,7 @@ class KillSwitchResult(BaseModel):
 
     scope: KillSwitchScope
     session_id: UUID | None = None
-    agent_id: str | None = None
+    agent_id: AgentId | None = None
     sessions_aborted: int | None = None
     sessions_affected: int | None = None
     tickets_denied: int = 0

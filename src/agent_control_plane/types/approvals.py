@@ -7,12 +7,13 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 
 from .enums import ApprovalDecisionType, ApprovalStatus
+from .ids import ResourceId
 
 
 class ApprovalScopeDTO(BaseModel):
     """Scope constraints for an approval decision."""
 
-    resource_ids: list[str] = Field(default_factory=list)
+    resource_ids: list[ResourceId] = Field(default_factory=list)
     max_cost: Decimal | None = None
     max_count: int | None = None
     expiry: datetime | None = None
@@ -26,7 +27,7 @@ class ApprovalTicketDTO(BaseModel):
     proposal_id: UUID
 
     # Flat scope fields (match ORM column names)
-    scope_resource_ids: list[str] | None = None
+    scope_resource_ids: list[ResourceId] | None = None
     scope_max_cost: Decimal | None = None
     scope_max_count: int | None = None
     scope_expiry: datetime | None = None

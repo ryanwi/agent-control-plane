@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agent_control_plane.types.enums import EventKind
+from agent_control_plane.types.ids import AgentId, IdempotencyKey
 
 if TYPE_CHECKING:
     from agent_control_plane.storage.protocols import AsyncEventRepository
@@ -33,11 +34,11 @@ class EventStore:
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
-        agent_id: str | None = None,
+        agent_id: AgentId | None = None,
         correlation_id: UUID | None = None,
         routing_decision: dict[str, Any] | None = None,
         routing_reason: str | None = None,
-        idempotency_key: str | None = None,
+        idempotency_key: IdempotencyKey | None = None,
     ) -> int | None:
         """Append an event with monotonic sequence allocation.
 

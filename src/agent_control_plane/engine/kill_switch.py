@@ -14,6 +14,7 @@ from agent_control_plane.types.enums import (
     KillSwitchScope,
     SessionStatus,
 )
+from agent_control_plane.types.ids import AgentId
 from agent_control_plane.types.sessions import KillSwitchResult
 
 if TYPE_CHECKING:
@@ -42,7 +43,7 @@ class KillSwitch:
         scope: KillSwitchScope,
         *,
         session_id: UUID | None = None,
-        agent_id: str | None = None,
+        agent_id: AgentId | None = None,
         reason: str = "Kill switch triggered",
     ) -> KillSwitchResult:
         """Trigger the kill switch at the specified scope."""
@@ -77,7 +78,7 @@ class KillSwitch:
             tickets_denied=denied,
         )
 
-    async def _abort_agent(self, agent_id: str | None, reason: str) -> KillSwitchResult:
+    async def _abort_agent(self, agent_id: AgentId | None, reason: str) -> KillSwitchResult:
         """Pause active execution across all sessions for an agent-abort event."""
         if agent_id is None:
             raise ValueError("agent_id required for agent_abort")

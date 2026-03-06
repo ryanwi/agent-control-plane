@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field
 
 from .enums import ActionName
+from .ids import AgentId
 
 
 class AgentCapability(BaseModel):
@@ -21,7 +22,7 @@ class AgentCapability(BaseModel):
 class AgentMetadata(BaseModel):
     """Identity and capability metadata for a registered agent."""
 
-    id: str
+    id: AgentId
     name: str
     version: str = "1.0.0"
     tags: list[str] = Field(default_factory=list)
@@ -33,8 +34,8 @@ class DelegationProposal(BaseModel):
     """A request from one agent to delegate a task to another."""
 
     id: UUID = Field(default_factory=uuid4)
-    source_agent_id: str
-    target_agent_id: str
+    source_agent_id: AgentId
+    target_agent_id: AgentId
     task_description: str
     risk_score: float = 0.5
     metadata: dict[str, Any] = Field(default_factory=dict)

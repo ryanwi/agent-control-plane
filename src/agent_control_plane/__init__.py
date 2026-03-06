@@ -122,6 +122,7 @@ from agent_control_plane.types.enums import (
     UnknownAppEventPolicy,
 )
 from agent_control_plane.types.frames import EventFrame, RequestFrame, ResponseFrame
+from agent_control_plane.types.ids import AgentId, IdempotencyKey, ResourceId
 from agent_control_plane.types.policies import (
     ActionTiers,
     AutoApproveConditions,
@@ -148,6 +149,7 @@ __all__ = [
     "ActionTiers",
     # Agent Registry
     "AgentCapability",
+    "AgentId",
     "AgentMetadata",
     "AgentRecord",
     "AgentRegistry",
@@ -206,6 +208,7 @@ __all__ = [
     "ExecutionIntentStatus",
     "ExecutionMode",
     "ExecutionResultDTO",
+    "IdempotencyKey",
     "KillResultDTO",
     "KillSwitch",
     "KillSwitchActiveError",
@@ -229,6 +232,7 @@ __all__ = [
     "ProposalStatus",
     "ReferenceBase",
     "RequestFrame",
+    "ResourceId",
     "ResourceLockedError",
     "ResponseFrame",
     "RiskClassifier",

@@ -15,6 +15,7 @@ from agent_control_plane.types.agents import AgentMetadata, DelegationProposal
 from agent_control_plane.types.approvals import ApprovalTicketDTO
 from agent_control_plane.types.enums import EventKind, ProposalStatus, SessionStatus
 from agent_control_plane.types.frames import EventFrame
+from agent_control_plane.types.ids import AgentId, IdempotencyKey, ResourceId
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
 
 # ---------------------------------------------------------------------------
@@ -66,11 +67,11 @@ class EventRepository(Protocol):
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
-        agent_id: str | None = None,
+        agent_id: AgentId | None = None,
         correlation_id: UUID | None = None,
         routing_decision: dict[str, Any] | None = None,
         routing_reason: str | None = None,
-        idempotency_key: str | None = None,
+        idempotency_key: IdempotencyKey | None = None,
     ) -> int: ...
 
     def replay(self, session_id: UUID, after_seq: int = 0, limit: int = 100) -> list[EventFrame]: ...
@@ -86,11 +87,11 @@ class AsyncEventRepository(Protocol):
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
-        agent_id: str | None = None,
+        agent_id: AgentId | None = None,
         correlation_id: UUID | None = None,
         routing_decision: dict[str, Any] | None = None,
         routing_reason: str | None = None,
-        idempotency_key: str | None = None,
+        idempotency_key: IdempotencyKey | None = None,
     ) -> int: ...
 
     async def replay(self, session_id: UUID, after_seq: int = 0, limit: int = 100) -> list[EventFrame]: ...
@@ -136,13 +137,13 @@ class AsyncApprovalRepository(Protocol):
 @runtime_checkable
 class ProposalRepository(Protocol):
     def update_status(self, proposal_id: UUID, status: ProposalStatus) -> None: ...
-    def has_pending_for_resource(self, session_id: UUID, resource_id: str) -> bool: ...
+    def has_pending_for_resource(self, session_id: UUID, resource_id: ResourceId) -> bool: ...
 
 
 @runtime_checkable
 class AsyncProposalRepository(Protocol):
     async def update_status(self, proposal_id: UUID, status: ProposalStatus) -> None: ...
-    async def has_pending_for_resource(self, session_id: UUID, resource_id: str) -> bool: ...
+    async def has_pending_for_resource(self, session_id: UUID, resource_id: ResourceId) -> bool: ...
 
 
 ...
@@ -154,7 +155,7 @@ class AsyncProposalRepository(Protocol):
 @runtime_checkable
 class AgentRepository(Protocol):
     def register_agent(self, agent: AgentMetadata) -> None: ...
-    def get_agent(self, agent_id: str) -> AgentMetadata | None: ...
+    def get_agent(self, agent_id: AgentId) -> AgentMetadata | None: ...
     def list_agents(self, tags: list[str] | None = None) -> list[AgentMetadata]: ...
     def record_delegation(self, delegation: DelegationProposal) -> None: ...
 
@@ -162,7 +163,7 @@ class AgentRepository(Protocol):
 @runtime_checkable
 class AsyncAgentRepository(Protocol):
     async def register_agent(self, agent: AgentMetadata) -> None: ...
-    async def get_agent(self, agent_id: str) -> AgentMetadata | None: ...
+    async def get_agent(self, agent_id: AgentId) -> AgentMetadata | None: ...
     async def list_agents(self, tags: list[str] | None = None) -> list[AgentMetadata]: ...
     async def record_delegation(self, delegation: DelegationProposal) -> None: ...
 

@@ -29,13 +29,14 @@ from agent_control_plane.types.enums import (
     UnknownAppEventPolicy,
 )
 from agent_control_plane.types.frames import EventFrame
+from agent_control_plane.types.ids import AgentId, IdempotencyKey
 from agent_control_plane.types.sessions import SessionState
 
 
 class KillResultDTO(BaseModel):
     scope: KillSwitchScope
     session_id: UUID | None = None
-    agent_id: str | None = None
+    agent_id: AgentId | None = None
     sessions_aborted: int | None = None
     sessions_affected: int | None = None
     tickets_denied: int = 0
@@ -54,11 +55,11 @@ class MappedEventDTO(BaseModel):
     event_kind: EventKind
     payload: dict[str, Any] = Field(default_factory=dict)
     state_bearing: bool = False
-    agent_id: str | None = None
+    agent_id: AgentId | None = None
     correlation_id: UUID | None = None
     routing_decision: dict[str, Any] | None = None
     routing_reason: str | None = None
-    idempotency_key: str | None = None
+    idempotency_key: IdempotencyKey | None = None
 
 
 @runtime_checkable
@@ -177,11 +178,11 @@ class SyncControlPlane:
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
-        agent_id: str | None = None,
+        agent_id: AgentId | None = None,
         correlation_id: UUID | None = None,
         routing_decision: dict[str, Any] | None = None,
         routing_reason: str | None = None,
-        idempotency_key: str | None = None,
+        idempotency_key: IdempotencyKey | None = None,
     ) -> int:
         with self.session_scope() as db:
             uow = self._uow_factory(db)
@@ -213,9 +214,9 @@ class SyncControlPlane:
         mapper: AppEventMapper,
         unknown_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.RAISE,
         state_bearing: bool | None = None,
-        agent_id: str | None = None,
+        agent_id: AgentId | None = None,
         correlation_id: UUID | None = None,
-        idempotency_key: str | None = None,
+        idempotency_key: IdempotencyKey | None = None,
     ) -> int | None:
         mapped = mapper.map_event(event_name, payload)
         if mapped is None:
@@ -424,11 +425,11 @@ class ControlPlaneFacade:
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
-        agent_id: str | None = None,
+        agent_id: AgentId | None = None,
         correlation_id: UUID | None = None,
         routing_decision: dict[str, Any] | None = None,
         routing_reason: str | None = None,
-        idempotency_key: str | None = None,
+        idempotency_key: IdempotencyKey | None = None,
     ) -> int:
         return self._cp.emit_event(
             session_id,
@@ -449,9 +450,9 @@ class ControlPlaneFacade:
         payload: Mapping[str, Any],
         *,
         state_bearing: bool | None = None,
-        agent_id: str | None = None,
+        agent_id: AgentId | None = None,
         correlation_id: UUID | None = None,
-        idempotency_key: str | None = None,
+        idempotency_key: IdempotencyKey | None = None,
     ) -> int | None:
         if self._mapper is None:
             raise ValueError("No app event mapper configured")

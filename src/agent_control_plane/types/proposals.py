@@ -15,6 +15,7 @@ from .enums import (
     RiskLevel,
     parse_action_name,
 )
+from .ids import AgentId, ResourceId
 
 
 class ActionProposalDTO(BaseModel):
@@ -22,11 +23,11 @@ class ActionProposalDTO(BaseModel):
 
     id: UUID = Field(default_factory=uuid4)
     session_id: UUID
-    agent_id: str | None = None
+    agent_id: AgentId | None = None
     cycle_event_seq: int | None = None
 
     # Proposal content
-    resource_id: str
+    resource_id: ResourceId
     resource_type: str
     decision: ActionName
     reasoning: str
@@ -75,7 +76,7 @@ class ExecutionIntentDTO(BaseModel):
     proposal_id: UUID
     executor_type: str  # dry_run, live, replay
 
-    resource_id: str
+    resource_id: ResourceId
     action: str
     parameters: dict[str, Any] = Field(default_factory=dict)
 

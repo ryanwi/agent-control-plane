@@ -22,6 +22,7 @@ from .enums import (
     UnknownAppEventPolicy,
 )
 from .frames import EventFrame, RequestFrame, ResponseFrame
+from .ids import AgentId, IdempotencyKey, ResourceId
 from .policies import ActionTiers, AutoApproveConditions, PolicySnapshotDTO, RiskLimits
 from .proposals import ActionProposalDTO, ExecutionIntentDTO, ExecutionResultDTO, RiskDecisionDTO
 from .sessions import KillSwitchResult, SessionCreate, SessionState, SessionSummary
@@ -32,6 +33,7 @@ __all__ = [
     "ActionProposalDTO",
     "ActionTier",
     "ActionTiers",
+    "AgentId",
     "AgentScope",
     "ApprovalDecisionRequest",
     "ApprovalDecisionType",
@@ -47,12 +49,14 @@ __all__ = [
     "ExecutionIntentStatus",
     "ExecutionMode",
     "ExecutionResultDTO",
+    "IdempotencyKey",
     "KillSwitchResult",
     "KillSwitchScope",
     "McpEventName",
     "PolicySnapshotDTO",
     "ProposalStatus",
     "RequestFrame",
+    "ResourceId",
     "ResponseFrame",
     "RiskDecisionDTO",
     "RiskLevel",
