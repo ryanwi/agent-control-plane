@@ -27,6 +27,7 @@ from agent_control_plane.types.enums import (
     UnknownAppEventPolicy,
     parse_action_name,
 )
+from agent_control_plane.types.ids import AgentId, ResourceId
 from agent_control_plane.types.policies import PolicySnapshotDTO
 from agent_control_plane.types.proposals import ActionProposalDTO
 
@@ -314,8 +315,8 @@ class McpGateway:
         score = Decimal(str(raw_score))
         return ActionProposalDTO(
             session_id=session_id,
-            agent_id=context.agent_id,
-            resource_id=resource_id,
+            agent_id=AgentId(context.agent_id) if context.agent_id is not None else None,
+            resource_id=ResourceId(resource_id),
             resource_type=resource_type,
             decision=action,
             reasoning=f"MCP tool call: {context.tool_name}",

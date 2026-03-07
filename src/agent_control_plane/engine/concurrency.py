@@ -6,6 +6,8 @@ import logging
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from agent_control_plane.types.ids import ResourceId
+
 if TYPE_CHECKING:
     from agent_control_plane.storage.protocols import AsyncProposalRepository, AsyncSessionRepository
 
@@ -47,5 +49,5 @@ class ConcurrencyGuard:
 
         Raises ResourceLockedError if a conflicting proposal exists.
         """
-        if await self._proposal_repo.has_pending_for_resource(session_id, resource_id):
+        if await self._proposal_repo.has_pending_for_resource(session_id, ResourceId(resource_id)):
             raise ResourceLockedError(f"Pending proposal for {resource_id} blocks new proposals")

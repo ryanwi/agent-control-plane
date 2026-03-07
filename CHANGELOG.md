@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-03-06
+
+### Added
+
+- Expanded `AsyncControlPlaneFacade` operations so async hosts can avoid direct repository/UoW usage for common flows:
+  - Session lifecycle: `list_sessions`, `activate_session`, `pause_session`, `resume_session`, `set_active_cycle`
+  - Concurrency helpers: `acquire_cycle`, `release_cycle`
+  - Approvals: `create_ticket`, `approve_ticket`, `deny_ticket`, `get_pending_tickets`, `expire_timed_out_tickets`
+  - Policy creation: `create_policy`
+  - Recovery helpers: `recover_stuck_sessions`, `check_stuck_cycles`
+- Typed ID aliases in `agent_control_plane.types.ids`:
+  - `AgentId`
+  - `ResourceId`
+  - `IdempotencyKey`
+
+### Changed
+
+- Key public/storage signatures now accept typed ID aliases for stronger compile-time contracts.
+- MCP and engine call sites were updated to convert boundary strings into typed ID aliases.
+
 ## [0.1.7] - 2026-03-06
 
 ### Changed

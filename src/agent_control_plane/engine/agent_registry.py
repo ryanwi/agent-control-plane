@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from agent_control_plane.types.agents import AgentMetadata, DelegationProposal
+from agent_control_plane.types.ids import AgentId
 
 if TYPE_CHECKING:
     from agent_control_plane.storage.protocols import AsyncAgentRepository
@@ -26,7 +27,7 @@ class AgentRegistry:
 
     async def get_agent(self, agent_id: str) -> AgentMetadata | None:
         """Retrieve agent metadata by ID."""
-        return await self._repo.get_agent(agent_id)
+        return await self._repo.get_agent(AgentId(agent_id))
 
     async def list_agents(self, tags: list[str] | None = None) -> list[AgentMetadata]:
         """List registered agents, optionally filtered by tags."""

@@ -269,6 +269,12 @@ async def handle_proposal(db_session: AsyncSession, request: dict) -> None:
 For a native sync host, use `SyncControlPlane` or `ControlPlaneFacade` and `examples/quickstart_sync.py`.
 For async hosts (FastAPI/async workers), use `AsyncControlPlaneFacade`.
 
+`AsyncControlPlaneFacade` now also covers the common operational flows that previously required direct UoW access:
+- session transitions (`activate_session`, `pause_session`, `resume_session`, `list_sessions`)
+- cycle coordination (`acquire_cycle`, `release_cycle`, `set_active_cycle`)
+- approvals (`create_ticket`, `approve_ticket`, `deny_ticket`, `get_pending_tickets`, `expire_timed_out_tickets`)
+- policy creation and recovery helpers (`create_policy`, `recover_stuck_sessions`, `check_stuck_cycles`)
+
 `SyncControlPlane.kill()` and `SyncControlPlane.kill_all()` return `KillResultDTO`.
 `SyncControlPlane.emit_event()` / `replay_events()` provide first-class sync event operations.
 `SyncControlPlane.emit_app_event()` supports boundary mapping via `AppEventMapper`/`DictEventMapper`.
