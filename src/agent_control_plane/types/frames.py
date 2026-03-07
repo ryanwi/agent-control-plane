@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, field_validator
 
 from .enums import ActionName, EventKind, parse_action_name
+from .ids import AgentId
 
 
 class RequestFrame(BaseModel):
@@ -45,7 +46,7 @@ class EventFrame(BaseModel):
     session_id: UUID
     seq: int
     event_kind: EventKind
-    agent_id: str | None = None
+    agent_id: AgentId | None = None
     correlation_id: UUID | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
     state_bearing: bool = False

@@ -29,6 +29,7 @@ from agent_control_plane.types.enums import (
     UnknownAppEventPolicy,
 )
 from agent_control_plane.types.frames import EventFrame
+from agent_control_plane.types.ids import AgentId, IdempotencyKey
 from agent_control_plane.types.sessions import SessionState
 
 
@@ -180,11 +181,11 @@ class AsyncControlPlaneFacade:
         payload: dict[str, object],
         *,
         state_bearing: bool = False,
-        agent_id: str | None = None,
+        agent_id: AgentId | None = None,
         correlation_id: UUID | None = None,
         routing_decision: dict[str, object] | None = None,
         routing_reason: str | None = None,
-        idempotency_key: str | None = None,
+        idempotency_key: IdempotencyKey | None = None,
     ) -> int:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
@@ -209,9 +210,9 @@ class AsyncControlPlaneFacade:
         payload: Mapping[str, object],
         *,
         state_bearing: bool | None = None,
-        agent_id: str | None = None,
+        agent_id: AgentId | None = None,
         correlation_id: UUID | None = None,
-        idempotency_key: str | None = None,
+        idempotency_key: IdempotencyKey | None = None,
     ) -> int | None:
         if self._mapper is None:
             raise ValueError("No app event mapper configured")
