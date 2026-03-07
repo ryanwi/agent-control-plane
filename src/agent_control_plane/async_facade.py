@@ -449,9 +449,16 @@ class AsyncControlPlaneFacade:
         routing_decision: dict[str, object] | None = None,
         routing_reason: str | None = None,
         idempotency_key: IdempotencyKey | None = None,
+        command_id: IdempotencyKey | None = None,
     ) -> int:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
+            cached = await self._get_cached_command_result(uow, command_id, "emit")
+            if cached is not None:
+                seq = cached.get("seq")
+                if not isinstance(seq, int):
+                    raise ValueError("Invalid cached idempotency payload for emit")
+                return seq
             seq = await uow.event_repo.append(
                 session_id=session_id,
                 event_kind=event_kind,
@@ -462,6 +469,13 @@ class AsyncControlPlaneFacade:
                 routing_decision=dict(routing_decision) if routing_decision else None,
                 routing_reason=routing_reason,
                 idempotency_key=idempotency_key,
+            )
+            await self._record_command_result(
+                uow,
+                command_id,
+                "emit",
+                {"seq": seq},
+                session_id=session_id,
             )
             await uow.commit()
             return seq
@@ -540,13 +554,22 @@ class AsyncControlPlaneFacade:
         *,
         final_event_kind: EventKind | None = None,
         payload: dict[str, object] | None = None,
+        command_id: IdempotencyKey | None = None,
     ) -> SessionLifecycleResult:
-        appended = 0
-        if final_event_kind is not None:
-            await self.emit(session_id, final_event_kind, dict(payload or {}), state_bearing=True)
-            appended = 1
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
+            cached = await self._get_cached_command_result(uow, command_id, "close_session")
+            if cached is not None:
+                return SessionLifecycleResult.model_validate(cached)
+            appended = 0
+            if final_event_kind is not None:
+                await uow.event_repo.append(
+                    session_id=session_id,
+                    event_kind=final_event_kind,
+                    payload=dict(payload or {}),
+                    state_bearing=True,
+                )
+                appended = 1
             await uow.session_repo.update_session(
                 session_id,
                 status=SessionStatus.COMPLETED,
@@ -557,7 +580,15 @@ class AsyncControlPlaneFacade:
             session = await uow.session_repo.get_session(session_id)
             if session is None:
                 raise ValueError(f"Session not found after completion: {session_id}")
-            return SessionLifecycleResult(session=session, events_appended=appended)
+            result = SessionLifecycleResult(session=session, events_appended=appended)
+            await self._record_command_result(
+                uow,
+                command_id,
+                "close_session",
+                result.model_dump(mode="json"),
+                session_id=session_id,
+            )
+            return result
 
     async def abort_session(
         self,
@@ -565,9 +596,13 @@ class AsyncControlPlaneFacade:
         *,
         reason: str = "Session aborted",
         abort_reason: AbortReason = AbortReason.OPERATOR_REQUEST,
+        command_id: IdempotencyKey | None = None,
     ) -> SessionLifecycleResult:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
+            cached = await self._get_cached_command_result(uow, command_id, "abort_session")
+            if cached is not None:
+                return SessionLifecycleResult.model_validate(cached)
             await uow.session_repo.update_session(
                 session_id,
                 status=SessionStatus.ABORTED,
@@ -580,13 +615,37 @@ class AsyncControlPlaneFacade:
             session = await uow.session_repo.get_session(session_id)
             if session is None:
                 raise ValueError(f"Session not found after abort: {session_id}")
-            return SessionLifecycleResult(session=session)
+            result = SessionLifecycleResult(session=session)
+            await self._record_command_result(
+                uow,
+                command_id,
+                "abort_session",
+                result.model_dump(mode="json"),
+                session_id=session_id,
+            )
+            return result
 
-    async def kill_session(self, session_id: UUID, *, reason: str = "Kill switch triggered") -> KillResultDTO:
-        return await self._trigger_kill(KillSwitchScope.SESSION_ABORT, session_id=session_id, reason=reason)
+    async def kill_session(
+        self,
+        session_id: UUID,
+        *,
+        reason: str = "Kill switch triggered",
+        command_id: IdempotencyKey | None = None,
+    ) -> KillResultDTO:
+        return await self._trigger_kill(
+            KillSwitchScope.SESSION_ABORT,
+            session_id=session_id,
+            reason=reason,
+            command_id=command_id,
+        )
 
-    async def kill_system(self, *, reason: str = "System halt") -> KillResultDTO:
-        return await self._trigger_kill(KillSwitchScope.SYSTEM_HALT, reason=reason)
+    async def kill_system(
+        self,
+        *,
+        reason: str = "System halt",
+        command_id: IdempotencyKey | None = None,
+    ) -> KillResultDTO:
+        return await self._trigger_kill(KillSwitchScope.SYSTEM_HALT, reason=reason, command_id=command_id)
 
     async def recover_stuck_sessions(self) -> dict[str, int]:
         sessions = await self.list_sessions(statuses=[SessionStatus.ACTIVE], limit=1000)
@@ -672,9 +731,14 @@ class AsyncControlPlaneFacade:
         *,
         session_id: UUID | None = None,
         reason: str = "Kill switch triggered",
+        command_id: IdempotencyKey | None = None,
     ) -> KillResultDTO:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
+            operation = f"kill:{scope.value}"
+            cached = await self._get_cached_command_result(uow, command_id, operation)
+            if cached is not None:
+                return KillResultDTO.model_validate(cached)
             if scope == KillSwitchScope.SESSION_ABORT:
                 if session_id is None:
                     raise ValueError("session_id required for session_abort")
@@ -693,12 +757,20 @@ class AsyncControlPlaneFacade:
                     {"reason": reason, "tickets_denied": denied},
                     state_bearing=True,
                 )
-                await uow.commit()
-                return KillResultDTO(
+                result = KillResultDTO(
                     scope=KillSwitchScope.SESSION_ABORT,
                     session_id=session_id,
                     tickets_denied=denied,
                 )
+                await self._record_command_result(
+                    uow,
+                    command_id,
+                    operation,
+                    result.model_dump(mode="json"),
+                    session_id=session_id,
+                )
+                await uow.commit()
+                return result
 
             if scope == KillSwitchScope.SYSTEM_HALT:
                 sessions = await uow.session_repo.list_sessions(statuses=[SessionStatus.ACTIVE, SessionStatus.CREATED])
@@ -719,12 +791,19 @@ class AsyncControlPlaneFacade:
                         {"scope": "system_halt", "reason": reason},
                         state_bearing=True,
                     )
-                await uow.commit()
-                return KillResultDTO(
+                result = KillResultDTO(
                     scope=KillSwitchScope.SYSTEM_HALT,
                     sessions_aborted=len(sessions),
                     tickets_denied=denied_total,
                 )
+                await self._record_command_result(
+                    uow,
+                    command_id,
+                    operation,
+                    result.model_dump(mode="json"),
+                )
+                await uow.commit()
+                return result
 
             raise ValueError(f"Unsupported kill scope for async API: {scope}")
 

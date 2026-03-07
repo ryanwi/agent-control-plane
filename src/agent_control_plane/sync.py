@@ -408,13 +408,33 @@ class ControlPlaneFacade:
         max_cost: Decimal = Decimal("10000"),
         max_action_count: int = 50,
         execution_mode: ExecutionMode = ExecutionMode.DRY_RUN,
+        command_id: IdempotencyKey | None = None,
     ) -> UUID:
-        return self._cp.create_session(
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            cached = self._get_cached_command_result(uow, command_id, "open_session")
+            if cached is not None:
+                raw_session_id = cached.get("session_id")
+                if not isinstance(raw_session_id, str):
+                    raise ValueError("Invalid cached idempotency payload for open_session")
+                return UUID(raw_session_id)
+        session_id = self._cp.create_session(
             name=name,
             max_cost=max_cost,
             max_action_count=max_action_count,
             execution_mode=execution_mode,
         )
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            self._record_command_result(
+                uow,
+                command_id,
+                "open_session",
+                {"session_id": str(session_id)},
+                session_id=session_id,
+            )
+            uow.commit()
+        return session_id
 
     def close_session(
         self,
@@ -422,16 +442,55 @@ class ControlPlaneFacade:
         *,
         final_event_kind: EventKind | None = None,
         payload: dict[str, Any] | None = None,
+        command_id: IdempotencyKey | None = None,
     ) -> SessionLifecycleResult:
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            cached = self._get_cached_command_result(uow, command_id, "close_session")
+            if cached is not None:
+                return SessionLifecycleResult.model_validate(cached)
         appended = 0
         if final_event_kind is not None:
             self._cp.emit_event(session_id, final_event_kind, payload or {}, state_bearing=True)
             appended = 1
         result = self._cp.complete_session(session_id)
-        return SessionLifecycleResult(session=result.session, events_appended=result.events_appended + appended)
+        output = SessionLifecycleResult(session=result.session, events_appended=result.events_appended + appended)
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            self._record_command_result(
+                uow,
+                command_id,
+                "close_session",
+                output.model_dump(mode="json"),
+                session_id=session_id,
+            )
+            uow.commit()
+        return output
 
-    def abort_session(self, session_id: UUID, *, reason: str = "Session aborted") -> SessionLifecycleResult:
-        return self._cp.abort_session(session_id, reason=reason)
+    def abort_session(
+        self,
+        session_id: UUID,
+        *,
+        reason: str = "Session aborted",
+        command_id: IdempotencyKey | None = None,
+    ) -> SessionLifecycleResult:
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            cached = self._get_cached_command_result(uow, command_id, "abort_session")
+            if cached is not None:
+                return SessionLifecycleResult.model_validate(cached)
+        result = self._cp.abort_session(session_id, reason=reason)
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            self._record_command_result(
+                uow,
+                command_id,
+                "abort_session",
+                result.model_dump(mode="json"),
+                session_id=session_id,
+            )
+            uow.commit()
+        return result
 
     def emit(
         self,
@@ -445,8 +504,18 @@ class ControlPlaneFacade:
         routing_decision: dict[str, Any] | None = None,
         routing_reason: str | None = None,
         idempotency_key: IdempotencyKey | None = None,
+        command_id: IdempotencyKey | None = None,
     ) -> int:
-        return self._cp.emit_event(
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            cached = self._get_cached_command_result(uow, command_id, "emit")
+            if cached is not None:
+                seq = cached.get("seq")
+                if not isinstance(seq, int):
+                    raise ValueError("Invalid cached idempotency payload for emit")
+                return seq
+
+        seq = self._cp.emit_event(
             session_id,
             event_kind,
             payload,
@@ -457,6 +526,17 @@ class ControlPlaneFacade:
             routing_reason=routing_reason,
             idempotency_key=idempotency_key,
         )
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            self._record_command_result(
+                uow,
+                command_id,
+                "emit",
+                {"seq": seq},
+                session_id=session_id,
+            )
+            uow.commit()
+        return seq
 
     def emit_app(
         self,
@@ -581,8 +661,78 @@ class ControlPlaneFacade:
     def get_remaining_budget(self, session_id: UUID) -> dict[str, Decimal | int]:
         return self._cp.get_remaining_budget(session_id)
 
-    def kill_session(self, session_id: UUID, *, reason: str = "Kill switch triggered") -> KillResultDTO:
-        return self._cp.kill(session_id, reason=reason)
+    def kill_session(
+        self,
+        session_id: UUID,
+        *,
+        reason: str = "Kill switch triggered",
+        command_id: IdempotencyKey | None = None,
+    ) -> KillResultDTO:
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            cached = self._get_cached_command_result(uow, command_id, f"kill:{KillSwitchScope.SESSION_ABORT.value}")
+            if cached is not None:
+                return KillResultDTO.model_validate(cached)
+        result = self._cp.kill(session_id, reason=reason)
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            self._record_command_result(
+                uow,
+                command_id,
+                f"kill:{KillSwitchScope.SESSION_ABORT.value}",
+                result.model_dump(mode="json"),
+                session_id=session_id,
+            )
+            uow.commit()
+        return result
 
-    def kill_system(self, *, reason: str = "System halt") -> KillResultDTO:
-        return self._cp.kill_all(reason=reason)
+    def kill_system(self, *, reason: str = "System halt", command_id: IdempotencyKey | None = None) -> KillResultDTO:
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            cached = self._get_cached_command_result(uow, command_id, f"kill:{KillSwitchScope.SYSTEM_HALT.value}")
+            if cached is not None:
+                return KillResultDTO.model_validate(cached)
+        result = self._cp.kill_all(reason=reason)
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            self._record_command_result(
+                uow,
+                command_id,
+                f"kill:{KillSwitchScope.SYSTEM_HALT.value}",
+                result.model_dump(mode="json"),
+            )
+            uow.commit()
+        return result
+
+    def _get_cached_command_result(
+        self,
+        uow: SyncSqlAlchemyUnitOfWork,
+        command_id: IdempotencyKey | None,
+        operation: str,
+    ) -> dict[str, object] | None:
+        if command_id is None:
+            return None
+        cached = uow.command_repo.get_command(str(command_id))
+        if cached is None:
+            return None
+        if cached.operation != operation:
+            raise ValueError(f"Command id {command_id} already used for operation {cached.operation}")
+        return cached.result
+
+    def _record_command_result(
+        self,
+        uow: SyncSqlAlchemyUnitOfWork,
+        command_id: IdempotencyKey | None,
+        operation: str,
+        result: dict[str, object],
+        *,
+        session_id: UUID | None = None,
+    ) -> None:
+        if command_id is None:
+            return
+        uow.command_repo.record_command(
+            str(command_id),
+            operation,
+            result,
+            session_id=session_id,
+        )

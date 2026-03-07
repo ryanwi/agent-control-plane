@@ -269,4 +269,95 @@ async def test_async_facade_read_models_feed_health_and_idempotency(tmp_path: Pa
     assert health.active_sessions >= 1
     assert health.pending_tickets >= 1
 
+    emit_command_id = "cmd-emit-1"
+    seq1 = await facade.emit(
+        sid,
+        EventKind.CYCLE_STARTED,
+        {"phase": "c"},
+        state_bearing=True,
+        command_id=emit_command_id,
+    )
+    seq2 = await facade.emit(
+        sid,
+        EventKind.CYCLE_STARTED,
+        {"phase": "ignored"},
+        state_bearing=True,
+        command_id=emit_command_id,
+    )
+    assert seq2 == seq1
+
+    close_command_id = "cmd-close-1"
+    closed1 = await facade.close_session(sid, command_id=close_command_id)
+    closed2 = await facade.close_session(sid, command_id=close_command_id)
+    assert closed1.session.status == SessionStatus.COMPLETED
+    assert closed2.session.status == SessionStatus.COMPLETED
+
+    await facade.close()
+
+
+@pytest.mark.asyncio
+async def test_async_facade_state_feed_projection_end_to_end(tmp_path: Path):
+    db_file = tmp_path / "cp_async_projection_e2e.db"
+    facade = AsyncControlPlaneFacade.from_database_url(f"sqlite+aiosqlite:///{db_file}")
+
+    sid = await facade.open_session("projection-e2e")
+    await facade.activate_session(sid)
+
+    async with facade.session_scope() as db:
+        proposal_model = ModelRegistry.get("ActionProposal")
+        proposal = proposal_model(
+            id=uuid4(),
+            session_id=sid,
+            cycle_event_seq=None,
+            resource_id="projection-asset-1",
+            resource_type="task",
+            decision=ActionName.STATUS,
+            reasoning="projection test",
+            metadata_json={},
+            weight=Decimal("1.0"),
+            score=Decimal("0.9"),
+            action_tier=ActionTier.ALWAYS_APPROVE,
+            risk_level=RiskLevel.MEDIUM,
+            status=ProposalStatus.PENDING,
+        )
+        db.add(proposal)
+        await db.commit()
+        proposal_id = proposal.id
+
+    ticket = await facade.create_ticket(sid, proposal_id, datetime.now(UTC) + timedelta(minutes=10))
+    await facade.emit(sid, EventKind.CYCLE_STARTED, {"phase": "start"}, state_bearing=True)
+    await facade.approve_ticket(ticket.id, reason="projection approve")
+    await facade.emit(sid, EventKind.CYCLE_COMPLETED, {"phase": "done"}, state_bearing=True)
+
+    projection_tickets: dict = {}
+    projection_proposals: dict = {}
+    cursor = 0
+
+    while True:
+        feed = await facade.get_state_change_feed(cursor=cursor, limit=10)
+        if not feed.items:
+            break
+
+        for item in feed.items:
+            session_id = item.event.session_id
+            tickets_page = await facade.list_tickets(session_id=session_id, limit=200, offset=0)
+            for projected_ticket in tickets_page.items:
+                projection_tickets[projected_ticket.id] = projected_ticket.status
+
+            proposals_page = await facade.list_proposals(session_id=session_id, limit=200, offset=0)
+            for projected_proposal in proposals_page.items:
+                projection_proposals[projected_proposal.id] = projected_proposal.status
+
+            cursor = item.cursor
+
+    canonical_ticket = await facade.get_ticket(ticket.id)
+    canonical_proposal = await facade.get_proposal(proposal_id)
+
+    assert canonical_ticket is not None
+    assert canonical_proposal is not None
+    assert projection_tickets[ticket.id] == canonical_ticket.status
+    assert projection_proposals[proposal_id] == canonical_proposal.status
+    assert projection_tickets[ticket.id] == ApprovalStatus.APPROVED
+    assert projection_proposals[proposal_id] == ProposalStatus.APPROVED
+
     await facade.close()

@@ -138,3 +138,31 @@ def test_control_plane_facade_session_budget_and_replay(tmp_path: Path):
     abort_result = facade.abort_session(sid2, reason="operator stop")
     assert abort_result.session.status.value == "aborted"
     facade.close()
+
+
+def test_control_plane_facade_command_id_idempotency(tmp_path: Path):
+    db_file = tmp_path / "cp_facade_idempotency.db"
+    facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_file}")
+    facade.setup()
+
+    sid = facade.open_session("idempotency-demo", command_id="sync-open-1")
+    sid_again = facade.open_session("ignored-name", command_id="sync-open-1")
+    assert sid_again == sid
+
+    seq1 = facade.emit(sid, EventKind.CYCLE_STARTED, {"phase": "one"}, command_id="sync-emit-1")
+    seq2 = facade.emit(sid, EventKind.CYCLE_STARTED, {"phase": "two"}, command_id="sync-emit-1")
+    assert seq2 == seq1
+
+    close1 = facade.close_session(sid, command_id="sync-close-1")
+    close2 = facade.close_session(sid, command_id="sync-close-1")
+    assert close1.session.status.value == "completed"
+    assert close2.session.status.value == "completed"
+
+    sid_kill = facade.open_session("kill-target")
+    kill1 = facade.kill_session(sid_kill, command_id="sync-kill-1")
+    kill2 = facade.kill_session(sid_kill, command_id="sync-kill-1")
+    assert kill1.scope == kill2.scope
+    assert kill1.session_id == kill2.session_id
+    assert kill1.tickets_denied == kill2.tickets_denied
+
+    facade.close()
