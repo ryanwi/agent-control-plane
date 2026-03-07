@@ -287,6 +287,12 @@ class AsyncControlPlaneFacade:
             uow = self._uow_factory(db)
             return await uow.approval_repo.get_pending_tickets(session_id)
 
+    async def get_ticket(self, ticket_id: UUID) -> ApprovalTicketDTO | None:
+        """Return a single approval ticket by ID, or None if not found."""
+        async with self.session_scope() as db:
+            uow = self._uow_factory(db)
+            return await uow.approval_repo.get_ticket(ticket_id)
+
     async def expire_timed_out_tickets(self) -> int:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)

@@ -264,6 +264,14 @@ class AsyncSqlAlchemyApprovalRepo:
         await self._session.flush()
         return self._to_dto(ticket)
 
+    async def get_ticket(self, ticket_id: UUID) -> ApprovalTicketDTO | None:
+        approval_ticket_model = ModelRegistry.get("ApprovalTicket")
+        result = await self._session.execute(select(approval_ticket_model).where(approval_ticket_model.id == ticket_id))
+        ticket = result.scalar_one_or_none()
+        if ticket is None:
+            return None
+        return self._to_dto(ticket)
+
     async def get_pending_ticket_for_update(self, ticket_id: UUID) -> ApprovalTicketDTO:
         approval_ticket_model = ModelRegistry.get("ApprovalTicket")
         result = await self._session.execute(

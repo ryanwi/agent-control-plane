@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-03-07
+
+### Added
+
+- Added `AsyncControlPlaneFacade.get_ticket(ticket_id)` to fetch a single approval ticket by ID regardless of status.
+- Added async approval repository `get_ticket(ticket_id)` support in protocols and SQLAlchemy async storage.
+- Added async facade tests covering:
+  - existing ticket lookup by ID
+  - missing ticket lookup returning `None`
+  - lookups across `PENDING`, `APPROVED`, `DENIED`, and `EXPIRED` statuses
+
 ## [0.1.8] - 2026-03-06
 
 ### Added
