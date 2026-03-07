@@ -19,7 +19,15 @@ from agent_control_plane.storage.sqlalchemy_async import (
     AsyncSqlAlchemySessionRepo,
     AsyncSqlAlchemyUnitOfWork,
 )
-from agent_control_plane.types.enums import ApprovalDecisionType, ApprovalStatus, SessionStatus
+from agent_control_plane.types.enums import (
+    ActionName,
+    ActionTier,
+    ApprovalDecisionType,
+    ApprovalStatus,
+    ProposalStatus,
+    RiskLevel,
+    SessionStatus,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -199,14 +207,14 @@ async def test_proposal_repo(db_session: AsyncSession):
         session_id=cs.id,
         resource_id="res-1",
         resource_type="task",
-        decision="refund",
+        decision=ActionName.REFUND,
         reasoning="test",
         metadata_json={},
         weight=Decimal("1"),
         score=Decimal("0.5"),
-        action_tier="always_approve",
-        risk_level="low",
-        status="pending",
+        action_tier=ActionTier.ALWAYS_APPROVE,
+        risk_level=RiskLevel.LOW,
+        status=ProposalStatus.PENDING,
     )
     db_session.add(ap)
     await db_session.flush()
@@ -214,7 +222,7 @@ async def test_proposal_repo(db_session: AsyncSession):
     assert await proposal_repo.has_pending_for_resource(cs.id, "res-1") is True
     assert await proposal_repo.has_pending_for_resource(cs.id, "res-2") is False
 
-    await proposal_repo.update_status(ap.id, "approved")
+    await proposal_repo.update_status(ap.id, ProposalStatus.APPROVED)
     assert await proposal_repo.has_pending_for_resource(cs.id, "res-1") is False
 
 

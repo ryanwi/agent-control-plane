@@ -14,10 +14,13 @@ from agent_control_plane.engine.concurrency import CycleAlreadyActiveError
 from agent_control_plane.models.registry import ModelRegistry
 from agent_control_plane.sync import DictEventMapper
 from agent_control_plane.types.enums import (
+    ActionName,
+    ActionTier,
     ApprovalDecisionType,
     ApprovalStatus,
     EventKind,
     ProposalStatus,
+    RiskLevel,
     SessionStatus,
     UnknownAppEventPolicy,
 )
@@ -40,7 +43,7 @@ async def test_async_facade_session_budget_emit_and_close(tmp_path: Path):
     assert seq == 1
 
     close_result = await facade.close_session(sid)
-    assert close_result.session.status.value == "completed"
+    assert close_result.session.status == SessionStatus.COMPLETED
     assert close_result.events_appended == 0
 
     events = await facade.replay(sid)
@@ -93,14 +96,14 @@ async def test_async_facade_approval_lifecycle_and_expiry(tmp_path: Path):
             cycle_event_seq=None,
             resource_id="resource-1",
             resource_type="task",
-            decision="status",
+            decision=ActionName.STATUS,
             reasoning="needs approval",
             metadata_json={},
             weight=Decimal("1.0"),
             score=Decimal("0.8"),
-            action_tier="always_approve",
-            risk_level="medium",
-            status="pending",
+            action_tier=ActionTier.ALWAYS_APPROVE,
+            risk_level=RiskLevel.MEDIUM,
+            status=ProposalStatus.PENDING,
         )
         db.add(proposal)
         await db.commit()
@@ -150,14 +153,14 @@ async def test_async_facade_get_ticket_by_id_for_all_statuses(tmp_path: Path):
             cycle_event_seq=None,
             resource_id="resource-get-ticket",
             resource_type="task",
-            decision="status",
+            decision=ActionName.STATUS,
             reasoning="needs approval",
             metadata_json={},
             weight=Decimal("1.0"),
             score=Decimal("0.8"),
-            action_tier="always_approve",
-            risk_level="medium",
-            status="pending",
+            action_tier=ActionTier.ALWAYS_APPROVE,
+            risk_level=RiskLevel.MEDIUM,
+            status=ProposalStatus.PENDING,
         )
         db.add(proposal)
         await db.commit()
