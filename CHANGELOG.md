@@ -2,6 +2,48 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-07
+
+### Added
+
+- New query/feed types in `agent_control_plane.types.query`:
+  - `PageDTO`
+  - `StateChangeDTO`
+  - `StateChangePageDTO`
+  - `SessionHealthDTO`
+  - `CommandResultDTO`
+- New control-plane command ledger model:
+  - `CommandLedgerMixin`
+  - `CommandLedger` reference model (`command_ledger` table)
+- New storage protocol surfaces:
+  - Proposal reads: `get_proposal`, `list_proposals`
+  - Ticket reads: `get_ticket` (sync), `list_tickets`
+  - Event feed reads: `list_state_bearing_events`
+  - Command idempotency repository: `get_command`, `record_command`
+- New SQLAlchemy repository implementations:
+  - `AsyncSqlAlchemyCommandRepo`
+  - `SyncSqlAlchemyCommandRepo`
+- New facade read APIs (async and sync):
+  - `get_proposal`, `list_proposals`
+  - `get_ticket`, `list_tickets`
+  - `get_state_change_feed`
+  - `get_health_snapshot`
+- Async command-id idempotency support for key mutations:
+  - `open_session`
+  - `create_ticket`
+  - `approve_ticket`
+  - `deny_ticket`
+
+### Changed
+
+- `AsyncSqlAlchemyUnitOfWork` and `SyncSqlAlchemyUnitOfWork` now expose `command_repo`.
+- Public exports updated in package root, `storage`, `models`, and `types` modules for new query/feed/idempotency symbols.
+- Async facade test suite expanded to cover:
+  - proposal/ticket read APIs
+  - state-change feed behavior
+  - health snapshot
+  - command-id idempotency on repeated calls
+
 ## [0.1.9] - 2026-03-07
 
 ### Added

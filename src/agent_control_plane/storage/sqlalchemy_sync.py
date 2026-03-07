@@ -27,6 +27,8 @@ from agent_control_plane.types.enums import (
     SessionStatus,
 )
 from agent_control_plane.types.frames import EventFrame
+from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.query import CommandResultDTO
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
 
 
@@ -205,6 +207,22 @@ class SyncSqlAlchemyEventRepo:
         row = result.scalar_one_or_none()
         return self._to_dto(row) if row else None
 
+    def list_state_bearing_events(
+        self, *, session_id: UUID | None = None, limit: int = 100, offset: int = 0
+    ) -> list[EventFrame]:
+        control_event_model = ModelRegistry.get("ControlEvent")
+        query = (
+            select(control_event_model)
+            .where(control_event_model.state_bearing.is_(True))
+            .order_by(control_event_model.created_at.asc(), control_event_model.seq.asc())
+            .offset(offset)
+            .limit(limit)
+        )
+        if session_id is not None:
+            query = query.where(control_event_model.session_id == session_id)
+        result = self._session.execute(query)
+        return [self._to_dto(row) for row in result.scalars().all()]
+
     def _allocate_seq(self, session_id: UUID) -> int:
         session_seq_counter_model = ModelRegistry.get("SessionSeqCounter")
         result = self._session.execute(
@@ -256,6 +274,12 @@ class SyncSqlAlchemyApprovalRepo:
         self._session.flush()
         return self._to_dto(ticket)
 
+    def get_ticket(self, ticket_id: UUID) -> ApprovalTicketDTO | None:
+        approval_ticket_model = ModelRegistry.get("ApprovalTicket")
+        result = self._session.execute(select(approval_ticket_model).where(approval_ticket_model.id == ticket_id))
+        row = result.scalar_one_or_none()
+        return self._to_dto(row) if row else None
+
     def get_pending_ticket_for_update(self, ticket_id: UUID) -> ApprovalTicketDTO:
         approval_ticket_model = ModelRegistry.get("ApprovalTicket")
         result = self._session.execute(select(approval_ticket_model).where(approval_ticket_model.id == ticket_id))
@@ -277,6 +301,24 @@ class SyncSqlAlchemyApprovalRepo:
         query = select(approval_ticket_model).where(approval_ticket_model.status == ApprovalStatus.PENDING)
         if session_id:
             query = query.where(approval_ticket_model.session_id == session_id)
+        result = self._session.execute(query)
+        return [self._to_dto(row) for row in result.scalars().all()]
+
+    def list_tickets(
+        self,
+        *,
+        session_id: UUID | None = None,
+        statuses: list[ApprovalStatus] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ApprovalTicketDTO]:
+        approval_ticket_model = ModelRegistry.get("ApprovalTicket")
+        query = select(approval_ticket_model)
+        if session_id is not None:
+            query = query.where(approval_ticket_model.session_id == session_id)
+        if statuses:
+            query = query.where(approval_ticket_model.status.in_(statuses))
+        query = query.order_by(approval_ticket_model.created_at.desc()).offset(offset).limit(limit)
         result = self._session.execute(query)
         return [self._to_dto(row) for row in result.scalars().all()]
 
@@ -357,6 +399,30 @@ class SyncSqlAlchemyProposalRepo:
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    def get_proposal(self, proposal_id: UUID) -> ActionProposalDTO | None:
+        action_proposal_model = ModelRegistry.get("ActionProposal")
+        result = self._session.execute(select(action_proposal_model).where(action_proposal_model.id == proposal_id))
+        row = result.scalar_one_or_none()
+        return self._to_dto(row) if row else None
+
+    def list_proposals(
+        self,
+        *,
+        session_id: UUID | None = None,
+        statuses: list[ProposalStatus] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ActionProposalDTO]:
+        action_proposal_model = ModelRegistry.get("ActionProposal")
+        query = select(action_proposal_model)
+        if session_id is not None:
+            query = query.where(action_proposal_model.session_id == session_id)
+        if statuses:
+            query = query.where(action_proposal_model.status.in_(statuses))
+        query = query.order_by(action_proposal_model.created_at.desc()).offset(offset).limit(limit)
+        result = self._session.execute(query)
+        return [self._to_dto(row) for row in result.scalars().all()]
+
     def update_status(self, proposal_id: UUID, status: ProposalStatus) -> None:
         action_proposal_model = ModelRegistry.get("ActionProposal")
         self._session.execute(
@@ -375,6 +441,66 @@ class SyncSqlAlchemyProposalRepo:
             .limit(1)
         )
         return result.scalar_one_or_none() is not None
+
+    def _to_dto(self, row: Any) -> ActionProposalDTO:
+        return ActionProposalDTO(
+            id=row.id,
+            session_id=row.session_id,
+            cycle_event_seq=getattr(row, "cycle_event_seq", None),
+            resource_id=row.resource_id,
+            resource_type=row.resource_type,
+            decision=row.decision,
+            reasoning=row.reasoning,
+            metadata=getattr(row, "metadata_json", {}) or {},
+            weight=row.weight,
+            score=row.score,
+            action_tier=row.action_tier,
+            risk_level=row.risk_level,
+            status=row.status,
+            created_at=row.created_at,
+        )
+
+
+class SyncSqlAlchemyCommandRepo:
+    """Sync SQLAlchemy implementation of CommandRepository."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get_command(self, command_id: str) -> CommandResultDTO | None:
+        command_ledger_model = ModelRegistry.get("CommandLedger")
+        result = self._session.execute(
+            select(command_ledger_model).where(command_ledger_model.command_id == command_id)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        return CommandResultDTO(
+            command_id=row.command_id,
+            operation=row.operation,
+            result=row.result_json,
+            created_at=row.created_at,
+            session_id=getattr(row, "session_id", None),
+        )
+
+    def record_command(
+        self,
+        command_id: str,
+        operation: str,
+        result: dict[str, object],
+        *,
+        session_id: UUID | None = None,
+    ) -> None:
+        command_ledger_model = ModelRegistry.get("CommandLedger")
+        row = command_ledger_model(
+            id=uuid4(),
+            command_id=command_id,
+            operation=operation,
+            result_json=result,
+            session_id=session_id,
+        )
+        self._session.add(row)
+        self._session.flush()
 
 
 class SyncSqlAlchemyAgentRepo:
@@ -461,6 +587,7 @@ class SyncSqlAlchemyUnitOfWork:
         self.approval_repo = SyncSqlAlchemyApprovalRepo(session)
         self.proposal_repo = SyncSqlAlchemyProposalRepo(session)
         self.agent_repo = SyncSqlAlchemyAgentRepo(session)
+        self.command_repo = SyncSqlAlchemyCommandRepo(session)
 
     def commit(self) -> None:
         self._session.commit()

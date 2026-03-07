@@ -13,9 +13,11 @@ from uuid import UUID
 
 from agent_control_plane.types.agents import AgentMetadata, DelegationProposal
 from agent_control_plane.types.approvals import ApprovalTicketDTO
-from agent_control_plane.types.enums import EventKind, ProposalStatus, SessionStatus
+from agent_control_plane.types.enums import ApprovalStatus, EventKind, ProposalStatus, SessionStatus
 from agent_control_plane.types.frames import EventFrame
 from agent_control_plane.types.ids import AgentId, IdempotencyKey, ResourceId
+from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.query import CommandResultDTO
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
 
 # ---------------------------------------------------------------------------
@@ -76,6 +78,9 @@ class EventRepository(Protocol):
 
     def replay(self, session_id: UUID, after_seq: int = 0, limit: int = 100) -> list[EventFrame]: ...
     def get_last_event(self, session_id: UUID) -> EventFrame | None: ...
+    def list_state_bearing_events(
+        self, *, session_id: UUID | None = None, limit: int = 100, offset: int = 0
+    ) -> list[EventFrame]: ...
 
 
 @runtime_checkable
@@ -96,6 +101,9 @@ class AsyncEventRepository(Protocol):
 
     async def replay(self, session_id: UUID, after_seq: int = 0, limit: int = 100) -> list[EventFrame]: ...
     async def get_last_event(self, session_id: UUID) -> EventFrame | None: ...
+    async def list_state_bearing_events(
+        self, *, session_id: UUID | None = None, limit: int = 100, offset: int = 0
+    ) -> list[EventFrame]: ...
 
 
 # ---------------------------------------------------------------------------
@@ -107,8 +115,17 @@ class AsyncEventRepository(Protocol):
 class ApprovalRepository(Protocol):
     def create_ticket(self, session_id: UUID, proposal_id: UUID, timeout_at: datetime) -> ApprovalTicketDTO: ...
 
+    def get_ticket(self, ticket_id: UUID) -> ApprovalTicketDTO | None: ...
     def get_pending_ticket_for_update(self, ticket_id: UUID) -> ApprovalTicketDTO: ...
     def update_ticket(self, ticket_id: UUID, **fields: Any) -> None: ...
+    def list_tickets(
+        self,
+        *,
+        session_id: UUID | None = None,
+        statuses: list[ApprovalStatus] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ApprovalTicketDTO]: ...
     def get_pending_tickets(self, session_id: UUID | None = None) -> list[ApprovalTicketDTO]: ...
     def get_session_scope_tickets(self, session_id: UUID) -> list[ApprovalTicketDTO]: ...
     def decrement_scope_count(self, ticket_id: UUID) -> None: ...
@@ -123,6 +140,14 @@ class AsyncApprovalRepository(Protocol):
     async def get_ticket(self, ticket_id: UUID) -> ApprovalTicketDTO | None: ...
     async def get_pending_ticket_for_update(self, ticket_id: UUID) -> ApprovalTicketDTO: ...
     async def update_ticket(self, ticket_id: UUID, **fields: Any) -> None: ...
+    async def list_tickets(
+        self,
+        *,
+        session_id: UUID | None = None,
+        statuses: list[ApprovalStatus] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ApprovalTicketDTO]: ...
     async def get_pending_tickets(self, session_id: UUID | None = None) -> list[ApprovalTicketDTO]: ...
     async def get_session_scope_tickets(self, session_id: UUID) -> list[ApprovalTicketDTO]: ...
     async def decrement_scope_count(self, ticket_id: UUID) -> None: ...
@@ -137,14 +162,63 @@ class AsyncApprovalRepository(Protocol):
 
 @runtime_checkable
 class ProposalRepository(Protocol):
+    def get_proposal(self, proposal_id: UUID) -> ActionProposalDTO | None: ...
+    def list_proposals(
+        self,
+        *,
+        session_id: UUID | None = None,
+        statuses: list[ProposalStatus] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ActionProposalDTO]: ...
     def update_status(self, proposal_id: UUID, status: ProposalStatus) -> None: ...
     def has_pending_for_resource(self, session_id: UUID, resource_id: ResourceId) -> bool: ...
 
 
 @runtime_checkable
 class AsyncProposalRepository(Protocol):
+    async def get_proposal(self, proposal_id: UUID) -> ActionProposalDTO | None: ...
+    async def list_proposals(
+        self,
+        *,
+        session_id: UUID | None = None,
+        statuses: list[ProposalStatus] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ActionProposalDTO]: ...
     async def update_status(self, proposal_id: UUID, status: ProposalStatus) -> None: ...
     async def has_pending_for_resource(self, session_id: UUID, resource_id: ResourceId) -> bool: ...
+
+
+# ---------------------------------------------------------------------------
+# Command idempotency repositories
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class CommandRepository(Protocol):
+    def get_command(self, command_id: str) -> CommandResultDTO | None: ...
+    def record_command(
+        self,
+        command_id: str,
+        operation: str,
+        result: dict[str, object],
+        *,
+        session_id: UUID | None = None,
+    ) -> None: ...
+
+
+@runtime_checkable
+class AsyncCommandRepository(Protocol):
+    async def get_command(self, command_id: str) -> CommandResultDTO | None: ...
+    async def record_command(
+        self,
+        command_id: str,
+        operation: str,
+        result: dict[str, object],
+        *,
+        session_id: UUID | None = None,
+    ) -> None: ...
 
 
 ...
@@ -181,6 +255,7 @@ class SyncUnitOfWork(Protocol):
     approval_repo: ApprovalRepository
     proposal_repo: ProposalRepository
     agent_repo: AgentRepository
+    command_repo: CommandRepository
 
     def commit(self) -> None: ...
     def rollback(self) -> None: ...
@@ -193,6 +268,7 @@ class AsyncUnitOfWork(Protocol):
     approval_repo: AsyncApprovalRepository
     proposal_repo: AsyncProposalRepository
     agent_repo: AsyncAgentRepository
+    command_repo: AsyncCommandRepository
 
     async def commit(self) -> None: ...
     async def rollback(self) -> None: ...

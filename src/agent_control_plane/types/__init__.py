@@ -1,5 +1,7 @@
 """Public type exports for agent_control_plane.types."""
 
+# ruff: noqa: RUF022
+
 from .approvals import ApprovalDecisionRequest, ApprovalScopeDTO, ApprovalTicketDTO
 from .enums import (
     AbortReason,
@@ -25,6 +27,7 @@ from .frames import EventFrame, RequestFrame, ResponseFrame
 from .ids import AgentId, IdempotencyKey, ResourceId
 from .policies import ActionTiers, AutoApproveConditions, PolicySnapshotDTO, RiskLimits
 from .proposals import ActionProposalDTO, ExecutionIntentDTO, ExecutionResultDTO, RiskDecisionDTO
+from .query import CommandResultDTO, PageDTO, SessionHealthDTO, StateChangeDTO, StateChangePageDTO
 from .sessions import KillSwitchResult, SessionCreate, SessionState, SessionSummary
 
 __all__ = [
@@ -53,6 +56,7 @@ __all__ = [
     "KillSwitchResult",
     "KillSwitchScope",
     "McpEventName",
+    "PageDTO",
     "PolicySnapshotDTO",
     "ProposalStatus",
     "RequestFrame",
@@ -63,8 +67,12 @@ __all__ = [
     "RiskLimits",
     "RoutingResolutionStep",
     "SessionCreate",
+    "SessionHealthDTO",
     "SessionState",
     "SessionStatus",
     "SessionSummary",
+    "StateChangeDTO",
+    "StateChangePageDTO",
+    "CommandResultDTO",
     "UnknownAppEventPolicy",
 ]

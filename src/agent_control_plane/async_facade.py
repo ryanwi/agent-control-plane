@@ -36,6 +36,8 @@ from agent_control_plane.types.enums import (
 )
 from agent_control_plane.types.frames import EventFrame
 from agent_control_plane.types.ids import AgentId, IdempotencyKey
+from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.query import PageDTO, SessionHealthDTO, StateChangeDTO, StateChangePageDTO
 from agent_control_plane.types.sessions import SessionState
 
 
@@ -136,9 +138,16 @@ class AsyncControlPlaneFacade:
         max_cost: Decimal = Decimal("10000"),
         max_action_count: int = 50,
         execution_mode: ExecutionMode = ExecutionMode.DRY_RUN,
+        command_id: IdempotencyKey | None = None,
     ) -> UUID:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
+            cached = await self._get_cached_command_result(uow, command_id, "open_session")
+            if cached is not None:
+                raw_session_id = cached.get("session_id")
+                if not isinstance(raw_session_id, str):
+                    raise ValueError("Invalid cached idempotency payload for open_session")
+                return UUID(raw_session_id)
             cs = await uow.session_repo.create_session(
                 session_name=name,
                 status=SessionStatus.CREATED,
@@ -147,6 +156,13 @@ class AsyncControlPlaneFacade:
                 max_action_count=max_action_count,
             )
             await uow.session_repo.create_seq_counter(cs.id)
+            await self._record_command_result(
+                uow,
+                command_id,
+                "open_session",
+                {"session_id": str(cs.id)},
+                session_id=cs.id,
+            )
             await uow.commit()
             return cs.id
 
@@ -229,10 +245,27 @@ class AsyncControlPlaneFacade:
             await uow.commit()
             return policy_id
 
-    async def create_ticket(self, session_id: UUID, proposal_id: UUID, timeout_at: datetime) -> ApprovalTicketDTO:
+    async def create_ticket(
+        self,
+        session_id: UUID,
+        proposal_id: UUID,
+        timeout_at: datetime,
+        *,
+        command_id: IdempotencyKey | None = None,
+    ) -> ApprovalTicketDTO:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
+            cached = await self._get_cached_command_result(uow, command_id, "create_ticket")
+            if cached is not None:
+                return ApprovalTicketDTO.model_validate(cached)
             ticket = await uow.approval_repo.create_ticket(session_id, proposal_id, timeout_at)
+            await self._record_command_result(
+                uow,
+                command_id,
+                "create_ticket",
+                ticket.model_dump(mode="json"),
+                session_id=session_id,
+            )
             await uow.commit()
             return ticket
 
@@ -247,9 +280,13 @@ class AsyncControlPlaneFacade:
         scope_max_cost: Decimal | None = None,
         scope_max_action_count: int | None = None,
         scope_expiry: datetime | None = None,
+        command_id: IdempotencyKey | None = None,
     ) -> ApprovalTicketDTO:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
+            cached = await self._get_cached_command_result(uow, command_id, "approve_ticket")
+            if cached is not None:
+                return ApprovalTicketDTO.model_validate(cached)
             ticket = await uow.approval_repo.get_pending_ticket_for_update(ticket_id)
             fields: dict[str, Any] = {
                 "status": ApprovalStatus.APPROVED,
@@ -265,12 +302,29 @@ class AsyncControlPlaneFacade:
                 fields["scope_expiry"] = scope_expiry
             await uow.approval_repo.update_ticket(ticket_id, **fields)
             await uow.proposal_repo.update_status(ticket.proposal_id, ProposalStatus.APPROVED)
+            result = ticket.model_copy(update=fields)
+            await self._record_command_result(
+                uow,
+                command_id,
+                "approve_ticket",
+                result.model_dump(mode="json"),
+                session_id=ticket.session_id,
+            )
             await uow.commit()
-            return ticket.model_copy(update=fields)
+            return result
 
-    async def deny_ticket(self, ticket_id: UUID, *, reason: str = "") -> ApprovalTicketDTO:
+    async def deny_ticket(
+        self,
+        ticket_id: UUID,
+        *,
+        reason: str = "",
+        command_id: IdempotencyKey | None = None,
+    ) -> ApprovalTicketDTO:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
+            cached = await self._get_cached_command_result(uow, command_id, "deny_ticket")
+            if cached is not None:
+                return ApprovalTicketDTO.model_validate(cached)
             ticket = await uow.approval_repo.get_pending_ticket_for_update(ticket_id)
             fields: dict[str, Any] = {
                 "status": ApprovalStatus.DENIED,
@@ -279,8 +333,16 @@ class AsyncControlPlaneFacade:
             }
             await uow.approval_repo.update_ticket(ticket_id, **fields)
             await uow.proposal_repo.update_status(ticket.proposal_id, ProposalStatus.DENIED)
+            result = ticket.model_copy(update=fields)
+            await self._record_command_result(
+                uow,
+                command_id,
+                "deny_ticket",
+                result.model_dump(mode="json"),
+                session_id=ticket.session_id,
+            )
             await uow.commit()
-            return ticket.model_copy(update=fields)
+            return result
 
     async def get_pending_tickets(self, session_id: UUID | None = None) -> list[ApprovalTicketDTO]:
         async with self.session_scope() as db:
@@ -292,6 +354,49 @@ class AsyncControlPlaneFacade:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             return await uow.approval_repo.get_ticket(ticket_id)
+
+    async def list_tickets(
+        self,
+        *,
+        session_id: UUID | None = None,
+        statuses: list[ApprovalStatus] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> PageDTO[ApprovalTicketDTO]:
+        async with self.session_scope() as db:
+            uow = self._uow_factory(db)
+            rows = await uow.approval_repo.list_tickets(
+                session_id=session_id,
+                statuses=statuses,
+                limit=limit + 1,
+                offset=offset,
+            )
+            has_more = len(rows) > limit
+            return PageDTO(items=rows[:limit], next_offset=(offset + limit if has_more else None))
+
+    async def get_proposal(self, proposal_id: UUID) -> ActionProposalDTO | None:
+        async with self.session_scope() as db:
+            uow = self._uow_factory(db)
+            return await uow.proposal_repo.get_proposal(proposal_id)
+
+    async def list_proposals(
+        self,
+        *,
+        session_id: UUID | None = None,
+        statuses: list[ProposalStatus] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> PageDTO[ActionProposalDTO]:
+        async with self.session_scope() as db:
+            uow = self._uow_factory(db)
+            rows = await uow.proposal_repo.list_proposals(
+                session_id=session_id,
+                statuses=statuses,
+                limit=limit + 1,
+                offset=offset,
+            )
+            has_more = len(rows) > limit
+            return PageDTO(items=rows[:limit], next_offset=(offset + limit if has_more else None))
 
     async def expire_timed_out_tickets(self) -> int:
         async with self.session_scope() as db:
@@ -395,6 +500,39 @@ class AsyncControlPlaneFacade:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             return await uow.event_repo.replay(session_id, after_seq=after_seq, limit=limit)
+
+    async def get_state_change_feed(
+        self,
+        *,
+        session_id: UUID | None = None,
+        cursor: int = 0,
+        limit: int = 100,
+    ) -> StateChangePageDTO:
+        async with self.session_scope() as db:
+            uow = self._uow_factory(db)
+            rows = await uow.event_repo.list_state_bearing_events(
+                session_id=session_id,
+                offset=cursor,
+                limit=limit + 1,
+            )
+            has_more = len(rows) > limit
+            items = [StateChangeDTO(cursor=cursor + idx + 1, event=row) for idx, row in enumerate(rows[:limit])]
+            return StateChangePageDTO(items=items, next_cursor=(cursor + limit if has_more else None))
+
+    async def get_health_snapshot(self) -> SessionHealthDTO:
+        created = await self.list_sessions(statuses=[SessionStatus.CREATED], limit=10_000)
+        active = await self.list_sessions(statuses=[SessionStatus.ACTIVE], limit=10_000)
+        paused = await self.list_sessions(statuses=[SessionStatus.PAUSED], limit=10_000)
+        pending = await self.get_pending_tickets()
+        sessions_with_cycles = sum(1 for session in created + active + paused if session.active_cycle_id is not None)
+        return SessionHealthDTO(
+            total_sessions=len(created) + len(active) + len(paused),
+            active_sessions=len(active),
+            created_sessions=len(created),
+            paused_sessions=len(paused),
+            sessions_with_active_cycles=sessions_with_cycles,
+            pending_tickets=len(pending),
+        )
 
     async def close_session(
         self,
@@ -589,3 +727,36 @@ class AsyncControlPlaneFacade:
                 )
 
             raise ValueError(f"Unsupported kill scope for async API: {scope}")
+
+    async def _get_cached_command_result(
+        self,
+        uow: AsyncSqlAlchemyUnitOfWork,
+        command_id: IdempotencyKey | None,
+        operation: str,
+    ) -> dict[str, object] | None:
+        if command_id is None:
+            return None
+        cached = await uow.command_repo.get_command(str(command_id))
+        if cached is None:
+            return None
+        if cached.operation != operation:
+            raise ValueError(f"Command id {command_id} already used for operation {cached.operation}")
+        return cached.result
+
+    async def _record_command_result(
+        self,
+        uow: AsyncSqlAlchemyUnitOfWork,
+        command_id: IdempotencyKey | None,
+        operation: str,
+        result: dict[str, object],
+        *,
+        session_id: UUID | None = None,
+    ) -> None:
+        if command_id is None:
+            return
+        await uow.command_repo.record_command(
+            str(command_id),
+            operation,
+            result,
+            session_id=session_id,
+        )

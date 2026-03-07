@@ -242,3 +242,16 @@ class DelegationMixin:
         default=func.current_timestamp(),
         server_default=func.current_timestamp(),
     )
+
+
+class CommandLedgerMixin:
+    """Mixin for idempotent command ledger."""
+
+    command_id: Mapped[str] = mapped_column(VARCHAR(255), nullable=False)
+    operation: Mapped[str] = mapped_column(VARCHAR(100), nullable=False)
+    result_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        default=func.current_timestamp(),
+        server_default=func.current_timestamp(),
+    )

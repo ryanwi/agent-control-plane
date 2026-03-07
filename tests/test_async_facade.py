@@ -196,3 +196,77 @@ async def test_async_facade_get_ticket_by_id_for_all_statuses(tmp_path: Path):
     assert await facade.get_ticket(uuid4()) is None
 
     await facade.close()
+
+
+@pytest.mark.asyncio
+async def test_async_facade_read_models_feed_health_and_idempotency(tmp_path: Path):
+    db_file = tmp_path / "cp_async_facade_reads.db"
+    facade = AsyncControlPlaneFacade.from_database_url(f"sqlite+aiosqlite:///{db_file}")
+
+    session_command_id = "cmd-open-session-1"
+    sid = await facade.open_session("read-models", command_id=session_command_id)
+    sid_again = await facade.open_session("read-models-ignored", command_id=session_command_id)
+    assert sid_again == sid
+
+    await facade.activate_session(sid)
+
+    async with facade.session_scope() as db:
+        proposal_model = ModelRegistry.get("ActionProposal")
+        proposal = proposal_model(
+            id=uuid4(),
+            session_id=sid,
+            cycle_event_seq=None,
+            resource_id="resource-feed",
+            resource_type="task",
+            decision=ActionName.STATUS,
+            reasoning="needs approval",
+            metadata_json={},
+            weight=Decimal("1.0"),
+            score=Decimal("0.8"),
+            action_tier=ActionTier.ALWAYS_APPROVE,
+            risk_level=RiskLevel.MEDIUM,
+            status=ProposalStatus.PENDING,
+        )
+        db.add(proposal)
+        await db.commit()
+        proposal_id = proposal.id
+
+    ticket_command_id = "cmd-create-ticket-1"
+    ticket = await facade.create_ticket(
+        sid,
+        proposal_id,
+        datetime.now(UTC) + timedelta(minutes=10),
+        command_id=ticket_command_id,
+    )
+    ticket_again = await facade.create_ticket(
+        sid,
+        proposal_id,
+        datetime.now(UTC) + timedelta(minutes=10),
+        command_id=ticket_command_id,
+    )
+    assert ticket_again.id == ticket.id
+
+    proposal = await facade.get_proposal(proposal_id)
+    assert proposal is not None
+    assert proposal.id == proposal_id
+
+    proposal_page = await facade.list_proposals(session_id=sid, statuses=[ProposalStatus.PENDING], limit=10, offset=0)
+    assert len(proposal_page.items) == 1
+    assert proposal_page.items[0].id == proposal_id
+
+    ticket_page = await facade.list_tickets(session_id=sid, statuses=[ApprovalStatus.PENDING], limit=10, offset=0)
+    assert len(ticket_page.items) == 1
+    assert ticket_page.items[0].id == ticket.id
+
+    await facade.emit(sid, EventKind.CYCLE_STARTED, {"phase": "a"}, state_bearing=True)
+    await facade.emit(sid, EventKind.CYCLE_COMPLETED, {"phase": "b"}, state_bearing=False)
+
+    feed = await facade.get_state_change_feed(session_id=sid, cursor=0, limit=10)
+    assert len(feed.items) == 1
+    assert feed.items[0].event.event_kind == EventKind.CYCLE_STARTED
+
+    health = await facade.get_health_snapshot()
+    assert health.active_sessions >= 1
+    assert health.pending_tickets >= 1
+
+    await facade.close()

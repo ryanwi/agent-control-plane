@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import VARCHAR, ForeignKey
+from sqlalchemy import VARCHAR, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql.sqltypes import Uuid
 
@@ -20,6 +20,7 @@ from agent_control_plane.models.mixins import (
     ActionProposalMixin,
     AgentMixin,
     ApprovalTicketMixin,
+    CommandLedgerMixin,
     ControlEventMixin,
     ControlSessionMixin,
     DelegationMixin,
@@ -86,6 +87,18 @@ class DelegationRecord(Base, DelegationMixin):
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
 
 
+class CommandLedger(Base, CommandLedgerMixin):
+    __tablename__ = "command_ledger"
+    __table_args__ = (UniqueConstraint("command_id", "operation", name="uq_command_ledger_command_operation"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    session_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("control_sessions.id"),
+        nullable=True,
+    )
+
+
 def register_models(registry: RegistryProtocol = DEFAULT_MODEL_REGISTRY) -> None:
     """Register all reference models with the ModelRegistry."""
     registry.register("PolicySnapshot", PolicySnapshot)
@@ -96,6 +109,7 @@ def register_models(registry: RegistryProtocol = DEFAULT_MODEL_REGISTRY) -> None
     registry.register("ApprovalTicket", ApprovalTicket)
     registry.register("AgentRecord", AgentRecord)
     registry.register("DelegationRecord", DelegationRecord)
+    registry.register("CommandLedger", CommandLedger)
 
 
 def create_tables(engine: Any) -> None:

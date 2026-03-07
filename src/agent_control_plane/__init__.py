@@ -1,5 +1,7 @@
 """agent-control-plane: Embeddable governance framework for agentic AI."""
 
+# ruff: noqa: RUF022
+
 from agent_control_plane.async_facade import AsyncControlPlaneFacade
 from agent_control_plane.builders import (
     KillSwitchServices,
@@ -45,6 +47,7 @@ from agent_control_plane.models import (
     ActionProposal,
     AgentRecord,
     ApprovalTicket,
+    CommandLedger,
     ControlEvent,
     ControlSession,
     DelegationRecord,
@@ -62,19 +65,23 @@ from agent_control_plane.recovery.timeout_escalation import TimeoutEscalation
 from agent_control_plane.storage import (
     ApprovalRepository,
     AsyncApprovalRepository,
+    AsyncCommandRepository,
     AsyncEventRepository,
     AsyncProposalRepository,
     AsyncSessionRepository,
     AsyncSqlAlchemyApprovalRepo,
+    AsyncSqlAlchemyCommandRepo,
     AsyncSqlAlchemyEventRepo,
     AsyncSqlAlchemyProposalRepo,
     AsyncSqlAlchemySessionRepo,
     AsyncSqlAlchemyUnitOfWork,
     AsyncUnitOfWork,
+    CommandRepository,
     EventRepository,
     ProposalRepository,
     SessionRepository,
     SyncSqlAlchemyApprovalRepo,
+    SyncSqlAlchemyCommandRepo,
     SyncSqlAlchemyEventRepo,
     SyncSqlAlchemyProposalRepo,
     SyncSqlAlchemySessionRepo,
@@ -135,6 +142,13 @@ from agent_control_plane.types.proposals import (
     ExecutionResultDTO,
     RiskDecisionDTO,
 )
+from agent_control_plane.types.query import (
+    CommandResultDTO,
+    PageDTO,
+    SessionHealthDTO,
+    StateChangeDTO,
+    StateChangePageDTO,
+)
 from agent_control_plane.types.sessions import BudgetInfo, KillSwitchResult, SessionCreate, SessionState, SessionSummary
 
 __all__ = [
@@ -171,11 +185,13 @@ __all__ = [
     "AssetMatch",
     "AssetScope",
     "AsyncApprovalRepository",
+    "AsyncCommandRepository",
     "AsyncControlPlaneFacade",
     "AsyncEventRepository",
     "AsyncProposalRepository",
     "AsyncSessionRepository",
     "AsyncSqlAlchemyApprovalRepo",
+    "AsyncSqlAlchemyCommandRepo",
     "AsyncSqlAlchemyEventRepo",
     "AsyncSqlAlchemyProposalRepo",
     "AsyncSqlAlchemySessionRepo",
@@ -186,6 +202,9 @@ __all__ = [
     "BudgetExhaustedError",
     "BudgetInfo",
     "BudgetTracker",
+    "CommandLedger",
+    "CommandRepository",
+    "CommandResultDTO",
     "ConcurrencyGuard",
     "ControlEvent",
     "ControlPlaneFacade",
@@ -227,6 +246,7 @@ __all__ = [
     "PolicyEngine",
     "PolicySnapshot",
     "PolicySnapshotDTO",
+    "PageDTO",
     "ProposalRepository",
     "ProposalRouter",
     "ProposalStatus",
@@ -247,6 +267,7 @@ __all__ = [
     "SessionEventBudgetServices",
     "SessionLifecycleResult",
     "SessionManager",
+    "SessionHealthDTO",
     "SessionRepository",
     "SessionSeqCounter",
     "SessionState",
@@ -254,11 +275,14 @@ __all__ = [
     "SessionSummary",
     "SyncControlPlane",
     "SyncSqlAlchemyApprovalRepo",
+    "SyncSqlAlchemyCommandRepo",
     "SyncSqlAlchemyEventRepo",
     "SyncSqlAlchemyProposalRepo",
     "SyncSqlAlchemySessionRepo",
     "SyncSqlAlchemyUnitOfWork",
     "SyncUnitOfWork",
+    "StateChangeDTO",
+    "StateChangePageDTO",
     "TimeoutEscalation",
     "ToolCallContext",
     "ToolCallResult",

@@ -20,16 +20,21 @@ from agent_control_plane.models.registry import (
     registry_scope,
 )
 from agent_control_plane.storage.sqlalchemy_sync import SyncSqlAlchemyUnitOfWork
+from agent_control_plane.types.approvals import ApprovalTicketDTO
 from agent_control_plane.types.enums import (
     AbortReason,
+    ApprovalStatus,
     EventKind,
     ExecutionMode,
     KillSwitchScope,
+    ProposalStatus,
     SessionStatus,
     UnknownAppEventPolicy,
 )
 from agent_control_plane.types.frames import EventFrame
 from agent_control_plane.types.ids import AgentId, IdempotencyKey
+from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.query import PageDTO, SessionHealthDTO, StateChangeDTO, StateChangePageDTO
 from agent_control_plane.types.sessions import SessionState
 
 
@@ -145,6 +150,16 @@ class SyncControlPlane:
         with self.session_scope() as db:
             uow = self._uow_factory(db)
             return uow.session_repo.get_session(session_id)
+
+    def list_sessions(
+        self,
+        *,
+        statuses: list[SessionStatus] | None = None,
+        limit: int = 50,
+    ) -> list[SessionState]:
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
+            return uow.session_repo.list_sessions(statuses=statuses, limit=limit)
 
     def check_budget(self, session_id: UUID, cost: Decimal = Decimal("0"), action_count: int = 1) -> bool:
         with self.session_scope() as db:
@@ -473,6 +488,89 @@ class ControlPlaneFacade:
 
     def get_session(self, session_id: UUID) -> SessionState | None:
         return self._cp.get_session(session_id)
+
+    def get_ticket(self, ticket_id: UUID) -> ApprovalTicketDTO | None:
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            return uow.approval_repo.get_ticket(ticket_id)
+
+    def list_tickets(
+        self,
+        *,
+        session_id: UUID | None = None,
+        statuses: list[ApprovalStatus] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> PageDTO[ApprovalTicketDTO]:
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            rows = uow.approval_repo.list_tickets(
+                session_id=session_id,
+                statuses=statuses,
+                limit=limit + 1,
+                offset=offset,
+            )
+            has_more = len(rows) > limit
+            return PageDTO(items=rows[:limit], next_offset=(offset + limit if has_more else None))
+
+    def get_proposal(self, proposal_id: UUID) -> ActionProposalDTO | None:
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            return uow.proposal_repo.get_proposal(proposal_id)
+
+    def list_proposals(
+        self,
+        *,
+        session_id: UUID | None = None,
+        statuses: list[ProposalStatus] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> PageDTO[ActionProposalDTO]:
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            rows = uow.proposal_repo.list_proposals(
+                session_id=session_id,
+                statuses=statuses,
+                limit=limit + 1,
+                offset=offset,
+            )
+            has_more = len(rows) > limit
+            return PageDTO(items=rows[:limit], next_offset=(offset + limit if has_more else None))
+
+    def get_state_change_feed(
+        self,
+        *,
+        session_id: UUID | None = None,
+        cursor: int = 0,
+        limit: int = 100,
+    ) -> StateChangePageDTO:
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            rows = uow.event_repo.list_state_bearing_events(
+                session_id=session_id,
+                offset=cursor,
+                limit=limit + 1,
+            )
+            has_more = len(rows) > limit
+            items = [StateChangeDTO(cursor=cursor + idx + 1, event=row) for idx, row in enumerate(rows[:limit])]
+            return StateChangePageDTO(items=items, next_cursor=(cursor + limit if has_more else None))
+
+    def get_health_snapshot(self) -> SessionHealthDTO:
+        created = self._cp.list_sessions(statuses=[SessionStatus.CREATED], limit=10_000)
+        active = self._cp.list_sessions(statuses=[SessionStatus.ACTIVE], limit=10_000)
+        paused = self._cp.list_sessions(statuses=[SessionStatus.PAUSED], limit=10_000)
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            pending = uow.approval_repo.get_pending_tickets()
+        sessions_with_cycles = sum(1 for session in created + active + paused if session.active_cycle_id is not None)
+        return SessionHealthDTO(
+            total_sessions=len(created) + len(active) + len(paused),
+            active_sessions=len(active),
+            created_sessions=len(created),
+            paused_sessions=len(paused),
+            sessions_with_active_cycles=sessions_with_cycles,
+            pending_tickets=len(pending),
+        )
 
     def check_budget(self, session_id: UUID, *, cost: Decimal = Decimal("0"), action_count: int = 1) -> bool:
         return self._cp.check_budget(session_id, cost=cost, action_count=action_count)
