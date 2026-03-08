@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from secrets import compare_digest
 from typing import Any, Protocol
 from uuid import UUID
 
-from fastapi import FastAPI, Header, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from agent_control_plane.sync import KillResultDTO
@@ -93,6 +96,44 @@ class KillRequest(BaseModel):
     reason: str | None = None
 
 
+class ErrorResponse(BaseModel):
+    error: str
+    details: dict[str, Any] | None = None
+
+
+class AuthPolicy(Protocol):
+    async def authorize(self, authorization: str | None) -> None: ...
+
+
+@dataclass(frozen=True)
+class AllowAllAuthPolicy:
+    async def authorize(self, authorization: str | None) -> None:
+        _ = authorization
+
+
+@dataclass(frozen=True)
+class DenyAllAuthPolicy:
+    message: str = "Authentication is required. Configure an auth policy for this gateway."
+
+    async def authorize(self, authorization: str | None) -> None:
+        _ = authorization
+        raise HTTPException(status_code=401, detail=self.message)
+
+
+@dataclass(frozen=True)
+class BearerTokenAuthPolicy:
+    token: str
+
+    async def authorize(self, authorization: str | None) -> None:
+        if authorization is None:
+            raise HTTPException(status_code=401, detail="Missing Authorization header")
+        scheme, _, presented = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not presented:
+            raise HTTPException(status_code=401, detail="Authorization must be Bearer token")
+        if not compare_digest(presented, self.token):
+            raise HTTPException(status_code=401, detail="Invalid bearer token")
+
+
 def _dump(model: BaseModel) -> dict[str, Any]:
     return model.model_dump(mode="json")
 
@@ -107,13 +148,50 @@ def _parse_statuses(raw: str | None, enum_type: type[SessionStatus] | type[Appro
         raise HTTPException(status_code=422, detail=f"Invalid status value: {exc}") from exc
 
 
-def create_app(facade: FacadeProtocol) -> FastAPI:  # noqa: C901
+def _error_response(status_code: int, error: str, details: dict[str, Any] | None = None) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code, content=ErrorResponse(error=error, details=details).model_dump(mode="json")
+    )
+
+
+def _normalize_conflict_error(exc: ValueError) -> tuple[int, str]:
+    text = str(exc).strip() or "Conflict"
+    lower = text.lower()
+    if "not found" in lower:
+        return 404, text
+    return 409, text
+
+
+def create_app(facade: FacadeProtocol, *, auth_policy: AuthPolicy | None = None) -> FastAPI:  # noqa: C901
     app = FastAPI(
         title="agent-control-plane-gateway",
         version="0.1.0",
         openapi_url="/openapi.json",
         docs_url="/docs",
     )
+
+    policy = auth_policy or DenyAllAuthPolicy()
+
+    @app.middleware("http")
+    async def require_auth(request: Request, call_next: Any) -> Any:
+        if request.url.path.startswith("/v1/") or request.url.path == "/dashboard":
+            await policy.authorize(request.headers.get("authorization"))
+        return await call_next(request)
+
+    @app.exception_handler(HTTPException)
+    async def http_error(_: Request, exc: HTTPException) -> JSONResponse:
+        detail = exc.detail
+        if isinstance(detail, dict):
+            message = str(detail.get("error") or "Request failed")
+            details = detail
+        else:
+            message = str(detail)
+            details = None
+        return _error_response(exc.status_code, message, details)
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
+        return _error_response(422, "Validation failed", {"errors": exc.errors()})
 
     @app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
     async def dashboard() -> str:
@@ -175,17 +253,21 @@ def create_app(facade: FacadeProtocol) -> FastAPI:  # noqa: C901
         x_idempotency_key: str | None = Header(default=None),
     ) -> dict[str, Any]:
         req = body or ApproveTicketRequest()
-        row = await facade.approve_ticket(
-            ticket_id,
-            decided_by=req.decided_by,
-            reason=req.reason,
-            decision_type=req.decision_type,
-            scope_resource_ids=req.scope_resource_ids,
-            scope_max_cost=req.scope_max_cost,
-            scope_max_action_count=req.scope_max_action_count,
-            scope_expiry=req.scope_expiry,
-            command_id=x_idempotency_key,
-        )
+        try:
+            row = await facade.approve_ticket(
+                ticket_id,
+                decided_by=req.decided_by,
+                reason=req.reason,
+                decision_type=req.decision_type,
+                scope_resource_ids=req.scope_resource_ids,
+                scope_max_cost=req.scope_max_cost,
+                scope_max_action_count=req.scope_max_action_count,
+                scope_expiry=req.scope_expiry,
+                command_id=x_idempotency_key,
+            )
+        except ValueError as exc:
+            status_code, message = _normalize_conflict_error(exc)
+            raise HTTPException(status_code=status_code, detail=message) from exc
         return _dump(row)
 
     @app.post("/v1/tickets/{ticket_id}/deny")
@@ -195,7 +277,11 @@ def create_app(facade: FacadeProtocol) -> FastAPI:  # noqa: C901
         x_idempotency_key: str | None = Header(default=None),
     ) -> dict[str, Any]:
         req = body or DenyTicketRequest()
-        row = await facade.deny_ticket(ticket_id, reason=req.reason, command_id=x_idempotency_key)
+        try:
+            row = await facade.deny_ticket(ticket_id, reason=req.reason, command_id=x_idempotency_key)
+        except ValueError as exc:
+            status_code, message = _normalize_conflict_error(exc)
+            raise HTTPException(status_code=status_code, detail=message) from exc
         return _dump(row)
 
     @app.get("/v1/events/state-changes")

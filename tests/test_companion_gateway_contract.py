@@ -24,16 +24,17 @@ from agent_control_plane.types.enums import (
 from agent_control_plane.types.frames import EventFrame
 from agent_control_plane.types.query import PageDTO, SessionHealthDTO, StateChangeDTO, StateChangePageDTO
 from agent_control_plane.types.sessions import SessionState
-from examples.companion_gateway.app import create_app
+from examples.companion_gateway.app import AllowAllAuthPolicy, create_app
 
 pytestmark = pytest.mark.filterwarnings("ignore:jsonschema.RefResolver is deprecated:DeprecationWarning")
 
 
 class _StubFacade:
-    def __init__(self) -> None:
+    def __init__(self, *, approve_conflict: bool = False) -> None:
         self.session_id = uuid4()
         self.ticket_id = uuid4()
         self.proposal_id = uuid4()
+        self.approve_conflict = approve_conflict
 
     async def list_sessions(
         self, *, statuses: list[SessionStatus] | None = None, limit: int = 50
@@ -82,6 +83,8 @@ class _StubFacade:
             scope_expiry,
             command_id,
         )
+        if self.approve_conflict:
+            raise ValueError("Ticket already decided")
         ticket = self._ticket()
         return ticket.model_copy(
             update={
@@ -174,13 +177,35 @@ def _validate_schema(spec: dict[str, Any], schema: dict[str, Any], payload: Any)
     validator.validate(payload)
 
 
-def _response_schema(spec: dict[str, Any], path: str, method: str) -> dict[str, Any]:
-    return spec["paths"][path][method]["responses"]["200"]["content"]["application/json"]["schema"]
+def _resolve_ref(spec: dict[str, Any], obj: dict[str, Any]) -> dict[str, Any]:
+    ref = obj.get("$ref")
+    if ref is None:
+        return obj
+    parts = ref.lstrip("#/").split("/")
+    resolved: Any = spec
+    for part in parts:
+        resolved = resolved[part]
+    if not isinstance(resolved, dict):
+        raise TypeError(f"Expected mapping at ref {ref}")
+    return resolved
+
+
+def _response_schema(spec: dict[str, Any], path: str, method: str, status_code: str = "200") -> dict[str, Any]:
+    response = _resolve_ref(spec, spec["paths"][path][method]["responses"][status_code])
+    return response["content"]["application/json"]["schema"]
+
+
+def _request_schema(spec: dict[str, Any], path: str, method: str) -> dict[str, Any]:
+    return spec["paths"][path][method]["requestBody"]["content"]["application/json"]["schema"]
+
+
+def _client(facade: _StubFacade) -> TestClient:
+    return TestClient(create_app(facade, auth_policy=AllowAllAuthPolicy()))
 
 
 def test_list_sessions_contract() -> None:
     spec = _openapi()
-    client = TestClient(create_app(_StubFacade()))
+    client = _client(_StubFacade())
 
     res = client.get("/v1/sessions")
     assert res.status_code == 200
@@ -190,7 +215,7 @@ def test_list_sessions_contract() -> None:
 def test_get_ticket_contract() -> None:
     spec = _openapi()
     facade = _StubFacade()
-    client = TestClient(create_app(facade))
+    client = _client(facade)
 
     res = client.get(f"/v1/tickets/{facade.ticket_id}")
     assert res.status_code == 200
@@ -199,7 +224,7 @@ def test_get_ticket_contract() -> None:
 
 def test_state_change_feed_contract() -> None:
     spec = _openapi()
-    client = TestClient(create_app(_StubFacade()))
+    client = _client(_StubFacade())
 
     res = client.get("/v1/events/state-changes?cursor=0&limit=20")
     assert res.status_code == 200
@@ -208,7 +233,7 @@ def test_state_change_feed_contract() -> None:
 
 def test_health_contract() -> None:
     spec = _openapi()
-    client = TestClient(create_app(_StubFacade()))
+    client = _client(_StubFacade())
 
     res = client.get("/v1/health")
     assert res.status_code == 200
@@ -217,8 +242,60 @@ def test_health_contract() -> None:
 
 def test_kill_system_contract() -> None:
     spec = _openapi()
-    client = TestClient(create_app(_StubFacade()))
+    client = _client(_StubFacade())
 
     res = client.post("/v1/kill/system", json={"reason": "ops"})
     assert res.status_code == 200
     _validate_schema(spec, _response_schema(spec, "/v1/kill/system", "post"), res.json())
+
+
+def test_request_body_contracts() -> None:
+    spec = _openapi()
+    _validate_schema(
+        spec,
+        _request_schema(spec, "/v1/tickets/{ticket_id}/approve", "post"),
+        {"decided_by": "ops", "decision_type": "allow_once", "reason": "ok"},
+    )
+    _validate_schema(
+        spec,
+        _request_schema(spec, "/v1/tickets/{ticket_id}/deny", "post"),
+        {"reason": "policy"},
+    )
+    _validate_schema(
+        spec,
+        _request_schema(spec, "/v1/kill/system", "post"),
+        {"reason": "operator_request"},
+    )
+
+
+def test_not_found_error_contract() -> None:
+    spec = _openapi()
+    facade = _StubFacade()
+    client = _client(facade)
+
+    res = client.get(f"/v1/tickets/{uuid4()}")
+    assert res.status_code == 404
+    _validate_schema(spec, _response_schema(spec, "/v1/tickets/{ticket_id}", "get", "404"), res.json())
+
+
+def test_conflict_error_contract() -> None:
+    spec = _openapi()
+    facade = _StubFacade(approve_conflict=True)
+    client = _client(facade)
+
+    res = client.post(f"/v1/tickets/{facade.ticket_id}/approve", json={"reason": "retry"})
+    assert res.status_code == 409
+    _validate_schema(
+        spec,
+        _response_schema(spec, "/v1/tickets/{ticket_id}/approve", "post", "409"),
+        res.json(),
+    )
+
+
+def test_validation_error_contract() -> None:
+    spec = _openapi()
+    client = _client(_StubFacade())
+
+    res = client.get("/v1/sessions?statuses=INVALID_STATUS")
+    assert res.status_code == 422
+    _validate_schema(spec, _response_schema(spec, "/v1/sessions", "get", "422"), res.json())

@@ -37,6 +37,10 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/SessionState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Error'
 
@@ -54,8 +58,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Error'
 
@@ -76,6 +84,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TicketPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Error'
 
@@ -93,8 +105,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApprovalTicket'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Error'
 
@@ -119,10 +135,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApprovalTicket'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Error'
 
@@ -147,10 +167,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ApprovalTicket'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Error'
 
@@ -170,6 +194,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StateChangePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Error'
 
@@ -185,6 +213,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SessionHealth'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         default:
           $ref: '#/components/responses/Error'
 
@@ -209,6 +239,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/KillResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Error'
 
@@ -232,6 +266,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/KillResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Error'
 
@@ -327,6 +365,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication failed or missing
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
     NotFound:
       description: Resource not found
       content:
@@ -335,6 +379,12 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
     Conflict:
       description: Resource state conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    UnprocessableEntity:
+      description: Validation failure
       content:
         application/json:
           schema:
@@ -717,5 +767,7 @@ components:
         error:
           type: string
         details:
-          type: object
-          additionalProperties: true
+          anyOf:
+            - type: object
+              additionalProperties: true
+            - type: 'null'

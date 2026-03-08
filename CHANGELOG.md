@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- Companion gateway runnable entrypoint at `examples/companion_gateway/main.py`.
+- Companion gateway auth policy hooks:
+  - `DenyAllAuthPolicy` (default)
+  - `AllowAllAuthPolicy`
+  - `BearerTokenAuthPolicy`
+- Contract tests now validate OpenAPI request bodies and common error responses (`404`, `409`, `422`).
+
+### Changed
+
+- Companion gateway now returns standardized error envelopes (`ErrorResponse`) for HTTP and validation errors.
+- OpenAPI contract now declares `401` and `422` responses for gateway endpoints.
+
 ## [0.5.0] - 2026-03-08
 
 ### Added

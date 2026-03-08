@@ -16,3 +16,14 @@ This folder is a starter for a companion API + dashboard service that wraps `age
 
 - App factory: `examples/companion_gateway/app.py:create_app`
 - Wire your real `AsyncControlPlaneFacade` instance in your host service bootstrap.
+
+## Run Locally
+
+```bash
+uv run uvicorn examples.companion_gateway.main:app --reload --port 8000
+```
+
+Auth behavior:
+- `create_app(...)` defaults to deny-all auth (`401`) unless you provide an auth policy.
+- The runnable `main.py` uses `AllowAllAuthPolicy` for convenience when no token is configured.
+- To require bearer auth in local runs, set `ACP_GATEWAY_BEARER_TOKEN` before starting.
