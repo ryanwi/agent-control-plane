@@ -6,10 +6,9 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-import pytest
 import yaml
 from fastapi.testclient import TestClient
-from jsonschema import Draft202012Validator, RefResolver
+from jsonschema import Draft202012Validator
 
 from agent_control_plane.sync import KillResultDTO
 from agent_control_plane.types.approvals import ApprovalTicketDTO
@@ -25,8 +24,6 @@ from agent_control_plane.types.frames import EventFrame
 from agent_control_plane.types.query import PageDTO, SessionHealthDTO, StateChangeDTO, StateChangePageDTO
 from agent_control_plane.types.sessions import SessionState
 from examples.companion_gateway.app import AllowAllAuthPolicy, create_app
-
-pytestmark = pytest.mark.filterwarnings("ignore:jsonschema.RefResolver is deprecated:DeprecationWarning")
 
 
 class _StubFacade:
@@ -173,7 +170,7 @@ def _openapi() -> dict[str, Any]:
 
 
 def _validate_schema(spec: dict[str, Any], schema: dict[str, Any], payload: Any) -> None:
-    validator = Draft202012Validator(schema, resolver=RefResolver.from_schema(spec))
+    validator = Draft202012Validator(_inline_local_refs(spec, schema))
     validator.validate(payload)
 
 
@@ -188,6 +185,17 @@ def _resolve_ref(spec: dict[str, Any], obj: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(resolved, dict):
         raise TypeError(f"Expected mapping at ref {ref}")
     return resolved
+
+
+def _inline_local_refs(spec: dict[str, Any], obj: Any) -> Any:
+    if isinstance(obj, dict):
+        ref = obj.get("$ref")
+        if isinstance(ref, str) and ref.startswith("#/"):
+            return _inline_local_refs(spec, _resolve_ref(spec, {"$ref": ref}))
+        return {k: _inline_local_refs(spec, v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_inline_local_refs(spec, item) for item in obj]
+    return obj
 
 
 def _response_schema(spec: dict[str, Any], path: str, method: str, status_code: str = "200") -> dict[str, Any]:
