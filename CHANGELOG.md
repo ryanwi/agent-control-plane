@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-03-08
+
 ### Added
 
 - Companion gateway runnable entrypoint at `examples/companion_gateway/main.py`.
@@ -15,6 +17,10 @@
 
 - Companion gateway now returns standardized error envelopes (`ErrorResponse`) for HTTP and validation errors.
 - OpenAPI contract now declares `401` and `422` responses for gateway endpoints.
+
+### Fixed
+
+- Package version metadata now matches the latest release tag (`0.5.3`) for package managers and `importlib.metadata`.
 
 ## [0.5.0] - 2026-03-08
 
