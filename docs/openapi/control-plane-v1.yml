@@ -1,0 +1,721 @@
+openapi: 3.1.0
+info:
+  title: Agent Control Plane API
+  version: 1.0.0
+  summary: Canonical HTTP contract for companion control-plane gateways
+  description: |
+    Versioned API contract for exposing `agent-control-plane` facade operations over HTTP.
+    This spec is intentionally domain-neutral and maps to library DTOs/enums.
+servers:
+  - url: https://control-plane.example.com
+    description: Example production endpoint
+  - url: http://localhost:8000
+    description: Local development endpoint
+security:
+  - bearerAuth: []
+tags:
+  - name: Sessions
+  - name: Tickets
+  - name: Events
+  - name: Health
+  - name: Safety
+paths:
+  /v1/sessions:
+    get:
+      tags: [Sessions]
+      summary: List sessions
+      operationId: listSessions
+      parameters:
+        - $ref: '#/components/parameters/SessionStatuses'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Sessions returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SessionState'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /v1/sessions/{session_id}:
+    get:
+      tags: [Sessions]
+      summary: Get a session by id
+      operationId: getSession
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionState'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /v1/tickets:
+    get:
+      tags: [Tickets]
+      summary: List approval tickets
+      operationId: listTickets
+      parameters:
+        - $ref: '#/components/parameters/SessionIdFilter'
+        - $ref: '#/components/parameters/TicketStatuses'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+      responses:
+        '200':
+          description: Ticket page returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketPage'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /v1/tickets/{ticket_id}:
+    get:
+      tags: [Tickets]
+      summary: Get a ticket by id
+      operationId: getTicket
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+      responses:
+        '200':
+          description: Ticket returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalTicket'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /v1/tickets/{ticket_id}/approve:
+    post:
+      tags: [Tickets]
+      summary: Approve a pending ticket
+      operationId: approveTicket
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveTicketRequest'
+      responses:
+        '200':
+          description: Ticket approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalTicket'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /v1/tickets/{ticket_id}/deny:
+    post:
+      tags: [Tickets]
+      summary: Deny a pending ticket
+      operationId: denyTicket
+      parameters:
+        - $ref: '#/components/parameters/TicketId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DenyTicketRequest'
+      responses:
+        '200':
+          description: Ticket denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalTicket'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /v1/events/state-changes:
+    get:
+      tags: [Events]
+      summary: List state-bearing events as a feed page
+      operationId: getStateChangeFeed
+      parameters:
+        - $ref: '#/components/parameters/SessionIdFilter'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Feed page returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StateChangePage'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /v1/health:
+    get:
+      tags: [Health]
+      summary: Get control-plane health snapshot
+      operationId: getHealthSnapshot
+      responses:
+        '200':
+          description: Health snapshot returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionHealth'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /v1/kill/session/{session_id}:
+    post:
+      tags: [Safety]
+      summary: Trigger session-scoped kill switch
+      operationId: killSession
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KillRequest'
+      responses:
+        '200':
+          description: Kill result returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KillResult'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /v1/kill/system:
+    post:
+      tags: [Safety]
+      summary: Trigger system halt kill switch
+      operationId: killSystem
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KillRequest'
+      responses:
+        '200':
+          description: Kill result returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KillResult'
+        default:
+          $ref: '#/components/responses/Error'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    SessionId:
+      name: session_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TicketId:
+      name: ticket_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SessionIdFilter:
+      name: session_id
+      in: query
+      required: false
+      schema:
+        type: string
+        format: uuid
+    SessionStatuses:
+      name: statuses
+      in: query
+      required: false
+      description: Comma-separated session statuses
+      schema:
+        type: array
+        items:
+          $ref: '#/components/schemas/SessionStatus'
+      style: form
+      explode: false
+    TicketStatuses:
+      name: statuses
+      in: query
+      required: false
+      description: Comma-separated approval ticket statuses
+      schema:
+        type: array
+        items:
+          $ref: '#/components/schemas/ApprovalStatus'
+      style: form
+      explode: false
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 50
+    Offset:
+      name: offset
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    IdempotencyKey:
+      name: X-Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+
+  responses:
+    Error:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Resource state conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  schemas:
+    SessionStatus:
+      type: string
+      enum: [created, active, paused, completed, aborted]
+
+    ExecutionMode:
+      type: string
+      enum: [dry_run, live, replay]
+
+    AssetScope:
+      type: string
+      enum: [matched_only]
+
+    AbortReason:
+      type: string
+      enum: [operator_request, kill_switch, budget_exhausted, agent_timeout, system_error, policy_violation]
+
+    ApprovalStatus:
+      type: string
+      enum: [pending, approved, denied, expired]
+
+    ApprovalDecisionType:
+      type: string
+      enum: [allow_once, allow_for_session]
+
+    EventKind:
+      type: string
+      enum:
+        - cycle_started
+        - cycle_skipped
+        - cycle_completed
+        - cycle_recovered
+        - signals_calculated
+        - proposals_generated
+        - risk_assessed
+        - approval_requested
+        - approval_granted
+        - approval_denied
+        - approval_timeout
+        - execution_started
+        - execution_completed
+        - session_aborted
+        - kill_switch_triggered
+        - budget_exhausted
+
+    KillSwitchScope:
+      type: string
+      enum: [session_abort, agent_abort, system_halt, budget_auto_halt]
+
+    SessionState:
+      type: object
+      required:
+        - id
+        - session_name
+        - status
+        - execution_mode
+        - max_cost
+        - used_cost
+        - max_action_count
+        - used_action_count
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        session_name:
+          type: string
+        status:
+          $ref: '#/components/schemas/SessionStatus'
+        execution_mode:
+          $ref: '#/components/schemas/ExecutionMode'
+        asset_scope:
+          anyOf:
+            - $ref: '#/components/schemas/AssetScope'
+            - type: 'null'
+        max_cost:
+          type: string
+          description: Decimal serialized as string
+        used_cost:
+          type: string
+          description: Decimal serialized as string
+        max_action_count:
+          type: integer
+        used_action_count:
+          type: integer
+        active_policy_id:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        active_cycle_id:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        dry_run_session_id:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        abort_reason:
+          anyOf:
+            - $ref: '#/components/schemas/AbortReason'
+            - type: 'null'
+        abort_details:
+          anyOf:
+            - type: string
+            - type: 'null'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+
+    ApprovalTicket:
+      type: object
+      required:
+        - id
+        - session_id
+        - proposal_id
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        session_id:
+          type: string
+          format: uuid
+        proposal_id:
+          type: string
+          format: uuid
+        scope_resource_ids:
+          anyOf:
+            - type: array
+              items:
+                type: string
+            - type: 'null'
+        scope_max_cost:
+          anyOf:
+            - type: string
+              description: Decimal serialized as string
+            - type: 'null'
+        scope_max_count:
+          anyOf:
+            - type: integer
+            - type: 'null'
+        scope_expiry:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        status:
+          $ref: '#/components/schemas/ApprovalStatus'
+        decision_type:
+          anyOf:
+            - $ref: '#/components/schemas/ApprovalDecisionType'
+            - type: 'null'
+        decided_by:
+          anyOf:
+            - type: string
+            - type: 'null'
+        decision_reason:
+          anyOf:
+            - type: string
+            - type: 'null'
+        timeout_at:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+        created_at:
+          type: string
+          format: date-time
+        decided_at:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+
+    TicketPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApprovalTicket'
+        next_offset:
+          anyOf:
+            - type: integer
+            - type: 'null'
+
+    EventFrame:
+      type: object
+      required:
+        - frame_kind
+        - event_id
+        - session_id
+        - seq
+        - event_kind
+        - payload
+        - state_bearing
+        - created_at
+      properties:
+        frame_kind:
+          type: string
+          enum: [event]
+        event_id:
+          type: string
+          format: uuid
+        session_id:
+          type: string
+          format: uuid
+        seq:
+          type: integer
+        event_kind:
+          $ref: '#/components/schemas/EventKind'
+        agent_id:
+          anyOf:
+            - type: string
+            - type: 'null'
+        correlation_id:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        payload:
+          type: object
+          additionalProperties: true
+        state_bearing:
+          type: boolean
+        routing_decision:
+          anyOf:
+            - type: object
+              additionalProperties: true
+            - type: 'null'
+        routing_reason:
+          anyOf:
+            - type: string
+            - type: 'null'
+        created_at:
+          type: string
+          format: date-time
+
+    StateChange:
+      type: object
+      required: [cursor, event, projected_at]
+      properties:
+        cursor:
+          type: integer
+        event:
+          $ref: '#/components/schemas/EventFrame'
+        projected_at:
+          type: string
+          format: date-time
+
+    StateChangePage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StateChange'
+        next_cursor:
+          anyOf:
+            - type: integer
+            - type: 'null'
+
+    SessionHealth:
+      type: object
+      required:
+        - total_sessions
+        - active_sessions
+        - created_sessions
+        - paused_sessions
+        - sessions_with_active_cycles
+        - pending_tickets
+        - captured_at
+      properties:
+        total_sessions:
+          type: integer
+        active_sessions:
+          type: integer
+        created_sessions:
+          type: integer
+        paused_sessions:
+          type: integer
+        sessions_with_active_cycles:
+          type: integer
+        pending_tickets:
+          type: integer
+        captured_at:
+          type: string
+          format: date-time
+
+    ApproveTicketRequest:
+      type: object
+      properties:
+        decided_by:
+          type: string
+          default: operator
+        reason:
+          anyOf:
+            - type: string
+            - type: 'null'
+        decision_type:
+          $ref: '#/components/schemas/ApprovalDecisionType'
+        scope_resource_ids:
+          type: array
+          items:
+            type: string
+        scope_max_cost:
+          anyOf:
+            - type: string
+              description: Decimal serialized as string
+            - type: 'null'
+        scope_max_action_count:
+          anyOf:
+            - type: integer
+            - type: 'null'
+        scope_expiry:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: 'null'
+
+    DenyTicketRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          default: ""
+
+    KillRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+
+    KillResult:
+      type: object
+      required: [scope, tickets_denied]
+      properties:
+        scope:
+          $ref: '#/components/schemas/KillSwitchScope'
+        session_id:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        agent_id:
+          anyOf:
+            - type: string
+            - type: 'null'
+        sessions_aborted:
+          anyOf:
+            - type: integer
+            - type: 'null'
+        sessions_affected:
+          anyOf:
+            - type: integer
+            - type: 'null'
+        tickets_denied:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
