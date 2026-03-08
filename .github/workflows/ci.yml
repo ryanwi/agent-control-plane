@@ -3,10 +3,40 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     branches: [main]
 
 jobs:
+  release_version_guard:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify tag matches pyproject version
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import os
+
+          ref = os.environ["GITHUB_REF_NAME"]  # e.g. v0.9.2
+          tag = ref[1:] if ref.startswith("v") else ref
+
+          pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
+          m = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, flags=re.M)
+          if m is None:
+              raise SystemExit("Could not find version in pyproject.toml")
+          version = m.group(1)
+          if version != tag:
+              raise SystemExit(f"Tag/version mismatch: tag={tag} pyproject={version}")
+          print(f"Tag/version match: {tag}")
+          PY
+
   docs_drift:
     runs-on: ubuntu-latest
     steps:

@@ -13,6 +13,7 @@
 ### Changed
 
 - Added root package version helpers (`__version__`, `get_version()`) and documented naming conventions.
+- Superseded by `v0.9.2` for package metadata correctness (`v0.9.1` tag still reported version `0.9.0`).
 
 ### Breaking (pre-1.0)
 
