@@ -362,6 +362,24 @@ Policy and telemetry integration helpers:
   - `agent_control_plane.experimental.capabilities`
   - builder service bundles expose `get_capabilities()` for detection only (non-authoritative; no enforcement)
 
+Example (detection only):
+
+```python
+from agent_control_plane.builders import build_session_event_budget
+from agent_control_plane.experimental.capabilities import StaticCapabilityProvider, capability_set_from_mapping
+
+provider = StaticCapabilityProvider(
+    capability_set_from_mapping({"managed_operations": {"version": "exp-1"}})
+)
+services = build_session_event_budget(
+    session_repo=session_repo,
+    event_repo=event_repo,
+    capability_provider=provider,
+)
+if services.get_capabilities().has("managed_operations"):
+    print("Managed operations integration is available")
+```
+
 `SyncControlPlane.kill()` and `SyncControlPlane.kill_all()` return `KillResultDTO`.
 `SyncControlPlane.emit_event()` / `replay_events()` provide first-class sync event operations.
 `SyncControlPlane.emit_app_event()` supports boundary mapping via `AppEventMapper`/`DictEventMapper`.
