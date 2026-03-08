@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Documentation now includes an explicit dev/prod DB guide (SQLite vs Postgres), reliability checklist, and expanded operations runbook for deployment and incident response.
+
 ## [0.7.0] - 2026-03-08
 
 ### Added

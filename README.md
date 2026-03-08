@@ -153,6 +153,7 @@ Related references:
 - [Security model](docs/security_model.md)
 - [Identity integration guide](docs/integration_identity.md)
 - [Operations runbook](docs/operations_runbook.md)
+- [Architecture reference](docs/architecture.md)
 
 ## Installation in host application
 
@@ -161,6 +162,23 @@ Related references:
 3. Create and persist session/policy records with your service transaction manager.
 4. Execute every control-plane transition through the engines above, not directly on models.
 5. Call recovery handlers during startup and on stuck-cycle monitors.
+
+### DB deployment guide (dev vs prod)
+
+Use the control plane as embedded application state, not as an external service.
+
+- Local development baseline:
+  - Use SQLite file storage (`sqlite:///./control_plane.db` or `sqlite+aiosqlite:///./control_plane.db`).
+  - Best for single-process development, demos, and integration tests.
+- Production baseline:
+  - Use Postgres (`postgresql+psycopg://...` for sync or `postgresql+asyncpg://...` for async).
+  - Use for multi-worker/multi-instance deployments, stronger concurrency behavior, and operational durability.
+
+Switch from SQLite to Postgres when any of the following is true:
+
+- You run more than one worker/process against the same control-plane DB.
+- You need managed backups, PITR, and high-availability controls.
+- You need predictable operational behavior under sustained concurrent writes.
 
 ### Storage note
 
@@ -185,6 +203,22 @@ session_manager.create_policy(...)
 crash_recovery.run_recovery(...)
 timeout_escalation.scan_and_recover(...)
 ```
+
+### Reliability checklist
+
+- Startup sequence:
+  - Register models, initialize schema, run crash/timeout recovery, then accept traffic.
+- Transaction boundary:
+  - Keep control-plane write operations inside a host-managed transaction/UoW boundary.
+  - Do not mix direct ORM writes with facade/engine transitions for the same state changes.
+- Concurrency model:
+  - SQLite: single-process/small-scale usage.
+  - Postgres: recommended for concurrent workers and production operations.
+- Fail-closed critical path:
+  - `state_bearing=True` events must raise on persistence failure.
+  - Treat these failures as blocking errors, never as best-effort telemetry.
+- Monitoring minimums:
+  - active sessions, pending approvals, budget exhaustion/denials, kill-switch triggers, stuck cycles.
 
 ## Troubleshooting
 

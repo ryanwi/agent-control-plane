@@ -145,6 +145,17 @@ Current architecture (v0.6+):
 - **Policy interfaces**: `EvaluatorPolicy` and `GuardrailPolicy` protocols provide explicit extension seams for decision logic.
 - **Telemetry export helpers**: `export_event(...)` and `export_scorecard(...)` bridge control-plane records to tracing/metrics systems.
 
+Recommended backend posture:
+
+- **SQLite**: local development and single-process embedding.
+- **Postgres**: production and multi-worker deployments requiring stronger operational guarantees.
+
+Reliability contracts:
+
+- All control-plane mutations are expected to run in host-managed transactional boundaries.
+- `state_bearing=True` persistence failures are fail-closed and must block forward progress.
+- Non-state-bearing events can be buffered/observed as best effort and must not be treated as durable state commits.
+
 Future roadmap:
 
 1. **Native OpenTelemetry Integration**: Provide first-class OTel SDK adapters beyond protocol-level helper functions.
