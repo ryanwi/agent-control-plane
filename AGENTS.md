@@ -54,6 +54,7 @@ uv run mypy src
 - Prefer minimal, targeted changes.
 - Preserve API/behavior in public exports under `src/agent_control_plane/__init__.py` unless the change is intentional and versioned.
 - For intentional API changes, update tests, README, and `CHANGELOG.md` in the same change.
+- If behavior or public contract intent changes, update an existing ADR (or add a new one) under `docs/adr/`.
 - Add/adjust tests for any behavior changes, especially:
   - approval/risk/budget/guidance paths,
   - kill-switch and recovery paths,
@@ -92,6 +93,7 @@ Before publishing:
 
 - Keep docs in `README.md` and `docs/architecture.md` consistent.
 - Ensure `CHANGELOG.md` contains the release notes.
+- If release notes include behavior/public-contract changes, include relevant ADR links.
 - Run the test suite.
 - Confirm no uncommitted files remain.
 

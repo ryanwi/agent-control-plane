@@ -9,3 +9,11 @@ Architecture Decision Records (ADRs) capture why important design choices were m
 - [0005: State-Bearing Event Semantics](0005-state-bearing-event-semantics.md): defines fail-closed durability behavior.
 - [0006: Projection Feed vs Canonical Reads](0006-projection-vs-canonical-reads.md): defines when projection is warranted.
 - [0007: Experimental Capability Contracts Are Informational Only](0007-experimental-capabilities-informational-only.md): defines non-enforcement intent for capability detection.
+
+## How to write/update ADRs
+
+- Filename format: `NNNN-short-kebab-title.md` (for example `0008-new-decision.md`).
+- Required headers: `Status`, `Date`, `Supersedes`, `Superseded by`, `Context`, `Decision`, `Consequences`.
+- Use status values: `Proposed`, `Accepted`, or `Superseded`.
+- Link related decisions in a `Related ADRs` section.
+- If behavior/contract changes, link relevant ADR IDs in `CHANGELOG.md` migration/release notes.

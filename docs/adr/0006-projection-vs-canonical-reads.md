@@ -2,7 +2,19 @@
 
 ## Status
 
-Proposed
+Accepted
+
+## Date
+
+2026-03-08
+
+## Supersedes
+
+None
+
+## Superseded by
+
+None
 
 ## Context
 
@@ -25,3 +37,7 @@ Some host applications need fast local read models; others can read canonical co
 - If projection is adopted, include parity checks against canonical reads.
 - Projection capability should not replace canonical reads as the source of truth.
 
+## Related ADRs
+
+- [0005: State-Bearing Event Semantics](0005-state-bearing-event-semantics.md)
+- [0007: Experimental Capability Contracts Are Informational Only](0007-experimental-capabilities-informational-only.md)

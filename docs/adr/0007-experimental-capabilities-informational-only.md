@@ -2,7 +2,19 @@
 
 ## Status
 
-Accepted (pre-1.0)
+Accepted
+
+## Date
+
+2026-03-08
+
+## Supersedes
+
+None
+
+## Superseded by
+
+None
 
 ## Context
 
@@ -25,3 +37,8 @@ We need a way for host applications and companion integrations to detect optiona
 
 - No entitlement or commercial logic in core engine/facade decision paths.
 - Any move from informational detection to enforcement must be a separate ADR and explicit API contract update.
+
+## Related ADRs
+
+- [0003: Facade vs Builder Responsibility](0003-facade-vs-builder-responsibility.md)
+- [0001: Public API Boundary](0001-public-api-boundary.md)

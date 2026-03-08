@@ -2,7 +2,19 @@
 
 ## Status
 
-Proposed
+Accepted
+
+## Date
+
+2026-03-08
+
+## Supersedes
+
+None
+
+## Superseded by
+
+None
 
 ## Context
 
@@ -25,3 +37,7 @@ Control-plane correctness depends on durable state transitions. Not all events a
 - Never downgrade a state-bearing path to non-state-bearing without explicit rationale and tests.
 - Tests should verify fail-closed behavior for state-bearing persistence failures.
 
+## Related ADRs
+
+- [0004: Idempotency Model for Mutating Operations](0004-idempotency-model.md)
+- [0006: Projection Feed vs Canonical Reads](0006-projection-vs-canonical-reads.md)

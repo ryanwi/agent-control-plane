@@ -2,7 +2,19 @@
 
 ## Status
 
-Proposed
+Accepted
+
+## Date
+
+2026-03-08
+
+## Supersedes
+
+None
+
+## Superseded by
+
+None
 
 ## Context
 
@@ -25,3 +37,7 @@ The repository is evolving quickly and exposes many modules. Contributors and do
 - Any change to package-root exports requires changelog entry and migration notes if breaking.
 - New symbols should be added to root only when intended for broad downstream use.
 
+## Related ADRs
+
+- [0002: Pre-1.0 Compatibility and Migration Notes](0002-pre-1-0-compatibility-and-migrations.md)
+- [0003: Facade vs Builder Responsibility](0003-facade-vs-builder-responsibility.md)

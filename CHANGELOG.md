@@ -46,6 +46,7 @@
 - Architecture/README now describe capability detection as a composition-time extension point (informational only, non-authoritative for governance enforcement).
 - Naming docs now standardize role-based conventions (domain/contract types, `*Row` persistence classes, no `DTO` suffixes).
 - ADR guidance is now documented in `docs/adr/README.md` for decision context and change rationale.
+- Release notes for behavior/public-contract changes should include relevant ADR links.
 
 ## [0.7.0] - 2026-03-08
 
