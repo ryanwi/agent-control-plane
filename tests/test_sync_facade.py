@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
+from agent_control_plane.models.registry import ModelRegistry
 from agent_control_plane.sync import (
     AppEventMapper,
     ControlPlaneFacade,
@@ -18,7 +20,45 @@ from agent_control_plane.sync import (
     SyncControlPlane,
     UnknownAppEventError,
 )
-from agent_control_plane.types.enums import EventKind, UnknownAppEventPolicy
+from agent_control_plane.types.aliases import (
+    AliasProfile,
+    AliasRegistry,
+    FieldAliasMap,
+    apply_inbound_aliases,
+    apply_outbound_aliases,
+)
+from agent_control_plane.types.enums import (
+    ActionName,
+    ActionTier,
+    ApprovalStatus,
+    EventKind,
+    ProposalStatus,
+    RiskLevel,
+    UnknownAppEventPolicy,
+)
+
+
+def _insert_pending_proposal(facade: ControlPlaneFacade, session_id: UUID, *, resource_id: str) -> UUID:
+    with facade._cp.session_scope() as db:
+        proposal_model = ModelRegistry.get("ActionProposal")
+        proposal = proposal_model(
+            id=uuid4(),
+            session_id=session_id,
+            cycle_event_seq=None,
+            resource_id=resource_id,
+            resource_type="task",
+            decision=ActionName.STATUS,
+            reasoning="sync projection test",
+            metadata_json={},
+            weight=Decimal("1.0"),
+            score=Decimal("0.9"),
+            action_tier=ActionTier.ALWAYS_APPROVE,
+            risk_level=RiskLevel.MEDIUM,
+            status=ProposalStatus.PENDING,
+        )
+        db.add(proposal)
+        db.commit()
+        return proposal.id
 
 
 def test_sync_control_plane_emit_and_replay_round_trip(tmp_path: Path):
@@ -166,3 +206,120 @@ def test_control_plane_facade_command_id_idempotency(tmp_path: Path):
     assert kill1.tickets_denied == kill2.tickets_denied
 
     facade.close()
+
+
+def test_control_plane_facade_approval_flows_and_idempotency(tmp_path: Path):
+    db_file = tmp_path / "cp_facade_approvals.db"
+    facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_file}")
+    facade.setup()
+
+    sid = facade.open_session("sync-approvals")
+    proposal_id = _insert_pending_proposal(facade, sid, resource_id="sync-asset-1")
+
+    timeout_at = datetime.now(UTC) + timedelta(minutes=10)
+    ticket = facade.create_ticket(sid, proposal_id, timeout_at, command_id="sync-ticket-create-1")
+    ticket_again = facade.create_ticket(sid, proposal_id, timeout_at, command_id="sync-ticket-create-1")
+    assert ticket_again.id == ticket.id
+    assert ticket_again.status == ApprovalStatus.PENDING
+
+    approved = facade.approve_ticket(
+        ticket.id,
+        reason="sync approve",
+        command_id="sync-ticket-approve-1",
+    )
+    approved_again = facade.approve_ticket(
+        ticket.id,
+        reason="ignored",
+        command_id="sync-ticket-approve-1",
+    )
+    assert approved.status == ApprovalStatus.APPROVED
+    assert approved_again.status == ApprovalStatus.APPROVED
+
+    approved_proposal = facade.get_proposal(proposal_id)
+    assert approved_proposal is not None
+    assert approved_proposal.status == ProposalStatus.APPROVED
+
+    proposal_id_2 = _insert_pending_proposal(facade, sid, resource_id="sync-asset-2")
+    ticket_2 = facade.create_ticket(sid, proposal_id_2, datetime.now(UTC) + timedelta(minutes=5))
+    denied = facade.deny_ticket(ticket_2.id, reason="sync deny", command_id="sync-ticket-deny-1")
+    denied_again = facade.deny_ticket(ticket_2.id, reason="ignored", command_id="sync-ticket-deny-1")
+    assert denied.status == ApprovalStatus.DENIED
+    assert denied_again.status == ApprovalStatus.DENIED
+
+    denied_proposal = facade.get_proposal(proposal_id_2)
+    assert denied_proposal is not None
+    assert denied_proposal.status == ProposalStatus.DENIED
+
+    facade.close()
+
+
+def test_control_plane_facade_state_feed_projection_end_to_end(tmp_path: Path):
+    db_file = tmp_path / "cp_sync_projection_e2e.db"
+    facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_file}")
+    facade.setup()
+
+    sid = facade.open_session("sync-projection")
+    proposal_id = _insert_pending_proposal(facade, sid, resource_id="projection-sync-asset-1")
+    ticket = facade.create_ticket(sid, proposal_id, datetime.now(UTC) + timedelta(minutes=10))
+
+    facade.emit(sid, EventKind.CYCLE_STARTED, {"phase": "start"}, state_bearing=True)
+    facade.approve_ticket(ticket.id, reason="projection approve")
+    facade.emit(sid, EventKind.CYCLE_COMPLETED, {"phase": "done"}, state_bearing=True)
+
+    projection_tickets: dict[UUID, ApprovalStatus] = {}
+    projection_proposals: dict[UUID, ProposalStatus] = {}
+    cursor = 0
+
+    while True:
+        feed = facade.get_state_change_feed(cursor=cursor, limit=10)
+        if not feed.items:
+            break
+        for item in feed.items:
+            session_id = item.event.session_id
+            tickets_page = facade.list_tickets(session_id=session_id, limit=200, offset=0)
+            for projected_ticket in tickets_page.items:
+                projection_tickets[projected_ticket.id] = projected_ticket.status
+
+            proposals_page = facade.list_proposals(session_id=session_id, limit=200, offset=0)
+            for projected_proposal in proposals_page.items:
+                projection_proposals[projected_proposal.id] = projected_proposal.status
+
+            cursor = item.cursor
+
+    canonical_ticket = facade.get_ticket(ticket.id)
+    canonical_proposal = facade.get_proposal(proposal_id)
+
+    assert canonical_ticket is not None
+    assert canonical_proposal is not None
+    assert projection_tickets[ticket.id] == canonical_ticket.status
+    assert projection_proposals[proposal_id] == canonical_proposal.status
+    assert projection_tickets[ticket.id] == ApprovalStatus.APPROVED
+    assert projection_proposals[proposal_id] == ProposalStatus.APPROVED
+
+    facade.close()
+
+
+def test_alias_helpers_in_projection_workflow():
+    AliasRegistry.clear_profiles()
+    profile = AliasProfile(
+        name="workflow",
+        aliases=FieldAliasMap(
+            canonical_to_alias={
+                "resource_id": "resourceId",
+                "state_bearing": "stateBearing",
+                "event_kind": "eventKind",
+            }
+        ),
+    )
+    AliasRegistry.register_profile(profile)
+
+    inbound = apply_inbound_aliases({"resourceId": "asset-9", "stateBearing": True}, "workflow")
+    assert inbound == {"resource_id": "asset-9", "state_bearing": True}
+
+    outbound = apply_outbound_aliases(
+        {"event_kind": EventKind.CYCLE_STARTED.value, "state_bearing": True, "resource_id": "asset-9"},
+        "workflow",
+    )
+    assert outbound == {"eventKind": "cycle_started", "stateBearing": True, "resourceId": "asset-9"}
+
+    AliasRegistry.clear_profiles()

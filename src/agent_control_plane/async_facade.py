@@ -17,10 +17,19 @@ from agent_control_plane.models.reference import Base, register_models
 from agent_control_plane.models.registry import RegistryProtocol, ScopedModelRegistry, registry_scope
 from agent_control_plane.storage.sqlalchemy_async import AsyncSqlAlchemyUnitOfWork
 from agent_control_plane.sync import (
+    CMD_ABORT_SESSION,
+    CMD_APPROVE_TICKET,
+    CMD_CLOSE_SESSION,
+    CMD_CREATE_TICKET,
+    CMD_DENY_TICKET,
+    CMD_EMIT,
+    CMD_OPEN_SESSION,
     AppEventMapper,
+    ApprovalTicketUpdateFields,
     KillResultDTO,
     SessionLifecycleResult,
     UnknownAppEventError,
+    kill_command_operation,
 )
 from agent_control_plane.types.approvals import ApprovalTicketDTO
 from agent_control_plane.types.enums import (
@@ -142,7 +151,7 @@ class AsyncControlPlaneFacade:
     ) -> UUID:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
-            cached = await self._get_cached_command_result(uow, command_id, "open_session")
+            cached = await self._get_cached_command_result(uow, command_id, CMD_OPEN_SESSION)
             if cached is not None:
                 raw_session_id = cached.get("session_id")
                 if not isinstance(raw_session_id, str):
@@ -159,7 +168,7 @@ class AsyncControlPlaneFacade:
             await self._record_command_result(
                 uow,
                 command_id,
-                "open_session",
+                CMD_OPEN_SESSION,
                 {"session_id": str(cs.id)},
                 session_id=cs.id,
             )
@@ -255,14 +264,14 @@ class AsyncControlPlaneFacade:
     ) -> ApprovalTicketDTO:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
-            cached = await self._get_cached_command_result(uow, command_id, "create_ticket")
+            cached = await self._get_cached_command_result(uow, command_id, CMD_CREATE_TICKET)
             if cached is not None:
                 return ApprovalTicketDTO.model_validate(cached)
             ticket = await uow.approval_repo.create_ticket(session_id, proposal_id, timeout_at)
             await self._record_command_result(
                 uow,
                 command_id,
-                "create_ticket",
+                CMD_CREATE_TICKET,
                 ticket.model_dump(mode="json"),
                 session_id=session_id,
             )
@@ -284,11 +293,11 @@ class AsyncControlPlaneFacade:
     ) -> ApprovalTicketDTO:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
-            cached = await self._get_cached_command_result(uow, command_id, "approve_ticket")
+            cached = await self._get_cached_command_result(uow, command_id, CMD_APPROVE_TICKET)
             if cached is not None:
                 return ApprovalTicketDTO.model_validate(cached)
             ticket = await uow.approval_repo.get_pending_ticket_for_update(ticket_id)
-            fields: dict[str, Any] = {
+            fields: ApprovalTicketUpdateFields = {
                 "status": ApprovalStatus.APPROVED,
                 "decision_type": decision_type,
                 "decided_by": decided_by,
@@ -306,7 +315,7 @@ class AsyncControlPlaneFacade:
             await self._record_command_result(
                 uow,
                 command_id,
-                "approve_ticket",
+                CMD_APPROVE_TICKET,
                 result.model_dump(mode="json"),
                 session_id=ticket.session_id,
             )
@@ -322,11 +331,11 @@ class AsyncControlPlaneFacade:
     ) -> ApprovalTicketDTO:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
-            cached = await self._get_cached_command_result(uow, command_id, "deny_ticket")
+            cached = await self._get_cached_command_result(uow, command_id, CMD_DENY_TICKET)
             if cached is not None:
                 return ApprovalTicketDTO.model_validate(cached)
             ticket = await uow.approval_repo.get_pending_ticket_for_update(ticket_id)
-            fields: dict[str, Any] = {
+            fields: ApprovalTicketUpdateFields = {
                 "status": ApprovalStatus.DENIED,
                 "decision_reason": reason,
                 "decided_at": datetime.now(UTC),
@@ -337,7 +346,7 @@ class AsyncControlPlaneFacade:
             await self._record_command_result(
                 uow,
                 command_id,
-                "deny_ticket",
+                CMD_DENY_TICKET,
                 result.model_dump(mode="json"),
                 session_id=ticket.session_id,
             )
@@ -453,7 +462,7 @@ class AsyncControlPlaneFacade:
     ) -> int:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
-            cached = await self._get_cached_command_result(uow, command_id, "emit")
+            cached = await self._get_cached_command_result(uow, command_id, CMD_EMIT)
             if cached is not None:
                 seq = cached.get("seq")
                 if not isinstance(seq, int):
@@ -473,7 +482,7 @@ class AsyncControlPlaneFacade:
             await self._record_command_result(
                 uow,
                 command_id,
-                "emit",
+                CMD_EMIT,
                 {"seq": seq},
                 session_id=session_id,
             )
@@ -558,7 +567,7 @@ class AsyncControlPlaneFacade:
     ) -> SessionLifecycleResult:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
-            cached = await self._get_cached_command_result(uow, command_id, "close_session")
+            cached = await self._get_cached_command_result(uow, command_id, CMD_CLOSE_SESSION)
             if cached is not None:
                 return SessionLifecycleResult.model_validate(cached)
             appended = 0
@@ -584,7 +593,7 @@ class AsyncControlPlaneFacade:
             await self._record_command_result(
                 uow,
                 command_id,
-                "close_session",
+                CMD_CLOSE_SESSION,
                 result.model_dump(mode="json"),
                 session_id=session_id,
             )
@@ -600,7 +609,7 @@ class AsyncControlPlaneFacade:
     ) -> SessionLifecycleResult:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
-            cached = await self._get_cached_command_result(uow, command_id, "abort_session")
+            cached = await self._get_cached_command_result(uow, command_id, CMD_ABORT_SESSION)
             if cached is not None:
                 return SessionLifecycleResult.model_validate(cached)
             await uow.session_repo.update_session(
@@ -619,7 +628,7 @@ class AsyncControlPlaneFacade:
             await self._record_command_result(
                 uow,
                 command_id,
-                "abort_session",
+                CMD_ABORT_SESSION,
                 result.model_dump(mode="json"),
                 session_id=session_id,
             )
@@ -735,7 +744,7 @@ class AsyncControlPlaneFacade:
     ) -> KillResultDTO:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
-            operation = f"kill:{scope.value}"
+            operation = kill_command_operation(scope)
             cached = await self._get_cached_command_result(uow, command_id, operation)
             if cached is not None:
                 return KillResultDTO.model_validate(cached)

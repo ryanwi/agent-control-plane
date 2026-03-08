@@ -114,6 +114,9 @@ flowchart LR
 - Use `register_risk_limits_extension_schema(...)` to enforce typed validation for `RiskLimits.custom`.
 - `RiskLimits.validate_extension()` and `RiskLimits.extension_as()` both fail fast when no extension schema is registered.
 - For non-DTO payload transforms, use `apply_inbound_aliases(...)` and `apply_outbound_aliases(...)` with a registered alias profile.
+- Alias helper rule of thumb:
+  - Use profiled DTO helpers (`model_validate_with_profile`, `model_dump_with_profile`) when the payload maps directly to library DTOs.
+  - Use `apply_inbound_aliases`/`apply_outbound_aliases` for boundary payloads that are not modeled as DTOs (for example, app-specific event envelopes).
 
 ## Control-plane lifecycle
 
@@ -281,10 +284,35 @@ For async hosts (FastAPI/async workers), use `AsyncControlPlaneFacade`.
 - approvals (`create_ticket`, `approve_ticket`, `deny_ticket`, `get_pending_tickets`, `expire_timed_out_tickets`)
 - policy creation and recovery helpers (`create_policy`, `recover_stuck_sessions`, `check_stuck_cycles`)
 
+`ControlPlaneFacade` also exposes approval write flows for sync hosts:
+- `create_ticket`
+- `approve_ticket`
+- `deny_ticket`
+
 `SyncControlPlane.kill()` and `SyncControlPlane.kill_all()` return `KillResultDTO`.
 `SyncControlPlane.emit_event()` / `replay_events()` provide first-class sync event operations.
 `SyncControlPlane.emit_app_event()` supports boundary mapping via `AppEventMapper`/`DictEventMapper`.
 `SyncControlPlane.complete_session()` / `abort_session()` return `SessionLifecycleResult`.
+
+## Feed projection consumer loop
+
+`get_state_change_feed(...)` is the incremental projection interface for consumers (agents, workers, read models).
+It returns only `state_bearing=True` events and a cursor you checkpoint after processing.
+
+```python
+cursor = load_checkpoint(default=0)
+while True:
+    page = facade.get_state_change_feed(cursor=cursor, limit=100)
+    if not page.items:
+        break
+    for item in page.items:
+        session_id = item.event.session_id
+        tickets = facade.list_tickets(session_id=session_id, limit=200, offset=0).items
+        proposals = facade.list_proposals(session_id=session_id, limit=200, offset=0).items
+        project_session_state(session_id, tickets=tickets, proposals=proposals)
+        cursor = item.cursor
+        save_checkpoint(cursor)
+```
 
 ## MCP tool-call gateway (v0.4)
 
@@ -363,6 +391,7 @@ class ControlEvent(Base, ControlEventMixin):
 ## Docs and API
 
 - Architecture and lifecycle reference: [docs/architecture.md](docs/architecture.md)
+- Canonical HTTP contract for companion gateways: [docs/openapi/control-plane-v1.yml](docs/openapi/control-plane-v1.yml)
 - Public API surface: [`src/agent_control_plane/__init__.py`](src/agent_control_plane/__init__.py)
 - Domain Examples:
   - Finance: [`examples/finance_agent.py`](examples/finance_agent.py)
@@ -381,6 +410,9 @@ class ControlEvent(Base, ControlEventMixin):
 - Utilities:
   - Audit Trail Replay: [`examples/audit_viewer.py`](examples/audit_viewer.py)
   - MCP Gateway Demo: [`examples/mcp_tool_gateway.py`](examples/mcp_tool_gateway.py)
+
+`agent-control-plane` remains library-first. Host HTTP APIs and dashboards in a companion gateway service that maps this
+contract to `ControlPlaneFacade` / `AsyncControlPlaneFacade`.
 
 ## License
 

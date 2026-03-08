@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+
+- `ControlPlaneFacade` now supports sync approval write operations:
+  - `create_ticket`
+  - `approve_ticket`
+  - `deny_ticket`
+- README now includes a canonical state-feed projection consumer loop using `get_state_change_feed(...)`.
+- Sync facade tests now cover:
+  - approval write flow behavior and command-id idempotency
+  - end-to-end state-feed projection convergence against canonical reads
+  - alias helper usage in a boundary payload workflow
+- Added canonical HTTP API contract at `docs/openapi/control-plane-v1.yml` for companion gateway services and dashboards.
+
+### Changed
+
+- README now points to the OpenAPI contract and clarifies the companion-service pattern for API/UI deployment.
+
 ## [0.3.2] - 2026-03-08
 
 ### Added

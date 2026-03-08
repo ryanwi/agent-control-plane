@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Final, Protocol, TypedDict, runtime_checkable
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -23,6 +23,7 @@ from agent_control_plane.storage.sqlalchemy_sync import SyncSqlAlchemyUnitOfWork
 from agent_control_plane.types.approvals import ApprovalTicketDTO
 from agent_control_plane.types.enums import (
     AbortReason,
+    ApprovalDecisionType,
     ApprovalStatus,
     EventKind,
     ExecutionMode,
@@ -36,6 +37,30 @@ from agent_control_plane.types.ids import AgentId, IdempotencyKey
 from agent_control_plane.types.proposals import ActionProposalDTO
 from agent_control_plane.types.query import PageDTO, SessionHealthDTO, StateChangeDTO, StateChangePageDTO
 from agent_control_plane.types.sessions import SessionState
+
+CMD_OPEN_SESSION: Final[str] = "open_session"
+CMD_CLOSE_SESSION: Final[str] = "close_session"
+CMD_ABORT_SESSION: Final[str] = "abort_session"
+CMD_EMIT: Final[str] = "emit"
+CMD_CREATE_TICKET: Final[str] = "create_ticket"
+CMD_APPROVE_TICKET: Final[str] = "approve_ticket"
+CMD_DENY_TICKET: Final[str] = "deny_ticket"
+
+
+def kill_command_operation(scope: KillSwitchScope) -> str:
+    return f"kill:{scope.value}"
+
+
+class ApprovalTicketUpdateFields(TypedDict, total=False):
+    status: ApprovalStatus
+    decision_type: ApprovalDecisionType
+    decided_by: str
+    decision_reason: str | None
+    decided_at: datetime
+    scope_resource_ids: list[str] | None
+    scope_max_cost: Decimal | None
+    scope_max_count: int | None
+    scope_expiry: datetime | None
 
 
 class KillResultDTO(BaseModel):
@@ -412,7 +437,7 @@ class ControlPlaneFacade:
     ) -> UUID:
         with self._cp.session_scope() as db:
             uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, "open_session")
+            cached = self._get_cached_command_result(uow, command_id, CMD_OPEN_SESSION)
             if cached is not None:
                 raw_session_id = cached.get("session_id")
                 if not isinstance(raw_session_id, str):
@@ -429,7 +454,7 @@ class ControlPlaneFacade:
             self._record_command_result(
                 uow,
                 command_id,
-                "open_session",
+                CMD_OPEN_SESSION,
                 {"session_id": str(session_id)},
                 session_id=session_id,
             )
@@ -446,7 +471,7 @@ class ControlPlaneFacade:
     ) -> SessionLifecycleResult:
         with self._cp.session_scope() as db:
             uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, "close_session")
+            cached = self._get_cached_command_result(uow, command_id, CMD_CLOSE_SESSION)
             if cached is not None:
                 return SessionLifecycleResult.model_validate(cached)
         appended = 0
@@ -460,7 +485,7 @@ class ControlPlaneFacade:
             self._record_command_result(
                 uow,
                 command_id,
-                "close_session",
+                CMD_CLOSE_SESSION,
                 output.model_dump(mode="json"),
                 session_id=session_id,
             )
@@ -476,7 +501,7 @@ class ControlPlaneFacade:
     ) -> SessionLifecycleResult:
         with self._cp.session_scope() as db:
             uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, "abort_session")
+            cached = self._get_cached_command_result(uow, command_id, CMD_ABORT_SESSION)
             if cached is not None:
                 return SessionLifecycleResult.model_validate(cached)
         result = self._cp.abort_session(session_id, reason=reason)
@@ -485,7 +510,7 @@ class ControlPlaneFacade:
             self._record_command_result(
                 uow,
                 command_id,
-                "abort_session",
+                CMD_ABORT_SESSION,
                 result.model_dump(mode="json"),
                 session_id=session_id,
             )
@@ -508,7 +533,7 @@ class ControlPlaneFacade:
     ) -> int:
         with self._cp.session_scope() as db:
             uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, "emit")
+            cached = self._get_cached_command_result(uow, command_id, CMD_EMIT)
             if cached is not None:
                 seq = cached.get("seq")
                 if not isinstance(seq, int):
@@ -531,12 +556,111 @@ class ControlPlaneFacade:
             self._record_command_result(
                 uow,
                 command_id,
-                "emit",
+                CMD_EMIT,
                 {"seq": seq},
                 session_id=session_id,
             )
             uow.commit()
         return seq
+
+    def create_ticket(
+        self,
+        session_id: UUID,
+        proposal_id: UUID,
+        timeout_at: datetime,
+        *,
+        command_id: IdempotencyKey | None = None,
+    ) -> ApprovalTicketDTO:
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            cached = self._get_cached_command_result(uow, command_id, CMD_CREATE_TICKET)
+            if cached is not None:
+                return ApprovalTicketDTO.model_validate(cached)
+            ticket = uow.approval_repo.create_ticket(session_id, proposal_id, timeout_at)
+            self._record_command_result(
+                uow,
+                command_id,
+                CMD_CREATE_TICKET,
+                ticket.model_dump(mode="json"),
+                session_id=session_id,
+            )
+            uow.commit()
+            return ticket
+
+    def approve_ticket(
+        self,
+        ticket_id: UUID,
+        *,
+        decided_by: str = "operator",
+        reason: str | None = None,
+        decision_type: ApprovalDecisionType = ApprovalDecisionType.ALLOW_ONCE,
+        scope_resource_ids: list[str] | None = None,
+        scope_max_cost: Decimal | None = None,
+        scope_max_action_count: int | None = None,
+        scope_expiry: datetime | None = None,
+        command_id: IdempotencyKey | None = None,
+    ) -> ApprovalTicketDTO:
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            cached = self._get_cached_command_result(uow, command_id, CMD_APPROVE_TICKET)
+            if cached is not None:
+                return ApprovalTicketDTO.model_validate(cached)
+            ticket = uow.approval_repo.get_pending_ticket_for_update(ticket_id)
+            fields: ApprovalTicketUpdateFields = {
+                "status": ApprovalStatus.APPROVED,
+                "decision_type": decision_type,
+                "decided_by": decided_by,
+                "decision_reason": reason,
+                "decided_at": datetime.now(UTC),
+            }
+            if decision_type == ApprovalDecisionType.ALLOW_FOR_SESSION:
+                fields["scope_resource_ids"] = scope_resource_ids
+                fields["scope_max_cost"] = scope_max_cost
+                fields["scope_max_count"] = scope_max_action_count
+                fields["scope_expiry"] = scope_expiry
+            uow.approval_repo.update_ticket(ticket_id, **fields)
+            uow.proposal_repo.update_status(ticket.proposal_id, ProposalStatus.APPROVED)
+            result = ticket.model_copy(update=fields)
+            self._record_command_result(
+                uow,
+                command_id,
+                CMD_APPROVE_TICKET,
+                result.model_dump(mode="json"),
+                session_id=ticket.session_id,
+            )
+            uow.commit()
+            return result
+
+    def deny_ticket(
+        self,
+        ticket_id: UUID,
+        *,
+        reason: str = "",
+        command_id: IdempotencyKey | None = None,
+    ) -> ApprovalTicketDTO:
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            cached = self._get_cached_command_result(uow, command_id, CMD_DENY_TICKET)
+            if cached is not None:
+                return ApprovalTicketDTO.model_validate(cached)
+            ticket = uow.approval_repo.get_pending_ticket_for_update(ticket_id)
+            fields: ApprovalTicketUpdateFields = {
+                "status": ApprovalStatus.DENIED,
+                "decision_reason": reason,
+                "decided_at": datetime.now(UTC),
+            }
+            uow.approval_repo.update_ticket(ticket_id, **fields)
+            uow.proposal_repo.update_status(ticket.proposal_id, ProposalStatus.DENIED)
+            result = ticket.model_copy(update=fields)
+            self._record_command_result(
+                uow,
+                command_id,
+                CMD_DENY_TICKET,
+                result.model_dump(mode="json"),
+                session_id=ticket.session_id,
+            )
+            uow.commit()
+            return result
 
     def emit_app(
         self,
@@ -670,7 +794,9 @@ class ControlPlaneFacade:
     ) -> KillResultDTO:
         with self._cp.session_scope() as db:
             uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, f"kill:{KillSwitchScope.SESSION_ABORT.value}")
+            cached = self._get_cached_command_result(
+                uow, command_id, kill_command_operation(KillSwitchScope.SESSION_ABORT)
+            )
             if cached is not None:
                 return KillResultDTO.model_validate(cached)
         result = self._cp.kill(session_id, reason=reason)
@@ -679,7 +805,7 @@ class ControlPlaneFacade:
             self._record_command_result(
                 uow,
                 command_id,
-                f"kill:{KillSwitchScope.SESSION_ABORT.value}",
+                kill_command_operation(KillSwitchScope.SESSION_ABORT),
                 result.model_dump(mode="json"),
                 session_id=session_id,
             )
@@ -689,7 +815,9 @@ class ControlPlaneFacade:
     def kill_system(self, *, reason: str = "System halt", command_id: IdempotencyKey | None = None) -> KillResultDTO:
         with self._cp.session_scope() as db:
             uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, f"kill:{KillSwitchScope.SYSTEM_HALT.value}")
+            cached = self._get_cached_command_result(
+                uow, command_id, kill_command_operation(KillSwitchScope.SYSTEM_HALT)
+            )
             if cached is not None:
                 return KillResultDTO.model_validate(cached)
         result = self._cp.kill_all(reason=reason)
@@ -698,7 +826,7 @@ class ControlPlaneFacade:
             self._record_command_result(
                 uow,
                 command_id,
-                f"kill:{KillSwitchScope.SYSTEM_HALT.value}",
+                kill_command_operation(KillSwitchScope.SYSTEM_HALT),
                 result.model_dump(mode="json"),
             )
             uow.commit()
