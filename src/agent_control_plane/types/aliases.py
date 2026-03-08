@@ -50,6 +50,18 @@ class AliasRegistry:
         cls._profiles.clear()
 
 
+def apply_inbound_aliases(data: Any, profile: str | AliasProfile) -> Any:
+    """Convert aliased payload keys into canonical DTO field names."""
+    resolved = AliasRegistry.get_profile(profile)
+    return _apply_inbound_aliases(data, resolved)
+
+
+def apply_outbound_aliases(data: Any, profile: str | AliasProfile) -> Any:
+    """Convert canonical DTO field names into profile-specific aliases."""
+    resolved = AliasRegistry.get_profile(profile)
+    return _apply_outbound_aliases(data, resolved)
+
+
 def _apply_inbound_aliases(data: Any, profile: AliasProfile) -> Any:
     if isinstance(data, BaseModel):
         data = data.model_dump(mode="python")
@@ -92,8 +104,7 @@ class AliasProfiledModel(BaseModel):
     ) -> Any:
         if profile is None:
             return cls.model_validate(data)
-        resolved = AliasRegistry.get_profile(profile)
-        normalized = _apply_inbound_aliases(data, resolved)
+        normalized = apply_inbound_aliases(data, profile)
         return cls.model_validate(normalized)
 
     def model_dump_with_profile(
@@ -105,8 +116,7 @@ class AliasProfiledModel(BaseModel):
         data = self.model_dump(**kwargs)
         if profile is None:
             return data
-        resolved = AliasRegistry.get_profile(profile)
-        converted = _apply_outbound_aliases(data, resolved)
+        converted = apply_outbound_aliases(data, profile)
         if not isinstance(converted, dict):
             raise TypeError("Profiled dump produced non-dict payload")
         return converted

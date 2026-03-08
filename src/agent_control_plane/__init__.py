@@ -103,7 +103,13 @@ from agent_control_plane.types.agents import (
     AgentMetadata,
     DelegationProposal,
 )
-from agent_control_plane.types.aliases import AliasProfile, AliasRegistry, FieldAliasMap
+from agent_control_plane.types.aliases import (
+    AliasProfile,
+    AliasRegistry,
+    FieldAliasMap,
+    apply_inbound_aliases,
+    apply_outbound_aliases,
+)
 from agent_control_plane.types.approvals import (
     ApprovalDecisionRequest,
     ApprovalScopeDTO,
@@ -242,6 +248,8 @@ __all__ = [
     "ExecutionMode",
     "ExecutionResultDTO",
     "FieldAliasMap",
+    "apply_inbound_aliases",
+    "apply_outbound_aliases",
     "IdempotencyKey",
     "KillResultDTO",
     "KillSwitch",

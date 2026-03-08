@@ -2,7 +2,7 @@
 
 # ruff: noqa: RUF022
 
-from .aliases import AliasProfile, AliasRegistry, FieldAliasMap
+from .aliases import AliasProfile, AliasRegistry, FieldAliasMap, apply_inbound_aliases, apply_outbound_aliases
 from .approvals import ApprovalDecisionRequest, ApprovalScopeDTO, ApprovalTicketDTO
 from .enums import (
     AbortReason,
@@ -67,6 +67,8 @@ __all__ = [
     "ExecutionMode",
     "ExecutionResultDTO",
     "FieldAliasMap",
+    "apply_inbound_aliases",
+    "apply_outbound_aliases",
     "IdempotencyKey",
     "KillSwitchResult",
     "KillSwitchScope",

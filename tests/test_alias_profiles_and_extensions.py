@@ -7,7 +7,13 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from agent_control_plane.engine.policy_engine import PolicyEngine
-from agent_control_plane.types.aliases import AliasProfile, AliasRegistry, FieldAliasMap
+from agent_control_plane.types.aliases import (
+    AliasProfile,
+    AliasRegistry,
+    FieldAliasMap,
+    apply_inbound_aliases,
+    apply_outbound_aliases,
+)
 from agent_control_plane.types.enums import (
     ActionName,
     ActionTier,
@@ -162,3 +168,23 @@ def test_risk_limits_typed_extension_schema():
     bad = RiskLimits(custom={"max_duration": Decimal("10")})
     with pytest.raises(ValidationError):
         bad.validate_extension()
+
+
+def test_risk_limits_validate_extension_raises_without_registered_schema():
+    limits = RiskLimits(custom={"foo": Decimal("1")})
+    with pytest.raises(ValueError, match="No RiskLimits extension schema registered"):
+        limits.validate_extension()
+
+
+def test_alias_apply_helpers_are_usable_outside_dto_methods():
+    profile = AliasProfile(
+        name="domain",
+        aliases=FieldAliasMap(canonical_to_alias={"resource_id": "security_id", "score": "confidence"}),
+    )
+    AliasRegistry.register_profile(profile)
+
+    inbound = apply_inbound_aliases({"security_id": "AAPL", "confidence": "0.9"}, "domain")
+    assert inbound == {"resource_id": "AAPL", "score": "0.9"}
+
+    outbound = apply_outbound_aliases({"resource_id": "MSFT", "score": "0.7"}, profile)
+    assert outbound == {"security_id": "MSFT", "confidence": "0.7"}

@@ -109,6 +109,12 @@ flowchart LR
 - `SessionManager`, `CrashRecovery`, and `TimeoutEscalation` preserve continuity after failures.
 - `McpGateway` governs MCP tool calls before execution (policy, approvals, budget, audit).
 
+## Typed extension and alias hooks
+
+- Use `register_risk_limits_extension_schema(...)` to enforce typed validation for `RiskLimits.custom`.
+- `RiskLimits.validate_extension()` and `RiskLimits.extension_as()` both fail fast when no extension schema is registered.
+- For non-DTO payload transforms, use `apply_inbound_aliases(...)` and `apply_outbound_aliases(...)` with a registered alias profile.
+
 ## Control-plane lifecycle
 
 1. Proposal enters the control plane with agent identity, intent, and resource scope.

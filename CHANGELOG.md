@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-03-08
+
+### Added
+
+- Public alias utility helpers in `agent_control_plane.types`:
+  - `apply_inbound_aliases(data, profile)`
+  - `apply_outbound_aliases(data, profile)`
+- Package root exports now include alias utility helpers for non-DTO mapping workflows.
+
+### Changed
+
+- `RiskLimits.validate_extension()` now fails fast when no extension schema is registered, matching `extension_as()` semantics.
+
+## [0.3.1] - 2026-03-08
+
+### Fixed
+
+- Resolved mypy failures in alias key normalization and profiled dump typing.
+- Resolved MCP gateway action typing mismatch for `ActionValue` vs enum `.value` access.
+
 ## [0.2.0] - 2026-03-07
 
 ### Added

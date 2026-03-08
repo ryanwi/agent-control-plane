@@ -20,8 +20,9 @@ class RiskLimits(AliasProfiledModel):
 
     def validate_extension(self) -> None:
         schema = get_risk_limits_extension_schema()
-        if schema is not None:
-            schema.model_validate(self.custom)
+        if schema is None:
+            raise ValueError("No RiskLimits extension schema registered")
+        schema.model_validate(self.custom)
 
     def extension_as(self, schema: type[BaseModel] | None = None) -> BaseModel:
         resolved_schema = schema or get_risk_limits_extension_schema()
