@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-03-08
+
+### Added
+
+- New agentic-governance DTOs and exports:
+  - checkpoints/rollback (`SessionCheckpointDTO`, `RollbackResultDTO`)
+  - goal/planning (`GoalDTO`, `PlanDTO`, `PlanStepDTO`, `PlanProgressDTO`)
+  - evaluation/guardrails (`EvaluationResultDTO`, `GuardrailDecisionDTO`)
+  - handoff/scorecard (`HandoffResultDTO`, `ControlPlaneScorecardDTO`)
+- New enums for agentic workflows:
+  - `GoalStatus`, `PlanStepStatus`, `EvaluationDecision`, `GuardrailPhase`
+- New sync/async facade primitives:
+  - `create_checkpoint`, `list_checkpoints`, `rollback_to_checkpoint`
+  - `create_goal`, `create_plan`, `start_plan_step`, `complete_plan_step`, `get_plan_progress`
+  - `record_evaluation`, `apply_guardrail`, `request_handoff`, `get_operational_scorecard`
+- New tests validating core agentic primitive flows:
+  - `tests/test_agentic_primitives.py`
+
 ## [0.5.3] - 2026-03-08
 
 ### Added

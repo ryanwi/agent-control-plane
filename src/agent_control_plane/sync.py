@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Final, Protocol, TypedDict, runtime_checkable
 from uuid import UUID
@@ -20,14 +20,30 @@ from agent_control_plane.models.registry import (
     registry_scope,
 )
 from agent_control_plane.storage.sqlalchemy_sync import SyncSqlAlchemyUnitOfWork
+from agent_control_plane.types.agentic import (
+    ControlPlaneScorecardDTO,
+    EvaluationResultDTO,
+    GoalDTO,
+    GuardrailDecisionDTO,
+    HandoffResultDTO,
+    PlanDTO,
+    PlanProgressDTO,
+    PlanStepDTO,
+    RollbackResultDTO,
+    SessionCheckpointDTO,
+)
 from agent_control_plane.types.approvals import ApprovalTicketDTO
 from agent_control_plane.types.enums import (
     AbortReason,
     ApprovalDecisionType,
     ApprovalStatus,
+    EvaluationDecision,
     EventKind,
     ExecutionMode,
+    GoalStatus,
+    GuardrailPhase,
     KillSwitchScope,
+    PlanStepStatus,
     ProposalStatus,
     SessionStatus,
     UnknownAppEventPolicy,
@@ -49,6 +65,14 @@ CMD_DENY_TICKET: Final[str] = "deny_ticket"
 
 def kill_command_operation(scope: KillSwitchScope) -> str:
     return f"kill:{scope.value}"
+
+
+def guardrail_event_kind(phase: GuardrailPhase) -> EventKind:
+    if phase == GuardrailPhase.INPUT:
+        return EventKind.GUARDRAIL_INPUT
+    if phase == GuardrailPhase.TOOL:
+        return EventKind.GUARDRAIL_TOOL
+    return EventKind.GUARDRAIL_OUTPUT
 
 
 class ApprovalTicketUpdateFields(TypedDict, total=False):
@@ -775,6 +799,315 @@ class ControlPlaneFacade:
             sessions_with_active_cycles=sessions_with_cycles,
             pending_tickets=len(pending),
         )
+
+    def create_checkpoint(
+        self,
+        session_id: UUID,
+        *,
+        label: str,
+        metadata: dict[str, object] | None = None,
+        created_by: str = "system",
+        command_id: IdempotencyKey | None = None,
+    ) -> SessionCheckpointDTO:
+        operation = "checkpoint:create"
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            cached = self._get_cached_command_result(uow, command_id, operation)
+            if cached is not None:
+                return SessionCheckpointDTO.model_validate(cached)
+            last = uow.event_repo.get_last_event(session_id)
+            cp = SessionCheckpointDTO(
+                session_id=session_id,
+                event_seq=last.seq if last is not None else 0,
+                label=label,
+                metadata=dict(metadata or {}),
+                created_by=created_by,
+            )
+            uow.event_repo.append(
+                session_id,
+                EventKind.CHECKPOINT_CREATED,
+                cp.model_dump(mode="json"),
+                state_bearing=True,
+            )
+            self._record_command_result(
+                uow,
+                command_id,
+                operation,
+                cp.model_dump(mode="json"),
+                session_id=session_id,
+            )
+            uow.commit()
+            return cp
+
+    def list_checkpoints(self, session_id: UUID, *, limit: int = 50, offset: int = 0) -> PageDTO[SessionCheckpointDTO]:
+        events = self._cp.replay_events(session_id, after_seq=0, limit=10_000)
+        rows = [
+            SessionCheckpointDTO.model_validate(e.payload)
+            for e in events
+            if e.event_kind == EventKind.CHECKPOINT_CREATED and isinstance(e.payload, dict)
+        ]
+        sliced = rows[offset : offset + limit + 1]
+        has_more = len(sliced) > limit
+        items = sliced[:limit]
+        return PageDTO(items=items, next_offset=(offset + limit if has_more else None))
+
+    def rollback_to_checkpoint(
+        self,
+        session_id: UUID,
+        checkpoint_id: UUID,
+        *,
+        reason: str,
+        command_id: IdempotencyKey | None = None,
+    ) -> RollbackResultDTO:
+        operation = "checkpoint:rollback"
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            cached = self._get_cached_command_result(uow, command_id, operation)
+            if cached is not None:
+                return RollbackResultDTO.model_validate(cached)
+            cps = self.list_checkpoints(session_id, limit=10_000, offset=0).items
+            target = next((cp for cp in cps if cp.id == checkpoint_id), None)
+            if target is None:
+                raise ValueError(f"Checkpoint not found: {checkpoint_id}")
+            last = uow.event_repo.get_last_event(session_id)
+            from_seq = last.seq if last is not None else 0
+            uow.event_repo.append(
+                session_id,
+                EventKind.ROLLBACK_REQUESTED,
+                {"checkpoint_id": str(checkpoint_id), "reason": reason},
+                state_bearing=True,
+            )
+            result = RollbackResultDTO(
+                session_id=session_id,
+                from_seq=from_seq,
+                to_seq=target.event_seq,
+                restored_fields=["session_state", "proposal_state", "approval_state"],
+                events_appended=2,
+            )
+            uow.event_repo.append(
+                session_id,
+                EventKind.ROLLBACK_COMPLETED,
+                result.model_dump(mode="json"),
+                state_bearing=True,
+            )
+            self._record_command_result(
+                uow,
+                command_id,
+                operation,
+                result.model_dump(mode="json"),
+                session_id=session_id,
+            )
+            uow.commit()
+            return result
+
+    def create_goal(
+        self,
+        session_id: UUID,
+        *,
+        name: str,
+        description: str = "",
+        metadata: dict[str, object] | None = None,
+    ) -> GoalDTO:
+        goal = GoalDTO(
+            session_id=session_id,
+            name=name,
+            description=description,
+            status=GoalStatus.ACTIVE,
+            metadata=dict(metadata or {}),
+        )
+        self._cp.emit_event(session_id, EventKind.GOAL_CREATED, goal.model_dump(mode="json"), state_bearing=True)
+        return goal
+
+    def create_plan(self, session_id: UUID, goal_id: UUID, *, title: str, steps: list[str]) -> PlanDTO:
+        plan_steps = [PlanStepDTO(plan_id=UUID(int=0), step_index=i, title=step) for i, step in enumerate(steps)]
+        plan = PlanDTO(session_id=session_id, goal_id=goal_id, title=title, steps=plan_steps)
+        plan.steps = [step.model_copy(update={"plan_id": plan.id}) for step in plan.steps]
+        self._cp.emit_event(session_id, EventKind.PLAN_CREATED, plan.model_dump(mode="json"), state_bearing=True)
+        return plan
+
+    def start_plan_step(self, session_id: UUID, plan_id: UUID, *, step_index: int) -> PlanStepDTO:
+        step = PlanStepDTO(
+            plan_id=plan_id,
+            step_index=step_index,
+            title=f"step-{step_index}",
+            status=PlanStepStatus.RUNNING,
+        )
+        self._cp.emit_event(session_id, EventKind.PLAN_STEP_STARTED, step.model_dump(mode="json"), state_bearing=True)
+        return step
+
+    def complete_plan_step(
+        self, session_id: UUID, plan_id: UUID, *, step_index: int, notes: str | None = None
+    ) -> PlanStepDTO:
+        step = PlanStepDTO(
+            plan_id=plan_id,
+            step_index=step_index,
+            title=f"step-{step_index}",
+            status=PlanStepStatus.SUCCEEDED,
+            notes=notes,
+        )
+        self._cp.emit_event(session_id, EventKind.PLAN_STEP_COMPLETED, step.model_dump(mode="json"), state_bearing=True)
+        return step
+
+    def get_plan_progress(self, session_id: UUID, goal_id: UUID) -> PlanProgressDTO:
+        events = self._cp.replay_events(session_id, after_seq=0, limit=10_000)
+        goal = next(
+            (
+                GoalDTO.model_validate(e.payload)
+                for e in events
+                if e.event_kind == EventKind.GOAL_CREATED
+                and isinstance(e.payload, dict)
+                and e.payload.get("id") == str(goal_id)
+            ),
+            None,
+        )
+        if goal is None:
+            raise ValueError(f"Goal not found: {goal_id}")
+        plan = next(
+            (
+                PlanDTO.model_validate(e.payload)
+                for e in events
+                if e.event_kind == EventKind.PLAN_CREATED
+                and isinstance(e.payload, dict)
+                and e.payload.get("goal_id") == str(goal_id)
+            ),
+            None,
+        )
+        completed_steps = 0
+        failed_steps = 0
+        running_steps = 0
+        if plan is not None:
+            total_steps = len(plan.steps)
+            for e in events:
+                if not isinstance(e.payload, dict):
+                    continue
+                if e.payload.get("plan_id") != str(plan.id):
+                    continue
+                if e.event_kind == EventKind.PLAN_STEP_COMPLETED:
+                    completed_steps += 1
+                elif e.event_kind == EventKind.PLAN_STEP_FAILED:
+                    failed_steps += 1
+                elif e.event_kind == EventKind.PLAN_STEP_STARTED:
+                    running_steps += 1
+        else:
+            total_steps = 0
+        return PlanProgressDTO(
+            goal=goal,
+            plan=plan,
+            total_steps=total_steps,
+            completed_steps=completed_steps,
+            failed_steps=failed_steps,
+            running_steps=running_steps,
+        )
+
+    def record_evaluation(
+        self,
+        session_id: UUID,
+        *,
+        operation: str,
+        decision: EvaluationDecision,
+        score: float,
+        reasons: list[str],
+        actions: list[str] | None = None,
+    ) -> EvaluationResultDTO:
+        result = EvaluationResultDTO(
+            session_id=session_id,
+            operation=operation,
+            decision=decision,
+            score=score,
+            reasons=reasons,
+            actions=list(actions or []),
+        )
+        event_kind = (
+            EventKind.EVALUATION_PASSED if decision == EvaluationDecision.PASS else EventKind.EVALUATION_BLOCKED
+        )
+        self._cp.emit_event(session_id, event_kind, result.model_dump(mode="json"), state_bearing=False)
+        return result
+
+    def apply_guardrail(
+        self,
+        session_id: UUID,
+        *,
+        phase: GuardrailPhase,
+        allow: bool,
+        policy_code: str,
+        reason: str,
+        metadata: dict[str, object] | None = None,
+    ) -> GuardrailDecisionDTO:
+        result = GuardrailDecisionDTO(
+            session_id=session_id,
+            phase=phase,
+            allow=allow,
+            policy_code=policy_code,
+            reason=reason,
+            metadata=dict(metadata or {}),
+        )
+        self._cp.emit_event(
+            session_id,
+            guardrail_event_kind(phase),
+            result.model_dump(mode="json"),
+            state_bearing=False,
+        )
+        return result
+
+    def request_handoff(
+        self,
+        session_id: UUID,
+        *,
+        source_agent_id: str,
+        target_agent_id: str,
+        allowed_actions: list[str],
+        accepted: bool = True,
+        lease_seconds: int = 900,
+        metadata: dict[str, object] | None = None,
+    ) -> HandoffResultDTO:
+        expires_at = datetime.now(UTC) + timedelta(seconds=lease_seconds)
+        result = HandoffResultDTO(
+            session_id=session_id,
+            source_agent_id=source_agent_id,
+            target_agent_id=target_agent_id,
+            allowed_actions=allowed_actions,
+            accepted=accepted,
+            lease_expires_at=expires_at,
+            metadata=dict(metadata or {}),
+        )
+        event_kind = EventKind.HANDOFF_ACCEPTED if accepted else EventKind.HANDOFF_REJECTED
+        self._cp.emit_event(session_id, event_kind, result.model_dump(mode="json"), state_bearing=False)
+        return result
+
+    def get_operational_scorecard(  # noqa: C901
+        self,
+        *,
+        session_id: UUID | None = None,
+        window_start: datetime | None = None,
+        window_end: datetime | None = None,
+    ) -> ControlPlaneScorecardDTO:
+        sessions = [session_id] if session_id is not None else [s.id for s in self._cp.list_sessions(limit=10_000)]
+        scorecard = ControlPlaneScorecardDTO()
+        for sid in sessions:
+            for event in self._cp.replay_events(sid, after_seq=0, limit=10_000):
+                if window_start and event.created_at < window_start:
+                    continue
+                if window_end and event.created_at > window_end:
+                    continue
+                scorecard.total_events += 1
+                if event.event_kind == EventKind.CHECKPOINT_CREATED:
+                    scorecard.checkpoints_created += 1
+                elif event.event_kind == EventKind.ROLLBACK_COMPLETED:
+                    scorecard.rollbacks_completed += 1
+                elif event.event_kind == EventKind.EVALUATION_BLOCKED:
+                    scorecard.evaluations_blocked += 1
+                elif event.event_kind in (
+                    EventKind.GUARDRAIL_INPUT,
+                    EventKind.GUARDRAIL_TOOL,
+                    EventKind.GUARDRAIL_OUTPUT,
+                ):
+                    if isinstance(event.payload, dict) and event.payload.get("allow") is False:
+                        scorecard.guardrail_denies += 1
+                elif event.event_kind == EventKind.HANDOFF_ACCEPTED:
+                    scorecard.handoffs_accepted += 1
+                elif event.event_kind == EventKind.HANDOFF_REJECTED:
+                    scorecard.handoffs_rejected += 1
+        return scorecard
 
     def check_budget(self, session_id: UUID, *, cost: Decimal = Decimal("0"), action_count: int = 1) -> bool:
         return self._cp.check_budget(session_id, cost=cost, action_count=action_count)

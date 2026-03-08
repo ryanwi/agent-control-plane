@@ -129,6 +129,25 @@ class EventKind(StrEnum):
     SESSION_ABORTED = "session_aborted"
     KILL_SWITCH_TRIGGERED = "kill_switch_triggered"
     BUDGET_EXHAUSTED = "budget_exhausted"
+    CHECKPOINT_CREATED = "checkpoint_created"
+    ROLLBACK_REQUESTED = "rollback_requested"
+    ROLLBACK_COMPLETED = "rollback_completed"
+    ROLLBACK_FAILED = "rollback_failed"
+    GOAL_CREATED = "goal_created"
+    PLAN_CREATED = "plan_created"
+    PLAN_STEP_STARTED = "plan_step_started"
+    PLAN_STEP_COMPLETED = "plan_step_completed"
+    PLAN_STEP_FAILED = "plan_step_failed"
+    EVALUATION_REQUESTED = "evaluation_requested"
+    EVALUATION_PASSED = "evaluation_passed"
+    EVALUATION_BLOCKED = "evaluation_blocked"
+    GUARDRAIL_INPUT = "guardrail_input"
+    GUARDRAIL_TOOL = "guardrail_tool"
+    GUARDRAIL_OUTPUT = "guardrail_output"
+    HANDOFF_REQUESTED = "handoff_requested"
+    HANDOFF_ACCEPTED = "handoff_accepted"
+    HANDOFF_REJECTED = "handoff_rejected"
+    LEASE_EXPIRED = "lease_expired"
 
 
 class ProposalStatus(StrEnum):
@@ -271,3 +290,32 @@ class McpEventName(StrEnum):
     TOOL_CALL_APPROVAL_REQUIRED = "tool_call_approval_required"
     TOOL_CALL_EXECUTED = "tool_call_executed"
     TOOL_CALL_FAILED = "tool_call_failed"
+
+
+class GoalStatus(StrEnum):
+    CREATED = "created"
+    ACTIVE = "active"
+    BLOCKED = "blocked"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    ABORTED = "aborted"
+
+
+class PlanStepStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+    BLOCKED = "blocked"
+
+
+class EvaluationDecision(StrEnum):
+    PASS = "pass"
+    BLOCK = "block"
+
+
+class GuardrailPhase(StrEnum):
+    INPUT = "input"
+    TOOL = "tool"
+    OUTPUT = "output"

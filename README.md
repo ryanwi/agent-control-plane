@@ -289,6 +289,12 @@ For async hosts (FastAPI/async workers), use `AsyncControlPlaneFacade`.
 - `approve_ticket`
 - `deny_ticket`
 
+Agentic governance primitives are also available on sync/async facades:
+- checkpoint/rollback (`create_checkpoint`, `list_checkpoints`, `rollback_to_checkpoint`)
+- goal/planning (`create_goal`, `create_plan`, `start_plan_step`, `complete_plan_step`, `get_plan_progress`)
+- evaluation/guardrails/handoff (`record_evaluation`, `apply_guardrail`, `request_handoff`)
+- operational scorecards (`get_operational_scorecard`)
+
 `SyncControlPlane.kill()` and `SyncControlPlane.kill_all()` return `KillResultDTO`.
 `SyncControlPlane.emit_event()` / `replay_events()` provide first-class sync event operations.
 `SyncControlPlane.emit_app_event()` supports boundary mapping via `AppEventMapper`/`DictEventMapper`.
