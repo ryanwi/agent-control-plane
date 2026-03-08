@@ -36,6 +36,7 @@ from agent_control_plane.engine.policy_engine import (
 )
 from agent_control_plane.engine.router import ProposalRouter, RoutingDecision
 from agent_control_plane.engine.session_manager import SessionManager
+from agent_control_plane.idempotency import proposal_command_id
 from agent_control_plane.mcp import (
     ApprovalRequiredError,
     BudgetDeniedError,
@@ -332,6 +333,7 @@ __all__ = [
     "ProposalRepository",
     "ProposalRouter",
     "ProposalStatus",
+    "proposal_command_id",
     "ReferenceBase",
     "RequestFrame",
     "ResourceId",

@@ -274,6 +274,12 @@ def test_control_plane_facade_create_proposal_idempotency(tmp_path: Path):
     replayed = facade.create_proposal(proposal, command_id="sync-create-proposal-1")
     assert replayed.id == created.id
 
+    second = facade.create_proposal(
+        proposal.model_copy(update={"id": uuid4(), "resource_id": "sync-resource-2"}),
+        command_id="sync-create-proposal-2",
+    )
+    assert second.id != created.id
+
     loaded = facade.get_proposal(created.id)
     assert loaded is not None
     assert loaded.id == created.id

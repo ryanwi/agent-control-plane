@@ -324,6 +324,20 @@ For async hosts (FastAPI/async workers), use `AsyncControlPlaneFacade`.
 - `approve_ticket`
 - `deny_ticket`
 
+For retry-safe proposal inserts, pass a stable `command_id`:
+
+```python
+from agent_control_plane import proposal_command_id
+
+command_id = proposal_command_id(
+    session_id=proposal.session_id,
+    resource_id=proposal.resource_id,
+    resource_type=proposal.resource_type,
+    decision=proposal.decision,
+)
+created = facade.create_proposal(proposal, command_id=command_id)
+```
+
 Agentic governance primitives are also available on sync/async facades:
 - checkpoint/rollback (`create_checkpoint`, `list_checkpoints`, `rollback_to_checkpoint`)
 - goal/planning (`create_goal`, `create_plan`, `start_plan_step`, `complete_plan_step`, `get_plan_progress`)
@@ -344,6 +358,9 @@ Benchmark and experimentation helpers are available for closed-loop policy tunin
 Policy and telemetry integration helpers:
 - policy protocols (`EvaluatorPolicy`, `GuardrailPolicy`) with defaults (`ThresholdEvaluatorPolicy`, `PassThroughGuardrailPolicy`)
 - telemetry bridges (`export_event`, `export_scorecard`) for OTel-compatible tracer/meter adapters
+- experimental capability contracts for deployment/runtime composition:
+  - `agent_control_plane.experimental.capabilities`
+  - builder service bundles expose `get_capabilities()` for detection only (non-authoritative; no enforcement)
 
 `SyncControlPlane.kill()` and `SyncControlPlane.kill_all()` return `KillResultDTO`.
 `SyncControlPlane.emit_event()` / `replay_events()` provide first-class sync event operations.
@@ -447,6 +464,7 @@ class ControlEvent(Base, ControlEventMixin):
 ## Docs and API
 
 - Architecture and lifecycle reference: [docs/architecture.md](docs/architecture.md)
+- Compatibility posture (pre-1.0): [docs/compatibility.md](docs/compatibility.md)
 - Canonical HTTP contract for companion gateways: [docs/openapi/control-plane-v1.yml](docs/openapi/control-plane-v1.yml)
 - Public API surface: [`src/agent_control_plane/__init__.py`](src/agent_control_plane/__init__.py)
 - Domain Examples:

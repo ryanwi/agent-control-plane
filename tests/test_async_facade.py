@@ -221,6 +221,12 @@ async def test_async_facade_create_proposal_idempotency(tmp_path: Path):
     replayed = await facade.create_proposal(proposal, command_id="async-create-proposal-1")
     assert replayed.id == created.id
 
+    second = await facade.create_proposal(
+        proposal.model_copy(update={"id": uuid4(), "resource_id": "async-resource-2"}),
+        command_id="async-create-proposal-2",
+    )
+    assert second.id != created.id
+
     loaded = await facade.get_proposal(created.id)
     assert loaded is not None
     assert loaded.id == created.id

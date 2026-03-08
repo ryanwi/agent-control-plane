@@ -8,10 +8,18 @@
   - `ControlPlaneFacade.create_proposal(proposal, command_id=...)`
   - `AsyncControlPlaneFacade.create_proposal(proposal, command_id=...)`
 - Proposal repository protocol/storage support for `create_proposal(...)` in sync and async SQLAlchemy backends.
+- New deterministic helper for proposal command IDs:
+  - `proposal_command_id(session_id, resource_id, resource_type, decision, ...)`
+- Experimental capability contracts in `agent_control_plane.experimental.capabilities`:
+  - `CapabilityProvider`, `CapabilitySet`, `CapabilityDescriptor`
+  - `ControlPlaneCapability`, `StaticCapabilityProvider`, mapping helpers
+- Builder composition helpers now accept optional `capability_provider` and expose `get_capabilities()` on service bundles.
+- New compatibility reference: `docs/compatibility.md`.
 
 ### Changed
 
 - Documentation now includes an explicit dev/prod DB guide (SQLite vs Postgres), reliability checklist, and expanded operations runbook for deployment and incident response.
+- Architecture/README now describe capability detection as a composition-time extension point (informational only, non-authoritative for governance enforcement).
 
 ## [0.7.0] - 2026-03-08
 
