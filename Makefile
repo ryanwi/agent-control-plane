@@ -25,7 +25,7 @@ docs-drift:
 	bash scripts/docs_drift_check.sh
 
 openapi-check:
-	$(PYTHON) scripts/validate_openapi.py
+	uv run --extra dev python scripts/validate_openapi.py
 
 test:
 	$(PYTEST) -q
