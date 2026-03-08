@@ -240,3 +240,10 @@ Compatibility posture and migration guidance are documented in [compatibility.md
 - Avoid swallowing `state_bearing=True` persistence errors; those failures must block the decision path.
 - Avoid creating/using `EventKind` strings outside enum values.
 - Avoid mutating policy snapshot data after session start; policies are designed as immutable execution anchors.
+
+## 11) Design decisions
+
+- ADR index: [docs/adr/README.md](adr/README.md)
+- Capability detection non-enforcement: [0007](adr/0007-experimental-capabilities-informational-only.md)
+- Projection strategy: [0006](adr/0006-projection-vs-canonical-reads.md)
+- Idempotency model: [0004](adr/0004-idempotency-model.md)

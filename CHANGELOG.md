@@ -29,6 +29,7 @@
 
 - Documentation now includes an explicit dev/prod DB guide (SQLite vs Postgres), reliability checklist, and expanded operations runbook for deployment and incident response.
 - Architecture/README now describe capability detection as a composition-time extension point (informational only, non-authoritative for governance enforcement).
+- ADR guidance is now documented in `docs/adr/README.md` for decision context and change rationale.
 
 ## [0.7.0] - 2026-03-08
 
