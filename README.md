@@ -410,6 +410,7 @@ class ControlEvent(Base, ControlEventMixin):
 - Utilities:
   - Audit Trail Replay: [`examples/audit_viewer.py`](examples/audit_viewer.py)
   - MCP Gateway Demo: [`examples/mcp_tool_gateway.py`](examples/mcp_tool_gateway.py)
+  - Companion REST+Dashboard Starter: [`examples/companion_gateway`](examples/companion_gateway)
 
 `agent-control-plane` remains library-first. Host HTTP APIs and dashboards in a companion gateway service that maps this
 contract to `ControlPlaneFacade` / `AsyncControlPlaneFacade`.

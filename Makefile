@@ -5,12 +5,13 @@ MYPY ?= uv run mypy
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync docs-drift test lint format typecheck check
+.PHONY: help sync docs-drift openapi-check test lint format typecheck check
 
 help:
 	@printf "Targets:\n"
 	@printf "  make sync       - install/update dependencies (uv sync --extra dev)\n"
 	@printf "  make docs-drift - verify AGENTS.md / CLAUDE.md / GEMINI.md stay aligned\n"
+	@printf "  make openapi-check - validate OpenAPI contract files\n"
 	@printf "  make test       - run test suite\n"
 	@printf "  make lint       - run ruff checks\n"
 	@printf "  make format     - run ruff formatter\n"
@@ -22,6 +23,9 @@ sync:
 
 docs-drift:
 	bash scripts/docs_drift_check.sh
+
+openapi-check:
+	$(PYTHON) scripts/validate_openapi.py
 
 test:
 	$(PYTEST) -q
@@ -35,4 +39,4 @@ format:
 typecheck:
 	$(MYPY) src
 
-check: docs-drift lint typecheck test
+check: docs-drift openapi-check lint typecheck test

@@ -77,5 +77,8 @@ jobs:
       - name: Ruff lint
         run: ruff check src/ tests/ examples/
 
+      - name: OpenAPI spec validation
+        run: make openapi-check
+
       - name: Pre-commit hooks
         run: pre-commit run --all-files

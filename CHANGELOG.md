@@ -16,10 +16,15 @@
   - end-to-end state-feed projection convergence against canonical reads
   - alias helper usage in a boundary payload workflow
 - Added canonical HTTP API contract at `docs/openapi/control-plane-v1.yml` for companion gateway services and dashboards.
+- Added companion gateway starter at `examples/companion_gateway` with:
+  - REST endpoints mapped to facade/query operations
+  - minimal embedded dashboard endpoint (`/dashboard`)
+- Added OpenAPI contract response tests for the companion gateway against `docs/openapi/control-plane-v1.yml`.
 
 ### Changed
 
 - README now points to the OpenAPI contract and clarifies the companion-service pattern for API/UI deployment.
+- CI now validates OpenAPI specs via `make openapi-check`.
 
 ## [0.3.2] - 2026-03-08
 
