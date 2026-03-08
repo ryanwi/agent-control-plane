@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from agent_control_plane.types.enums import ActionName, ActionTier, RiskLevel, RoutingResolutionStep
+from agent_control_plane.types.enums import ActionName, ActionTier, ActionValue, RiskLevel, RoutingResolutionStep
 from agent_control_plane.types.policies import PolicySnapshotDTO
 from agent_control_plane.types.proposals import ActionProposalDTO
 
@@ -59,8 +59,9 @@ class UnknownActionHandler(BlockedActionHandler):
         risk_level: RiskLevel,
         tier: ActionTier,
     ) -> tuple[str, RoutingResolutionStep]:
+        action_value = proposal.decision.value if isinstance(proposal.decision, ActionName) else proposal.decision
         return (
-            f"Unknown action blocked by policy (action={proposal.decision.value})",
+            f"Unknown action blocked by policy (action={action_value})",
             RoutingResolutionStep.EXPLICIT_ASSIGNMENT,
         )
 
@@ -149,7 +150,7 @@ class ActionPolicyRegistry:
     def __init__(self, policy: PolicySnapshotDTO) -> None:
         self._unknown_handler = UnknownActionHandler()
         self._default_handler = DefaultRiskBasedHandler()
-        self._handlers_by_action: dict[ActionName, ActionPolicyHandler] = {}
+        self._handlers_by_action: dict[ActionValue, ActionPolicyHandler] = {}
 
         for action in policy.action_tiers.auto_approve:
             self._handlers_by_action[action] = AutoApproveActionHandler()
@@ -158,7 +159,7 @@ class ActionPolicyRegistry:
         for action in policy.action_tiers.blocked:
             self._handlers_by_action[action] = BlockedActionHandler()
 
-    def resolve(self, action: ActionName) -> ActionPolicyHandler:
+    def resolve(self, action: ActionValue) -> ActionPolicyHandler:
         if action == ActionName.UNKNOWN:
             return self._unknown_handler
         return self._handlers_by_action.get(action, self._default_handler)

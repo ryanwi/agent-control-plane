@@ -4,13 +4,14 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
+from .aliases import AliasProfiledModel
 from .enums import AbortReason, AssetScope, ExecutionMode, KillSwitchScope, SessionStatus
 from .ids import AgentId
 
 
-class SessionCreate(BaseModel):
+class SessionCreate(AliasProfiledModel):
     """Request to create a new control session."""
 
     session_name: str
@@ -22,7 +23,7 @@ class SessionCreate(BaseModel):
     dry_run_session_id: UUID | None = None
 
 
-class SessionState(BaseModel):
+class SessionState(AliasProfiledModel):
     """Current state of a control session."""
 
     id: UUID
@@ -50,7 +51,7 @@ class SessionState(BaseModel):
     updated_at: datetime | None = None
 
 
-class BudgetInfo(BaseModel):
+class BudgetInfo(AliasProfiledModel):
     """Budget status for a control session."""
 
     remaining_cost: Decimal
@@ -61,7 +62,7 @@ class BudgetInfo(BaseModel):
     max_count: int
 
 
-class SessionSummary(BaseModel):
+class SessionSummary(AliasProfiledModel):
     """Lightweight session summary for list views."""
 
     id: UUID
@@ -75,7 +76,7 @@ class SessionSummary(BaseModel):
     created_at: datetime
 
 
-class KillSwitchResult(BaseModel):
+class KillSwitchResult(AliasProfiledModel):
     """Typed kill-switch operation result."""
 
     scope: KillSwitchScope

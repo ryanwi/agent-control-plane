@@ -6,17 +6,22 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
-from .enums import ActionName
+from .enums import ActionValue, parse_action_name
 from .ids import AgentId
 
 
 class AgentCapability(BaseModel):
     """A specific action an agent is qualified to perform."""
 
-    action: ActionName
+    action: ActionValue
     constraints: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("action", mode="before")
+    @classmethod
+    def _parse_action(cls, value: ActionValue) -> ActionValue:
+        return parse_action_name(value)
 
 
 class AgentMetadata(BaseModel):

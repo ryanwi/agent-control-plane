@@ -6,18 +6,31 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
-from .enums import ActionName, AssetScope, ExecutionMode, RiskLevel, parse_action_name
+from .aliases import AliasProfiledModel
+from .enums import ActionValue, AssetScope, ExecutionMode, RiskLevel, parse_action_name
+from .extensions import get_risk_limits_extension_schema
 
 
-class RiskLimits(BaseModel):
+class RiskLimits(AliasProfiledModel):
     """Risk limit thresholds for a policy."""
 
     max_risk_score: Decimal = Decimal("10000")
     max_weight_pct: Decimal = Decimal("5.0")
     custom: dict[str, Decimal] = Field(default_factory=dict)
 
+    def validate_extension(self) -> None:
+        schema = get_risk_limits_extension_schema()
+        if schema is not None:
+            schema.model_validate(self.custom)
 
-class AutoApproveConditions(BaseModel):
+    def extension_as(self, schema: type[BaseModel] | None = None) -> BaseModel:
+        resolved_schema = schema or get_risk_limits_extension_schema()
+        if resolved_schema is None:
+            raise ValueError("No RiskLimits extension schema registered")
+        return resolved_schema.model_validate(self.custom)
+
+
+class AutoApproveConditions(AliasProfiledModel):
     """Conditions under which proposals can be auto-approved."""
 
     max_risk_tier: RiskLevel = RiskLevel.LOW
@@ -33,21 +46,21 @@ class AutoApproveConditions(BaseModel):
         return RiskLevel(value.strip().lower())
 
 
-class ActionTiers(BaseModel):
+class ActionTiers(AliasProfiledModel):
     """Action classification tiers."""
 
-    blocked: list[ActionName] = Field(default_factory=list)
-    always_approve: list[ActionName] = Field(default_factory=list)
-    auto_approve: list[ActionName] = Field(default_factory=list)
-    unrestricted: list[ActionName] = Field(default_factory=list)
+    blocked: list[ActionValue] = Field(default_factory=list)
+    always_approve: list[ActionValue] = Field(default_factory=list)
+    auto_approve: list[ActionValue] = Field(default_factory=list)
+    unrestricted: list[ActionValue] = Field(default_factory=list)
 
     @field_validator("blocked", "always_approve", "auto_approve", "unrestricted", mode="before")
     @classmethod
-    def _parse_actions(cls, value: list[ActionName | str]) -> list[ActionName]:
+    def _parse_actions(cls, value: list[ActionValue]) -> list[ActionValue]:
         return [parse_action_name(item) for item in value]
 
 
-class PolicySnapshotDTO(BaseModel):
+class PolicySnapshotDTO(AliasProfiledModel):
     """Immutable policy configuration frozen at session start."""
 
     id: UUID = Field(default_factory=uuid4)

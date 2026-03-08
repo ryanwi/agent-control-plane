@@ -7,18 +7,20 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
+from .aliases import AliasProfiledModel
 from .enums import (
-    ActionName,
     ActionTier,
+    ActionValue,
     ExecutionIntentStatus,
     ProposalStatus,
     RiskLevel,
     parse_action_name,
 )
+from .extensions import get_metadata_schema
 from .ids import AgentId, ResourceId
 
 
-class ActionProposalDTO(BaseModel):
+class ActionProposalDTO(AliasProfiledModel):
     """An action proposal generated from an agent recommendation."""
 
     id: UUID = Field(default_factory=uuid4)
@@ -29,7 +31,7 @@ class ActionProposalDTO(BaseModel):
     # Proposal content
     resource_id: ResourceId
     resource_type: str
-    decision: ActionName
+    decision: ActionValue
     reasoning: str
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -48,11 +50,22 @@ class ActionProposalDTO(BaseModel):
 
     @field_validator("decision", mode="before")
     @classmethod
-    def _parse_decision(cls, value: ActionName | str) -> ActionName:
+    def _parse_decision(cls, value: ActionValue) -> ActionValue:
         return parse_action_name(value)
 
+    def validate_metadata(self) -> None:
+        schema = get_metadata_schema(type(self))
+        if schema is not None:
+            schema.model_validate(self.metadata)
 
-class RiskDecisionDTO(BaseModel):
+    def metadata_as(self, schema: type[BaseModel] | None = None) -> BaseModel:
+        resolved_schema = schema or get_metadata_schema(type(self))
+        if resolved_schema is None:
+            raise ValueError(f"No metadata schema registered for {type(self).__name__}")
+        return resolved_schema.model_validate(self.metadata)
+
+
+class RiskDecisionDTO(AliasProfiledModel):
     """Risk assessment result for an action proposal."""
 
     id: UUID = Field(default_factory=uuid4)
@@ -69,7 +82,7 @@ class RiskDecisionDTO(BaseModel):
     assessed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class ExecutionIntentDTO(BaseModel):
+class ExecutionIntentDTO(AliasProfiledModel):
     """Intent to execute an approved proposal."""
 
     id: UUID = Field(default_factory=uuid4)
@@ -84,7 +97,7 @@ class ExecutionIntentDTO(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class ExecutionResultDTO(BaseModel):
+class ExecutionResultDTO(AliasProfiledModel):
     """Outcome of executing an action."""
 
     id: UUID = Field(default_factory=uuid4)

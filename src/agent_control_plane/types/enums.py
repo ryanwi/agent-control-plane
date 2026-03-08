@@ -1,6 +1,7 @@
 """Control plane enumerations."""
 
 from enum import StrEnum
+from typing import Final
 
 
 class ActionTier(StrEnum):
@@ -63,12 +64,40 @@ class ActionName(StrEnum):
     DELETE_VBC = "delete_vbc"
 
 
-def parse_action_name(value: ActionName | str) -> ActionName:
-    """Parse user input into a known action enum; unknown values fail-closed."""
+ActionValue = ActionName | str
+_REGISTERED_ACTION_NAMES: set[str] = set()
+_BUILTIN_ACTION_NAMES: Final[set[str]] = set(ActionName._value2member_map_.keys())
+
+
+def register_action_names(names: list[str]) -> None:
+    """Register additional domain-specific action names."""
+    for name in names:
+        normalized = name.strip().lower()
+        if normalized and normalized not in _BUILTIN_ACTION_NAMES:
+            _REGISTERED_ACTION_NAMES.add(normalized)
+
+
+def clear_registered_action_names() -> None:
+    """Clear dynamically registered action names (primarily for tests)."""
+    _REGISTERED_ACTION_NAMES.clear()
+
+
+def is_registered_action_name(value: str) -> bool:
+    """Return True when the value is a built-in or dynamically registered action."""
+    normalized = value.strip().lower()
+    return normalized in _BUILTIN_ACTION_NAMES or normalized in _REGISTERED_ACTION_NAMES
+
+
+def parse_action_name(value: ActionValue) -> ActionValue:
+    """Parse user input into a known action; unknown values fail-closed."""
     if isinstance(value, ActionName):
         return value
     normalized = value.strip().lower()
-    return ActionName(normalized) if normalized in ActionName._value2member_map_ else ActionName.UNKNOWN
+    if normalized in ActionName._value2member_map_:
+        return ActionName(normalized)
+    if normalized in _REGISTERED_ACTION_NAMES:
+        return normalized
+    return ActionName.UNKNOWN
 
 
 class SessionStatus(StrEnum):

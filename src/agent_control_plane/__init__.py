@@ -103,6 +103,7 @@ from agent_control_plane.types.agents import (
     AgentMetadata,
     DelegationProposal,
 )
+from agent_control_plane.types.aliases import AliasProfile, AliasRegistry, FieldAliasMap
 from agent_control_plane.types.approvals import (
     ApprovalDecisionRequest,
     ApprovalScopeDTO,
@@ -112,6 +113,7 @@ from agent_control_plane.types.enums import (
     AbortReason,
     ActionName,
     ActionTier,
+    ActionValue,
     AgentScope,
     ApprovalDecisionType,
     ApprovalStatus,
@@ -127,6 +129,15 @@ from agent_control_plane.types.enums import (
     RoutingResolutionStep,
     SessionStatus,
     UnknownAppEventPolicy,
+    clear_registered_action_names,
+    is_registered_action_name,
+    register_action_names,
+)
+from agent_control_plane.types.extensions import (
+    clear_metadata_schemas,
+    clear_risk_limits_extension_schema,
+    register_metadata_schema,
+    register_risk_limits_extension_schema,
 )
 from agent_control_plane.types.frames import EventFrame, RequestFrame, ResponseFrame
 from agent_control_plane.types.ids import AgentId, IdempotencyKey, ResourceId
@@ -155,6 +166,7 @@ __all__ = [
     # Enums
     "AbortReason",
     "ActionName",
+    "ActionValue",
     "ActionProposal",
     # Proposal DTOs
     "ActionProposalDTO",
@@ -184,6 +196,8 @@ __all__ = [
     "AssetClassifier",
     "AssetMatch",
     "AssetScope",
+    "AliasProfile",
+    "AliasRegistry",
     "AsyncApprovalRepository",
     "AsyncCommandRepository",
     "AsyncControlPlaneFacade",
@@ -227,6 +241,7 @@ __all__ = [
     "ExecutionIntentStatus",
     "ExecutionMode",
     "ExecutionResultDTO",
+    "FieldAliasMap",
     "IdempotencyKey",
     "KillResultDTO",
     "KillSwitch",
@@ -240,6 +255,10 @@ __all__ = [
     "McpGateway",
     "McpGatewayConfig",
     "McpGovernanceError",
+    "clear_metadata_schemas",
+    "clear_registered_action_names",
+    "clear_risk_limits_extension_schema",
+    "is_registered_action_name",
     # Models
     "ModelRegistry",
     "PolicyDeniedError",
@@ -294,5 +313,8 @@ __all__ = [
     "build_kill_switch_stack",
     "build_session_event_budget",
     "create_tables",
+    "register_action_names",
+    "register_metadata_schema",
+    "register_risk_limits_extension_schema",
     "register_models",
 ]

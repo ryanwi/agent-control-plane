@@ -20,6 +20,7 @@ from agent_control_plane.sync import DictEventMapper, MappedEventDTO, SyncContro
 from agent_control_plane.types.enums import (
     ActionName,
     ActionTier,
+    ActionValue,
     EventKind,
     McpEventName,
     ProposalStatus,
@@ -96,7 +97,7 @@ class ToolPolicyMap:
     def __init__(self, mapping: Mapping[str, ActionName | str]) -> None:
         self._mapping = {k.strip().lower(): parse_action_name(v) for k, v in mapping.items()}
 
-    def resolve(self, tool_name: str) -> ActionName:
+    def resolve(self, tool_name: str) -> ActionValue:
         return self._mapping.get(tool_name.strip().lower(), ActionName.UNKNOWN)
 
 

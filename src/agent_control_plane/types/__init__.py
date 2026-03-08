@@ -2,11 +2,13 @@
 
 # ruff: noqa: RUF022
 
+from .aliases import AliasProfile, AliasRegistry, FieldAliasMap
 from .approvals import ApprovalDecisionRequest, ApprovalScopeDTO, ApprovalTicketDTO
 from .enums import (
     AbortReason,
     ActionName,
     ActionTier,
+    ActionValue,
     AgentScope,
     ApprovalDecisionType,
     ApprovalStatus,
@@ -22,6 +24,15 @@ from .enums import (
     RoutingResolutionStep,
     SessionStatus,
     UnknownAppEventPolicy,
+    clear_registered_action_names,
+    is_registered_action_name,
+    register_action_names,
+)
+from .extensions import (
+    clear_metadata_schemas,
+    clear_risk_limits_extension_schema,
+    register_metadata_schema,
+    register_risk_limits_extension_schema,
 )
 from .frames import EventFrame, RequestFrame, ResponseFrame
 from .ids import AgentId, IdempotencyKey, ResourceId
@@ -33,6 +44,7 @@ from .sessions import KillSwitchResult, SessionCreate, SessionState, SessionSumm
 __all__ = [
     "AbortReason",
     "ActionName",
+    "ActionValue",
     "ActionProposalDTO",
     "ActionTier",
     "ActionTiers",
@@ -43,6 +55,8 @@ __all__ = [
     "ApprovalScopeDTO",
     "ApprovalStatus",
     "ApprovalTicketDTO",
+    "AliasProfile",
+    "AliasRegistry",
     "AssetMatch",
     "AssetScope",
     "AutoApproveConditions",
@@ -52,6 +66,7 @@ __all__ = [
     "ExecutionIntentStatus",
     "ExecutionMode",
     "ExecutionResultDTO",
+    "FieldAliasMap",
     "IdempotencyKey",
     "KillSwitchResult",
     "KillSwitchScope",
@@ -74,5 +89,12 @@ __all__ = [
     "StateChangeDTO",
     "StateChangePageDTO",
     "CommandResultDTO",
+    "clear_metadata_schemas",
+    "clear_registered_action_names",
+    "clear_risk_limits_extension_schema",
+    "is_registered_action_name",
+    "register_action_names",
+    "register_metadata_schema",
+    "register_risk_limits_extension_schema",
     "UnknownAppEventPolicy",
 ]
