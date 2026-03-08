@@ -7,6 +7,7 @@
 ### Fixed
 
 - Package version metadata now matches release tag (`0.9.4`) for package managers and runtime version checks.
+- Added a guarded local release-tag workflow (`make release-tag VERSION=x.y.z`) to enforce tag/version parity and prevent future metadata drift.
 
 ## [0.9.2] - 2026-03-08
 

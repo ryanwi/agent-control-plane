@@ -5,7 +5,7 @@ MYPY ?= uv run mypy
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync docs-drift openapi-check test lint format typecheck check
+.PHONY: help sync docs-drift openapi-check test lint format typecheck check release-tag
 
 help:
 	@printf "Targets:\n"
@@ -17,6 +17,7 @@ help:
 	@printf "  make format     - run ruff formatter\n"
 	@printf "  make typecheck  - run mypy\n"
 	@printf "  make check      - run lint + typecheck + test\n"
+	@printf "  make release-tag VERSION=x.y.z - verify + tag + push release\n"
 
 sync:
 	uv sync --extra dev
@@ -40,3 +41,10 @@ typecheck:
 	$(MYPY) src
 
 check: docs-drift openapi-check lint typecheck test
+
+release-tag:
+	@if [ -z "$(VERSION)" ]; then \
+		echo "VERSION is required. Example: make release-tag VERSION=0.9.4"; \
+		exit 1; \
+	fi
+	$(PYTHON) scripts/release_tag.py --version "$(VERSION)"

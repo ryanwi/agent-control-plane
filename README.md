@@ -76,6 +76,23 @@ The repo uses a `src/` layout. If you run commands with a Python interpreter tha
 the package installed (or you do not use `uv run`), imports like `import agent_control_plane`
 will fail with `ModuleNotFoundError`.
 
+## Release tagging
+
+Use the guarded release helper to avoid tag/version drift:
+
+```bash
+make release-tag VERSION=0.9.4
+```
+
+This command verifies:
+
+- clean working tree
+- current branch is `main`
+- `pyproject.toml` version matches `VERSION`
+- full `make check` passes
+
+Then it creates and pushes `vVERSION`.
+
 ## Quick architecture overview
 
 For the full reference design, see [docs/architecture.md](docs/architecture.md).
