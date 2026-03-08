@@ -18,7 +18,7 @@ class RegistryProtocol(Protocol):
 
 
 class ModelRegistry:
-    """Global model registry (legacy/default)."""
+    """Global model registry (default)."""
 
     _models: ClassVar[dict[str, type]] = {}
     _scoped_models: ClassVar[ContextVar[dict[str, type] | None]] = ContextVar(
