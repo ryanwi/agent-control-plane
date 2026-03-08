@@ -57,7 +57,8 @@ def _apply_inbound_aliases(data: Any, profile: AliasProfile) -> Any:
         converted: dict[str, Any] = {}
         alias_to_canonical = profile.aliases.alias_to_canonical
         for key, value in data.items():
-            canonical_key = alias_to_canonical.get(key, key)
+            normalized_key = key if isinstance(key, str) else str(key)
+            canonical_key = alias_to_canonical.get(normalized_key, normalized_key)
             converted[canonical_key] = _apply_inbound_aliases(value, profile)
         return converted
     if isinstance(data, list):
@@ -70,7 +71,8 @@ def _apply_outbound_aliases(data: Any, profile: AliasProfile) -> Any:
         converted: dict[str, Any] = {}
         canonical_to_alias = profile.aliases.canonical_to_alias
         for key, value in data.items():
-            alias_key = canonical_to_alias.get(key, key)
+            normalized_key = key if isinstance(key, str) else str(key)
+            alias_key = canonical_to_alias.get(normalized_key, normalized_key)
             converted[alias_key] = _apply_outbound_aliases(value, profile)
         return converted
     if isinstance(data, list):
@@ -104,4 +106,7 @@ class AliasProfiledModel(BaseModel):
         if profile is None:
             return data
         resolved = AliasRegistry.get_profile(profile)
-        return _apply_outbound_aliases(data, resolved)
+        converted = _apply_outbound_aliases(data, resolved)
+        if not isinstance(converted, dict):
+            raise TypeError("Profiled dump produced non-dict payload")
+        return converted

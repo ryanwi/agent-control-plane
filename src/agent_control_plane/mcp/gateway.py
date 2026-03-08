@@ -155,13 +155,14 @@ class McpGateway:
         self._assert_session_executable(session_id)
 
         action = self._tool_policy_map.resolve(context.tool_name)
+        action_value = action.value if isinstance(action, ActionName) else action
         self._emit(
             session_id,
             McpEventName.TOOL_CALL_RECEIVED,
             {
                 "tool_name": context.tool_name,
                 "agent_id": context.agent_id,
-                "action": action.value,
+                "action": action_value,
             },
             correlation_id=context.correlation_id,
             idempotency_key=context.idempotency_key,
@@ -309,7 +310,7 @@ class McpGateway:
         if state.status in {SessionStatus.ABORTED, SessionStatus.COMPLETED, SessionStatus.PAUSED}:
             raise KillSwitchActiveError(f"Session is not executable: {state.status.value}")
 
-    def _build_proposal(self, context: ToolCallContext, session_id: UUID, action: ActionName) -> ActionProposalDTO:
+    def _build_proposal(self, context: ToolCallContext, session_id: UUID, action: ActionValue) -> ActionProposalDTO:
         resource_id = str(context.arguments.get("resource_id") or context.arguments.get("id") or context.tool_name)
         resource_type = str(context.arguments.get("resource_type") or "mcp_tool")
         raw_score = context.arguments.get("score", "1.0")
