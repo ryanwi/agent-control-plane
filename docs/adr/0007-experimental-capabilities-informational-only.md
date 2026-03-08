@@ -1,4 +1,4 @@
-# ADR: Experimental Capability Contracts Are Informational Only
+# ADR 0007: Experimental Capability Contracts Are Informational Only
 
 ## Status
 
