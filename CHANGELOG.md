@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-03-08
+
+### Fixed
+
+- Package version metadata now matches release tag (`0.9.2`) for package managers and runtime version checks (`importlib.metadata`, `agent_control_plane.__version__`, `agent_control_plane.get_version()`).
+
+## [0.9.1] - 2026-03-08
+
+### Changed
+
+- Added root package version helpers (`__version__`, `get_version()`) and documented naming conventions.
+
 ### Breaking (pre-1.0)
 
 - Removed `*DTO` suffixes from public type names in `agent_control_plane.types` and facade signatures.
