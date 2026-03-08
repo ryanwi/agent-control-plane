@@ -16,6 +16,7 @@ from .agentic import (
 )
 from .aliases import AliasProfile, AliasRegistry, FieldAliasMap, apply_inbound_aliases, apply_outbound_aliases
 from .approvals import ApprovalDecisionRequest, ApprovalScopeDTO, ApprovalTicketDTO
+from .benchmark import BenchmarkRunResultDTO, BenchmarkRunSpec, BenchmarkScenarioSpec, FitnessWeights
 from .enums import (
     AbortReason,
     ActionName,
@@ -30,6 +31,8 @@ from .enums import (
     EventKind,
     ExecutionIntentStatus,
     ExecutionMode,
+    GoalStatus,
+    GuardrailPhase,
     KillSwitchScope,
     McpEventName,
     PlanStepStatus,
@@ -77,6 +80,9 @@ __all__ = [
     "AssetMatch",
     "AssetScope",
     "AutoApproveConditions",
+    "BenchmarkRunResultDTO",
+    "BenchmarkRunSpec",
+    "BenchmarkScenarioSpec",
     "EventFrame",
     "EventKind",
     "ExecutionIntentDTO",
@@ -116,6 +122,7 @@ __all__ = [
     "SessionState",
     "SessionStatus",
     "SessionSummary",
+    "FitnessWeights",
     "StateChangeDTO",
     "StateChangePageDTO",
     "CommandResultDTO",

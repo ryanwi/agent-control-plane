@@ -3,6 +3,14 @@
 # ruff: noqa: RUF022
 
 from agent_control_plane.async_facade import AsyncControlPlaneFacade
+from agent_control_plane.benchmark import (
+    FitnessEvaluator,
+    ScenarioRunner,
+    WeightedFitnessEvaluator,
+    hash_config,
+    run_batch,
+    run_benchmark,
+)
 from agent_control_plane.builders import (
     KillSwitchServices,
     SessionEventBudgetServices,
@@ -60,6 +68,12 @@ from agent_control_plane.models import (
     Base as ReferenceBase,
 )
 from agent_control_plane.models.registry import ModelRegistry, ScopedModelRegistry
+from agent_control_plane.policies import (
+    EvaluatorPolicy,
+    GuardrailPolicy,
+    PassThroughGuardrailPolicy,
+    ThresholdEvaluatorPolicy,
+)
 from agent_control_plane.recovery.crash_recovery import CrashRecovery
 from agent_control_plane.recovery.timeout_escalation import TimeoutEscalation
 from agent_control_plane.storage import (
@@ -98,6 +112,7 @@ from agent_control_plane.sync import (
     SyncControlPlane,
     UnknownAppEventError,
 )
+from agent_control_plane.telemetry import MeterLike, TracerLike, export_event, export_scorecard
 from agent_control_plane.types.agentic import (
     ControlPlaneScorecardDTO,
     EvaluationResultDTO,
@@ -126,6 +141,12 @@ from agent_control_plane.types.approvals import (
     ApprovalDecisionRequest,
     ApprovalScopeDTO,
     ApprovalTicketDTO,
+)
+from agent_control_plane.types.benchmark import (
+    BenchmarkRunResultDTO,
+    BenchmarkRunSpec,
+    BenchmarkScenarioSpec,
+    FitnessWeights,
 )
 from agent_control_plane.types.enums import (
     AbortReason,
@@ -232,6 +253,9 @@ __all__ = [
     "AsyncSqlAlchemyUnitOfWork",
     "AsyncUnitOfWork",
     "AutoApproveConditions",
+    "BenchmarkRunResultDTO",
+    "BenchmarkRunSpec",
+    "BenchmarkScenarioSpec",
     "BudgetDeniedError",
     "BudgetExhaustedError",
     "BudgetInfo",
@@ -264,12 +288,17 @@ __all__ = [
     "ExecutionIntentStatus",
     "ExecutionMode",
     "ExecutionResultDTO",
+    "export_event",
+    "export_scorecard",
     "FieldAliasMap",
+    "FitnessEvaluator",
+    "FitnessWeights",
     "GoalDTO",
     "GoalStatus",
     "GuardrailDecisionDTO",
     "GuardrailPhase",
     "HandoffResultDTO",
+    "hash_config",
     "apply_inbound_aliases",
     "apply_outbound_aliases",
     "IdempotencyKey",
@@ -339,6 +368,8 @@ __all__ = [
     "StateChangeDTO",
     "StateChangePageDTO",
     "TimeoutEscalation",
+    "ThresholdEvaluatorPolicy",
+    "TracerLike",
     "ToolCallContext",
     "ToolCallResult",
     "ToolExecutionError",
@@ -348,9 +379,17 @@ __all__ = [
     "UnknownAppEventPolicy",
     "build_kill_switch_stack",
     "build_session_event_budget",
+    "EvaluatorPolicy",
+    "GuardrailPolicy",
+    "PassThroughGuardrailPolicy",
+    "run_batch",
+    "run_benchmark",
+    "ScenarioRunner",
     "create_tables",
     "register_action_names",
     "register_metadata_schema",
     "register_risk_limits_extension_schema",
     "register_models",
+    "MeterLike",
+    "WeightedFitnessEvaluator",
 ]

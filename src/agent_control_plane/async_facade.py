@@ -67,6 +67,18 @@ from agent_control_plane.types.query import PageDTO, SessionHealthDTO, StateChan
 from agent_control_plane.types.sessions import SessionState
 
 
+def _percentile(values: list[float], percentile: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    idx = max(0, min(len(ordered) - 1, round((percentile / 100.0) * (len(ordered) - 1))))
+    return ordered[idx]
+
+
+def _normalize_utc(dt: datetime) -> datetime:
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+
+
 class AsyncControlPlaneFacade:
     """Async control-plane facade for async host applications."""
 
@@ -860,31 +872,82 @@ class AsyncControlPlaneFacade:
     ) -> ControlPlaneScorecardDTO:
         sessions = [session_id] if session_id is not None else [s.id for s in await self.list_sessions(limit=10_000)]
         scorecard = ControlPlaneScorecardDTO()
+        normalized_window_start = _normalize_utc(window_start) if window_start is not None else None
+        normalized_window_end = _normalize_utc(window_end) if window_end is not None else None
+        approval_latencies: list[float] = []
+        rollback_latencies: list[float] = []
+        total_cost = 0.0
+        successful_actions = 0
         for sid in sessions:
             events = await self.replay(sid, after_seq=0, limit=10_000)
+            pending_checkpoint_at: datetime | None = None
+            approval_requested_at: datetime | None = None
             for event in events:
-                if window_start and event.created_at < window_start:
+                event_created_at = _normalize_utc(event.created_at)
+                if normalized_window_start and event_created_at < normalized_window_start:
                     continue
-                if window_end and event.created_at > window_end:
+                if normalized_window_end and event_created_at > normalized_window_end:
                     continue
                 scorecard.total_events += 1
                 if event.event_kind == EventKind.CHECKPOINT_CREATED:
                     scorecard.checkpoints_created += 1
+                    pending_checkpoint_at = event_created_at
                 elif event.event_kind == EventKind.ROLLBACK_COMPLETED:
                     scorecard.rollbacks_completed += 1
+                    if pending_checkpoint_at is not None:
+                        rollback_latencies.append((event_created_at - pending_checkpoint_at).total_seconds() * 1000.0)
                 elif event.event_kind == EventKind.EVALUATION_BLOCKED:
                     scorecard.evaluations_blocked += 1
+                    if isinstance(event.payload, dict):
+                        for reason in event.payload.get("reasons", []):
+                            key = str(reason)
+                            scorecard.evaluation_block_reasons[key] = scorecard.evaluation_block_reasons.get(key, 0) + 1
                 elif event.event_kind in (
                     EventKind.GUARDRAIL_INPUT,
                     EventKind.GUARDRAIL_TOOL,
                     EventKind.GUARDRAIL_OUTPUT,
                 ):
-                    if isinstance(event.payload, dict) and event.payload.get("allow") is False:
-                        scorecard.guardrail_denies += 1
+                    if isinstance(event.payload, dict):
+                        code = str(event.payload.get("policy_code", "unknown"))
+                        scorecard.guardrail_policy_code_counts[code] = (
+                            scorecard.guardrail_policy_code_counts.get(code, 0) + 1
+                        )
+                        if event.payload.get("allow") is False:
+                            scorecard.guardrail_denies += 1
+                        else:
+                            scorecard.guardrail_allows += 1
                 elif event.event_kind == EventKind.HANDOFF_ACCEPTED:
                     scorecard.handoffs_accepted += 1
                 elif event.event_kind == EventKind.HANDOFF_REJECTED:
                     scorecard.handoffs_rejected += 1
+                elif event.event_kind == EventKind.APPROVAL_REQUESTED:
+                    approval_requested_at = event_created_at
+                elif event.event_kind in (EventKind.APPROVAL_GRANTED, EventKind.APPROVAL_DENIED):
+                    if approval_requested_at is not None:
+                        approval_latencies.append((event_created_at - approval_requested_at).total_seconds() * 1000.0)
+                        approval_requested_at = None
+                elif event.event_kind == EventKind.BUDGET_EXHAUSTED:
+                    scorecard.budget_exhausted_count += 1
+                elif event.event_kind == EventKind.EXECUTION_COMPLETED:
+                    successful_actions += 1
+                    if isinstance(event.payload, dict):
+                        value = event.payload.get("cost")
+                        if isinstance(value, int | float):
+                            total_cost += float(value)
+            scorecard.budget_denied_count += sum(
+                1
+                for e in events
+                if e.event_kind == EventKind.KILL_SWITCH_TRIGGERED
+                and isinstance(e.payload, dict)
+                and e.payload.get("reason") in ("budget_denied", "budget_exhausted")
+            )
+        scorecard.approval_latency_ms_p50 = _percentile(approval_latencies, 50)
+        scorecard.approval_latency_ms_p95 = _percentile(approval_latencies, 95)
+        scorecard.checkpoint_rollback_latency_ms_p50 = _percentile(rollback_latencies, 50)
+        scorecard.checkpoint_rollback_latency_ms_p95 = _percentile(rollback_latencies, 95)
+        scorecard.avg_cost_per_successful_action = (total_cost / successful_actions) if successful_actions > 0 else None
+        handoff_total = scorecard.handoffs_accepted + scorecard.handoffs_rejected
+        scorecard.handoff_accept_rate = (scorecard.handoffs_accepted / handoff_total) if handoff_total > 0 else None
         return scorecard
 
     async def close_session(

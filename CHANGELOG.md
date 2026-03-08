@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-03-08
+
+### Added
+
+- Deterministic benchmark primitives for agentic experimentation:
+  - `BenchmarkScenarioSpec`, `BenchmarkRunSpec`, `BenchmarkRunResultDTO`, `FitnessWeights`
+  - `run_benchmark(...)`, `run_batch(...)`, `hash_config(...)`, `WeightedFitnessEvaluator`
+- Pluggable policy interfaces for evaluator and guardrail decisions:
+  - `EvaluatorPolicy`, `GuardrailPolicy`
+  - `ThresholdEvaluatorPolicy`, `PassThroughGuardrailPolicy`
+- Telemetry export helpers for events and scorecards:
+  - `export_event(...)`, `export_scorecard(...)`
+  - `TracerLike`, `MeterLike` protocol contracts
+- Richer operational scorecards (sync + async) including:
+  - guardrail allow counts and policy-code histograms
+  - evaluation block-reason histograms
+  - budget denied/exhausted counters
+  - approval and checkpoint->rollback latency percentiles
+  - average cost per successful action and handoff acceptance rate
+
+### Changed
+
+- Public exports now include benchmark DTOs/utilities, policy interfaces, and telemetry helpers.
+
 ## [0.6.0] - 2026-03-08
 
 ### Added

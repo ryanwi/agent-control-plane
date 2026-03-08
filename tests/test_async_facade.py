@@ -18,7 +18,9 @@ from agent_control_plane.types.enums import (
     ActionTier,
     ApprovalDecisionType,
     ApprovalStatus,
+    EvaluationDecision,
     EventKind,
+    GuardrailPhase,
     ProposalStatus,
     RiskLevel,
     SessionStatus,
@@ -194,6 +196,78 @@ async def test_async_facade_get_ticket_by_id_for_all_statuses(tmp_path: Path):
     assert expired_fetched is not None and expired_fetched.status == ApprovalStatus.EXPIRED
 
     assert await facade.get_ticket(uuid4()) is None
+
+    await facade.close()
+
+
+@pytest.mark.asyncio
+async def test_async_facade_operational_scorecard_enriched_fields(tmp_path: Path):
+    db_file = tmp_path / "cp_async_scorecard.db"
+    facade = AsyncControlPlaneFacade.from_database_url(f"sqlite+aiosqlite:///{db_file}")
+
+    sid = await facade.open_session("async-scorecard")
+
+    await facade.record_evaluation(
+        sid,
+        operation="approve_ticket",
+        decision=EvaluationDecision.BLOCK,
+        score=0.2,
+        reasons=["policy mismatch"],
+    )
+    await facade.apply_guardrail(
+        sid,
+        phase=GuardrailPhase.INPUT,
+        allow=True,
+        policy_code="CP-GR-ALLOW",
+        reason="safe",
+    )
+    await facade.apply_guardrail(
+        sid,
+        phase=GuardrailPhase.OUTPUT,
+        allow=False,
+        policy_code="CP-GR-DENY",
+        reason="unsafe",
+    )
+    await facade.request_handoff(
+        sid,
+        source_agent_id="agent-a",
+        target_agent_id="agent-b",
+        allowed_actions=["status"],
+        accepted=True,
+    )
+    await facade.request_handoff(
+        sid,
+        source_agent_id="agent-a",
+        target_agent_id="agent-c",
+        allowed_actions=["status"],
+        accepted=False,
+    )
+
+    await facade.emit(sid, EventKind.APPROVAL_REQUESTED, {}, state_bearing=False)
+    await facade.emit(sid, EventKind.APPROVAL_GRANTED, {}, state_bearing=False)
+    await facade.emit(sid, EventKind.CHECKPOINT_CREATED, {}, state_bearing=False)
+    await facade.emit(sid, EventKind.ROLLBACK_COMPLETED, {}, state_bearing=False)
+    await facade.emit(sid, EventKind.EXECUTION_COMPLETED, {"cost": 2.5}, state_bearing=False)
+    await facade.emit(sid, EventKind.BUDGET_EXHAUSTED, {}, state_bearing=False)
+    await facade.emit(sid, EventKind.KILL_SWITCH_TRIGGERED, {"reason": "budget_denied"}, state_bearing=False)
+
+    scorecard = await facade.get_operational_scorecard(session_id=sid)
+    assert scorecard.evaluations_blocked == 1
+    assert scorecard.evaluation_block_reasons.get("policy mismatch") == 1
+    assert scorecard.guardrail_denies == 1
+    assert scorecard.guardrail_allows == 1
+    assert scorecard.guardrail_policy_code_counts.get("CP-GR-ALLOW") == 1
+    assert scorecard.guardrail_policy_code_counts.get("CP-GR-DENY") == 1
+    assert scorecard.handoffs_accepted == 1
+    assert scorecard.handoffs_rejected == 1
+    assert scorecard.handoff_accept_rate == 0.5
+    assert scorecard.budget_denied_count == 1
+    assert scorecard.budget_exhausted_count == 1
+    assert scorecard.approval_latency_ms_p50 is not None
+    assert scorecard.approval_latency_ms_p95 is not None
+    assert scorecard.checkpoint_rollback_latency_ms_p50 is not None
+    assert scorecard.checkpoint_rollback_latency_ms_p95 is not None
+    assert scorecard.avg_cost_per_successful_action == 2.5
 
     await facade.close()
 

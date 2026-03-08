@@ -136,15 +136,18 @@ This keeps authn/authz concerns and governance concerns separate while preservin
 
 ## 5b) Persistence decoupling and abstraction
 
-Current architecture (v0.2+):
+Current architecture (v0.6+):
 
 - **Storage Protocols**: Narrow repository protocols (`SessionRepository`, `EventRepository`, etc.) decouple engines from database backends.
 - **SQLAlchemy Adapters**: Production-ready `AsyncSqlAlchemyUnitOfWork` and `SyncSqlAlchemyUnitOfWork` provide row-locking and transactional integrity.
 - **Model Registry**: Dynamic model resolution allows host applications to supply their own ORM classes while using standard mixins.
+- **Benchmark protocol hooks**: Deterministic benchmark DTOs and runners support repeatable policy/config experiments.
+- **Policy interfaces**: `EvaluatorPolicy` and `GuardrailPolicy` protocols provide explicit extension seams for decision logic.
+- **Telemetry export helpers**: `export_event(...)` and `export_scorecard(...)` bridge control-plane records to tracing/metrics systems.
 
-Proposed v0.3+ roadmap:
+Future roadmap:
 
-1. **Native OpenTelemetry Integration**: Export control-plane events directly to OTel traces/logs for observability.
+1. **Native OpenTelemetry Integration**: Provide first-class OTel SDK adapters beyond protocol-level helper functions.
 2. **Non-SQL Backends**: Provide optional adapters for DynamoDB or Redis using optimistic concurrency where row locking is unavailable.
 3. **Optimistic-Increment Strategies**: Support high-velocity budget tracking without database serialization.
 

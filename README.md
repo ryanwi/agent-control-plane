@@ -295,6 +295,21 @@ Agentic governance primitives are also available on sync/async facades:
 - evaluation/guardrails/handoff (`record_evaluation`, `apply_guardrail`, `request_handoff`)
 - operational scorecards (`get_operational_scorecard`)
 
+`get_operational_scorecard(...)` includes extended effectiveness metrics:
+- guardrail allow/deny counts and policy-code distribution
+- evaluation block-reason distribution
+- budget denied/exhausted counters
+- approval and checkpoint-rollback latency percentiles
+- average cost per successful action and handoff acceptance rate
+
+Benchmark and experimentation helpers are available for closed-loop policy tuning:
+- benchmark DTOs (`BenchmarkScenarioSpec`, `BenchmarkRunSpec`, `BenchmarkRunResultDTO`, `FitnessWeights`)
+- benchmark runner utilities (`run_benchmark`, `run_batch`, `hash_config`, `WeightedFitnessEvaluator`)
+
+Policy and telemetry integration helpers:
+- policy protocols (`EvaluatorPolicy`, `GuardrailPolicy`) with defaults (`ThresholdEvaluatorPolicy`, `PassThroughGuardrailPolicy`)
+- telemetry bridges (`export_event`, `export_scorecard`) for OTel-compatible tracer/meter adapters
+
 `SyncControlPlane.kill()` and `SyncControlPlane.kill_all()` return `KillResultDTO`.
 `SyncControlPlane.emit_event()` / `replay_events()` provide first-class sync event operations.
 `SyncControlPlane.emit_app_event()` supports boundary mapping via `AppEventMapper`/`DictEventMapper`.
