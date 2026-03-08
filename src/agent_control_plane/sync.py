@@ -58,6 +58,7 @@ CMD_OPEN_SESSION: Final[str] = "open_session"
 CMD_CLOSE_SESSION: Final[str] = "close_session"
 CMD_ABORT_SESSION: Final[str] = "abort_session"
 CMD_EMIT: Final[str] = "emit"
+CMD_CREATE_PROPOSAL: Final[str] = "create_proposal"
 CMD_CREATE_TICKET: Final[str] = "create_ticket"
 CMD_APPROVE_TICKET: Final[str] = "approve_ticket"
 CMD_DENY_TICKET: Final[str] = "deny_ticket"
@@ -622,6 +623,28 @@ class ControlPlaneFacade:
             )
             uow.commit()
             return ticket
+
+    def create_proposal(
+        self,
+        proposal: ActionProposalDTO,
+        *,
+        command_id: IdempotencyKey | None = None,
+    ) -> ActionProposalDTO:
+        with self._cp.session_scope() as db:
+            uow = self._cp._uow_factory(db)
+            cached = self._get_cached_command_result(uow, command_id, CMD_CREATE_PROPOSAL)
+            if cached is not None:
+                return ActionProposalDTO.model_validate(cached)
+            created = uow.proposal_repo.create_proposal(proposal)
+            self._record_command_result(
+                uow,
+                command_id,
+                CMD_CREATE_PROPOSAL,
+                created.model_dump(mode="json"),
+                session_id=proposal.session_id,
+            )
+            uow.commit()
+            return created
 
     def approve_ticket(
         self,

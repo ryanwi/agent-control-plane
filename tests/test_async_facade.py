@@ -26,6 +26,7 @@ from agent_control_plane.types.enums import (
     SessionStatus,
     UnknownAppEventPolicy,
 )
+from agent_control_plane.types.proposals import ActionProposalDTO
 
 
 @pytest.mark.asyncio
@@ -196,6 +197,42 @@ async def test_async_facade_get_ticket_by_id_for_all_statuses(tmp_path: Path):
     assert expired_fetched is not None and expired_fetched.status == ApprovalStatus.EXPIRED
 
     assert await facade.get_ticket(uuid4()) is None
+
+    await facade.close()
+
+
+@pytest.mark.asyncio
+async def test_async_facade_create_proposal_idempotency(tmp_path: Path):
+    db_file = tmp_path / "cp_async_create_proposal.db"
+    facade = AsyncControlPlaneFacade.from_database_url(f"sqlite+aiosqlite:///{db_file}")
+
+    sid = await facade.open_session("async-create-proposal")
+    proposal = ActionProposalDTO(
+        session_id=sid,
+        resource_id="async-resource-1",
+        resource_type="task",
+        decision=ActionName.STATUS,
+        reasoning="create proposal test",
+        weight=Decimal("1.0"),
+        score=Decimal("0.8"),
+    )
+
+    created = await facade.create_proposal(proposal, command_id="async-create-proposal-1")
+    replayed = await facade.create_proposal(proposal, command_id="async-create-proposal-1")
+    assert replayed.id == created.id
+
+    loaded = await facade.get_proposal(created.id)
+    assert loaded is not None
+    assert loaded.id == created.id
+    assert loaded.resource_id == "async-resource-1"
+
+    with pytest.raises(ValueError, match="already used for operation"):
+        await facade.create_ticket(
+            sid,
+            created.id,
+            datetime.now(UTC) + timedelta(minutes=5),
+            command_id="async-create-proposal-1",
+        )
 
     await facade.close()
 

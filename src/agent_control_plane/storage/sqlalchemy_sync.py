@@ -399,6 +399,28 @@ class SyncSqlAlchemyProposalRepo:
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    def create_proposal(self, proposal: ActionProposalDTO) -> ActionProposalDTO:
+        action_proposal_model = ModelRegistry.get("ActionProposal")
+        row = action_proposal_model(
+            id=proposal.id,
+            session_id=proposal.session_id,
+            cycle_event_seq=proposal.cycle_event_seq,
+            resource_id=proposal.resource_id,
+            resource_type=proposal.resource_type,
+            decision=proposal.decision,
+            reasoning=proposal.reasoning,
+            metadata_json=proposal.metadata,
+            weight=proposal.weight,
+            score=proposal.score,
+            action_tier=proposal.action_tier,
+            risk_level=proposal.risk_level,
+            status=proposal.status,
+            created_at=proposal.created_at,
+        )
+        self._session.add(row)
+        self._session.flush()
+        return self._to_dto(row)
+
     def get_proposal(self, proposal_id: UUID) -> ActionProposalDTO | None:
         action_proposal_model = ModelRegistry.get("ActionProposal")
         result = self._session.execute(select(action_proposal_model).where(action_proposal_model.id == proposal_id))
@@ -446,6 +468,7 @@ class SyncSqlAlchemyProposalRepo:
         return ActionProposalDTO(
             id=row.id,
             session_id=row.session_id,
+            agent_id=getattr(row, "agent_id", None),
             cycle_event_seq=getattr(row, "cycle_event_seq", None),
             resource_id=row.resource_id,
             resource_type=row.resource_type,
@@ -454,6 +477,8 @@ class SyncSqlAlchemyProposalRepo:
             metadata=getattr(row, "metadata_json", {}) or {},
             weight=row.weight,
             score=row.score,
+            risk_factors=getattr(row, "risk_factors", []) or [],
+            supporting_signals=getattr(row, "supporting_signals", []) or [],
             action_tier=row.action_tier,
             risk_level=row.risk_level,
             status=row.status,

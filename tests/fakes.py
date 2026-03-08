@@ -21,6 +21,7 @@ from agent_control_plane.types.enums import (
     SessionStatus,
 )
 from agent_control_plane.types.frames import EventFrame
+from agent_control_plane.types.proposals import ActionProposalDTO
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
 
 
@@ -227,7 +228,7 @@ class InMemoryProposalRepository:
     """In-memory proposal repository for tests."""
 
     def __init__(self) -> None:
-        self._proposals: dict[UUID, dict] = {}
+        self._proposals: dict[UUID, ActionProposalDTO] = {}
 
     def add_proposal(
         self,
@@ -236,19 +237,45 @@ class InMemoryProposalRepository:
         resource_id: str,
         status: ProposalStatus = ProposalStatus.PENDING,
     ) -> None:
-        self._proposals[proposal_id] = {
-            "session_id": session_id,
-            "resource_id": resource_id,
-            "status": status,
-        }
+        self._proposals[proposal_id] = ActionProposalDTO(
+            id=proposal_id,
+            session_id=session_id,
+            resource_id=resource_id,
+            resource_type="task",
+            decision="status",
+            reasoning="test",
+            status=status,
+        )
+
+    async def create_proposal(self, proposal: ActionProposalDTO) -> ActionProposalDTO:
+        self._proposals[proposal.id] = proposal
+        return proposal
+
+    async def get_proposal(self, proposal_id: UUID) -> ActionProposalDTO | None:
+        return self._proposals.get(proposal_id)
+
+    async def list_proposals(
+        self,
+        *,
+        session_id: UUID | None = None,
+        statuses: list[ProposalStatus] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[ActionProposalDTO]:
+        rows = list(self._proposals.values())
+        if session_id is not None:
+            rows = [row for row in rows if row.session_id == session_id]
+        if statuses:
+            rows = [row for row in rows if row.status in statuses]
+        return rows[offset : offset + limit]
 
     async def update_status(self, proposal_id: UUID, status: ProposalStatus) -> None:
         if proposal_id in self._proposals:
-            self._proposals[proposal_id]["status"] = status
+            self._proposals[proposal_id] = self._proposals[proposal_id].model_copy(update={"status": status})
 
     async def has_pending_for_resource(self, session_id: UUID, resource_id: str) -> bool:
         return any(
-            p["session_id"] == session_id and p["resource_id"] == resource_id and p["status"] == ProposalStatus.PENDING
+            p.session_id == session_id and p.resource_id == resource_id and p.status == ProposalStatus.PENDING
             for p in self._proposals.values()
         )
 

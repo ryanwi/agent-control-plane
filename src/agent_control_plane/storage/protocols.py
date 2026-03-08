@@ -162,6 +162,7 @@ class AsyncApprovalRepository(Protocol):
 
 @runtime_checkable
 class ProposalRepository(Protocol):
+    def create_proposal(self, proposal: ActionProposalDTO) -> ActionProposalDTO: ...
     def get_proposal(self, proposal_id: UUID) -> ActionProposalDTO | None: ...
     def list_proposals(
         self,
@@ -177,6 +178,7 @@ class ProposalRepository(Protocol):
 
 @runtime_checkable
 class AsyncProposalRepository(Protocol):
+    async def create_proposal(self, proposal: ActionProposalDTO) -> ActionProposalDTO: ...
     async def get_proposal(self, proposal_id: UUID) -> ActionProposalDTO | None: ...
     async def list_proposals(
         self,

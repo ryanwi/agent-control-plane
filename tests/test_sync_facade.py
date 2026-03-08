@@ -36,6 +36,7 @@ from agent_control_plane.types.enums import (
     RiskLevel,
     UnknownAppEventPolicy,
 )
+from agent_control_plane.types.proposals import ActionProposalDTO
 
 
 def _insert_pending_proposal(facade: ControlPlaneFacade, session_id: UUID, *, resource_id: str) -> UUID:
@@ -249,6 +250,42 @@ def test_control_plane_facade_approval_flows_and_idempotency(tmp_path: Path):
     denied_proposal = facade.get_proposal(proposal_id_2)
     assert denied_proposal is not None
     assert denied_proposal.status == ProposalStatus.DENIED
+
+    facade.close()
+
+
+def test_control_plane_facade_create_proposal_idempotency(tmp_path: Path):
+    db_file = tmp_path / "cp_facade_create_proposal.db"
+    facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_file}")
+    facade.setup()
+
+    sid = facade.open_session("sync-create-proposal")
+    proposal = ActionProposalDTO(
+        session_id=sid,
+        resource_id="sync-resource-1",
+        resource_type="task",
+        decision=ActionName.STATUS,
+        reasoning="create proposal test",
+        weight=Decimal("1.0"),
+        score=Decimal("0.8"),
+    )
+
+    created = facade.create_proposal(proposal, command_id="sync-create-proposal-1")
+    replayed = facade.create_proposal(proposal, command_id="sync-create-proposal-1")
+    assert replayed.id == created.id
+
+    loaded = facade.get_proposal(created.id)
+    assert loaded is not None
+    assert loaded.id == created.id
+    assert loaded.resource_id == "sync-resource-1"
+
+    with pytest.raises(ValueError, match="already used for operation"):
+        facade.create_ticket(
+            sid,
+            created.id,
+            datetime.now(UTC) + timedelta(minutes=5),
+            command_id="sync-create-proposal-1",
+        )
 
     facade.close()
 

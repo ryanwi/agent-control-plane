@@ -20,6 +20,7 @@ from agent_control_plane.sync import (
     CMD_ABORT_SESSION,
     CMD_APPROVE_TICKET,
     CMD_CLOSE_SESSION,
+    CMD_CREATE_PROPOSAL,
     CMD_CREATE_TICKET,
     CMD_DENY_TICKET,
     CMD_EMIT,
@@ -306,6 +307,28 @@ class AsyncControlPlaneFacade:
             )
             await uow.commit()
             return ticket
+
+    async def create_proposal(
+        self,
+        proposal: ActionProposalDTO,
+        *,
+        command_id: IdempotencyKey | None = None,
+    ) -> ActionProposalDTO:
+        async with self.session_scope() as db:
+            uow = self._uow_factory(db)
+            cached = await self._get_cached_command_result(uow, command_id, CMD_CREATE_PROPOSAL)
+            if cached is not None:
+                return ActionProposalDTO.model_validate(cached)
+            created = await uow.proposal_repo.create_proposal(proposal)
+            await self._record_command_result(
+                uow,
+                command_id,
+                CMD_CREATE_PROPOSAL,
+                created.model_dump(mode="json"),
+                session_id=proposal.session_id,
+            )
+            await uow.commit()
+            return created
 
     async def approve_ticket(
         self,

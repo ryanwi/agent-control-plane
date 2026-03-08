@@ -28,6 +28,7 @@ from agent_control_plane.types.enums import (
     RiskLevel,
     SessionStatus,
 )
+from agent_control_plane.types.proposals import ActionProposalDTO
 
 
 @pytest.fixture(autouse=True)
@@ -190,8 +191,6 @@ async def test_deny_all_pending(db_session: AsyncSession):
 
 @pytest.mark.asyncio
 async def test_proposal_repo(db_session: AsyncSession):
-    from agent_control_plane.models.reference import ActionProposal
-
     session_repo = AsyncSqlAlchemySessionRepo(db_session)
     proposal_repo = AsyncSqlAlchemyProposalRepo(db_session)
 
@@ -203,26 +202,26 @@ async def test_proposal_repo(db_session: AsyncSession):
         max_action_count=10,
     )
 
-    ap = ActionProposal(
+    proposal = ActionProposalDTO(
         session_id=cs.id,
         resource_id="res-1",
         resource_type="task",
-        decision=ActionName.REFUND,
+        decision=ActionName.STATUS,
         reasoning="test",
-        metadata_json={},
+        metadata={},
         weight=Decimal("1"),
         score=Decimal("0.5"),
         action_tier=ActionTier.ALWAYS_APPROVE,
         risk_level=RiskLevel.LOW,
         status=ProposalStatus.PENDING,
     )
-    db_session.add(ap)
-    await db_session.flush()
+    created = await proposal_repo.create_proposal(proposal)
+    assert created.id == proposal.id
 
     assert await proposal_repo.has_pending_for_resource(cs.id, "res-1") is True
     assert await proposal_repo.has_pending_for_resource(cs.id, "res-2") is False
 
-    await proposal_repo.update_status(ap.id, ProposalStatus.APPROVED)
+    await proposal_repo.update_status(created.id, ProposalStatus.APPROVED)
     assert await proposal_repo.has_pending_for_resource(cs.id, "res-1") is False
 
 

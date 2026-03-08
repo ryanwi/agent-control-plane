@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- New first-class proposal creation APIs:
+  - `ControlPlaneFacade.create_proposal(proposal, command_id=...)`
+  - `AsyncControlPlaneFacade.create_proposal(proposal, command_id=...)`
+- Proposal repository protocol/storage support for `create_proposal(...)` in sync and async SQLAlchemy backends.
+
 ### Changed
 
 - Documentation now includes an explicit dev/prod DB guide (SQLite vs Postgres), reliability checklist, and expanded operations runbook for deployment and incident response.

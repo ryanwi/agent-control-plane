@@ -315,10 +315,11 @@ For async hosts (FastAPI/async workers), use `AsyncControlPlaneFacade`.
 `AsyncControlPlaneFacade` now also covers the common operational flows that previously required direct UoW access:
 - session transitions (`activate_session`, `pause_session`, `resume_session`, `list_sessions`)
 - cycle coordination (`acquire_cycle`, `release_cycle`, `set_active_cycle`)
-- approvals (`create_ticket`, `approve_ticket`, `deny_ticket`, `get_pending_tickets`, `expire_timed_out_tickets`)
+- proposals/approvals (`create_proposal`, `create_ticket`, `approve_ticket`, `deny_ticket`, `get_pending_tickets`, `expire_timed_out_tickets`)
 - policy creation and recovery helpers (`create_policy`, `recover_stuck_sessions`, `check_stuck_cycles`)
 
-`ControlPlaneFacade` also exposes approval write flows for sync hosts:
+`ControlPlaneFacade` also exposes proposal/approval write flows for sync hosts:
+- `create_proposal`
 - `create_ticket`
 - `approve_ticket`
 - `deny_ticket`

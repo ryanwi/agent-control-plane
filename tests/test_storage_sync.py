@@ -16,10 +16,20 @@ from agent_control_plane.models.registry import ModelRegistry
 from agent_control_plane.storage.sqlalchemy_sync import (
     SyncSqlAlchemyApprovalRepo,
     SyncSqlAlchemyEventRepo,
+    SyncSqlAlchemyProposalRepo,
     SyncSqlAlchemySessionRepo,
     SyncSqlAlchemyUnitOfWork,
 )
-from agent_control_plane.types.enums import ApprovalDecisionType, ApprovalStatus, SessionStatus
+from agent_control_plane.types.enums import (
+    ActionName,
+    ActionTier,
+    ApprovalDecisionType,
+    ApprovalStatus,
+    ProposalStatus,
+    RiskLevel,
+    SessionStatus,
+)
+from agent_control_plane.types.proposals import ActionProposalDTO
 
 
 @pytest.fixture(autouse=True)
@@ -164,6 +174,44 @@ def test_deny_all_pending(db_session: Session):
 
     denied = approval_repo.deny_all_pending(cs.id)
     assert denied == 2
+
+
+def test_proposal_repo_create_and_query(db_session: Session):
+    session_repo = SyncSqlAlchemySessionRepo(db_session)
+    proposal_repo = SyncSqlAlchemyProposalRepo(db_session)
+
+    cs = session_repo.create_session(
+        session_name="proposal-test",
+        status=SessionStatus.ACTIVE,
+        execution_mode="dry_run",
+        max_cost=Decimal("100"),
+        max_action_count=10,
+    )
+
+    proposal = ActionProposalDTO(
+        session_id=cs.id,
+        resource_id="res-1",
+        resource_type="task",
+        decision=ActionName.STATUS,
+        reasoning="storage sync create proposal",
+        metadata={},
+        weight=Decimal("1"),
+        score=Decimal("0.5"),
+        action_tier=ActionTier.ALWAYS_APPROVE,
+        risk_level=RiskLevel.LOW,
+        status=ProposalStatus.PENDING,
+    )
+    created = proposal_repo.create_proposal(proposal)
+    assert created.id == proposal.id
+
+    fetched = proposal_repo.get_proposal(created.id)
+    assert fetched is not None
+    assert fetched.id == created.id
+    assert fetched.resource_id == "res-1"
+    assert proposal_repo.has_pending_for_resource(cs.id, "res-1") is True
+
+    proposal_repo.update_status(created.id, ProposalStatus.APPROVED)
+    assert proposal_repo.has_pending_for_resource(cs.id, "res-1") is False
 
 
 def test_unit_of_work(db_session: Session):
