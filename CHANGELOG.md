@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-03-08
+
+### Fixed
+
+- Package version metadata now matches release tag (`0.9.4`) for package managers and runtime version checks.
+
 ## [0.9.2] - 2026-03-08
 
 ### Fixed
