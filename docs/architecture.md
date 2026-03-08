@@ -53,7 +53,7 @@ The package is organized around explicit layers:
   - `crash_recovery` — resume control state after process interruption
   - `timeout_escalation` — escalate stuck active cycles
 - `types/` and `models/`
-  - DTOs, enums, and SQLAlchemy mixins for host-system integration.
+  - Domain/contract types, enums, and SQLAlchemy mixins for host-system integration.
 
 ## 3) Control-plane lifecycle
 
@@ -141,7 +141,7 @@ Current architecture (v0.6+):
 - **Storage Protocols**: Narrow repository protocols (`SessionRepository`, `EventRepository`, etc.) decouple engines from database backends.
 - **SQLAlchemy Adapters**: Production-ready `AsyncSqlAlchemyUnitOfWork` and `SyncSqlAlchemyUnitOfWork` provide row-locking and transactional integrity.
 - **Model Registry**: Dynamic model resolution allows host applications to supply their own ORM classes while using standard mixins.
-- **Benchmark protocol hooks**: Deterministic benchmark DTOs and runners support repeatable policy/config experiments.
+- **Benchmark protocol hooks**: Deterministic benchmark types and runners support repeatable policy/config experiments.
 - **Policy interfaces**: `EvaluatorPolicy` and `GuardrailPolicy` protocols provide explicit extension seams for decision logic.
 - **Telemetry export helpers**: `export_event(...)` and `export_scorecard(...)` bridge control-plane records to tracing/metrics systems.
 
@@ -201,7 +201,7 @@ Exports are centralized through [agent_control_plane/__init__.py](../src/agent_c
 | --- | --- | --- |
 | `agent_control_plane` | `PolicyEngine`, `ProposalRouter`, `ApprovalGate`, `BudgetTracker`, `ConcurrencyGuard`, `KillSwitch`, `EventStore`, `SessionManager`, `AgentRegistry`, `DelegationGuard`, `CrashRecovery`, `TimeoutEscalation`, `ModelRegistry`, `RiskClassifier`, `DefaultRiskClassifier` | Core control-plane entry points for orchestration and recovery. |
 | `agent_control_plane` | `ActionName`, `ActionTier`, `RiskLevel`, `ApprovalStatus`, `ApprovalDecisionType`, `ProposalStatus`, `SessionStatus`, `EventKind`, `ExecutionMode`, `AbortReason`, `KillSwitchScope`, `RoutingResolutionStep`, `AssetMatch`, `AgentScope` | Enumerations used by all engines; considered stable between minor releases. |
-| `agent_control_plane` | `ActionProposal`, `AgentMetadata`, `AgentCapability`, `DelegationProposal`, `SessionCreate`, `SessionSummary`, `PolicySnapshot`, `ApprovalScope`, `ApprovalTicket`, `RequestFrame`, `EventFrame`, `ResponseFrame`, `KillResult` | DTOs are semantically stable; add optional fields in minor releases only. |
+| `agent_control_plane` | `ActionProposal`, `AgentMetadata`, `AgentCapability`, `DelegationProposal`, `SessionCreate`, `SessionSummary`, `PolicySnapshot`, `ApprovalScope`, `ApprovalTicket`, `RequestFrame`, `EventFrame`, `ResponseFrame`, `KillResult` | Domain/contract types are semantically stable; add optional fields in minor releases only. |
 | `agent_control_plane.models` | `ModelRegistry`, `ControlSessionMixin`, `ControlEventMixin`, `ApprovalTicketMixin`, `PolicySnapshotMixin`, `AgentMixin`, `DelegationMixin` | Intended for embedding into host SQLAlchemy models and runtime bootstrapping. |
 | `agent_control_plane.experimental.*` | capability contracts and other extension scaffolding | Experimental surface; may change between minor releases in pre-1.0. |
 | Private internals (non-API) | `engine.*`, `recovery.*`, `types.*`, `models.*` modules | Import by direct module path only when needed; avoid for long-term compatibility. |

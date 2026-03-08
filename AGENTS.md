@@ -13,7 +13,7 @@ This repository is the standalone `agent-control-plane` package:
 
 - Engine modules (`src/agent_control_plane/engine/*`) contain execution logic.
 - Recovery modules (`src/agent_control_plane/recovery/*`) handle crash/timeout handling.
-- Types (`src/agent_control_plane/types/*`) define public DTOs and enums.
+- Types (`src/agent_control_plane/types/*`) define public domain/contract types and enums.
 - Model utilities (`src/agent_control_plane/models/*`) are integration helpers only.
 - Tests live in `tests/*` and should validate behavior at both success and failure paths.
 

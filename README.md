@@ -109,14 +109,22 @@ flowchart LR
 - `SessionManager`, `CrashRecovery`, and `TimeoutEscalation` preserve continuity after failures.
 - `McpGateway` governs MCP tool calls before execution (policy, approvals, budget, audit).
 
+## Naming conventions
+
+`agent-control-plane` uses role-based naming:
+
+- Domain/contract types: suffix-free names (`ActionProposal`, `ApprovalTicket`, `PolicySnapshot`).
+- Persistence ORM classes: `*Row` suffix (`ActionProposalRow`, `ApprovalTicketRow`, `PolicySnapshotRow`).
+- Transport-specific models should use explicit role names when introduced (for example `CreateProposalRequest`, `ProposalView`), not generic `DTO`.
+
 ## Typed extension and alias hooks
 
 - Use `register_risk_limits_extension_schema(...)` to enforce typed validation for `RiskLimits.custom`.
 - `RiskLimits.validate_extension()` and `RiskLimits.extension_as()` both fail fast when no extension schema is registered.
-- For non-DTO payload transforms, use `apply_inbound_aliases(...)` and `apply_outbound_aliases(...)` with a registered alias profile.
+- For non-domain payload transforms, use `apply_inbound_aliases(...)` and `apply_outbound_aliases(...)` with a registered alias profile.
 - Alias helper rule of thumb:
-  - Use profiled DTO helpers (`model_validate_with_profile`, `model_dump_with_profile`) when the payload maps directly to library DTOs.
-  - Use `apply_inbound_aliases`/`apply_outbound_aliases` for boundary payloads that are not modeled as DTOs (for example, app-specific event envelopes).
+  - Use profiled model helpers (`model_validate_with_profile`, `model_dump_with_profile`) when payload maps directly to library types.
+  - Use `apply_inbound_aliases`/`apply_outbound_aliases` for boundary payloads not modeled as core types (for example, app-specific event envelopes).
 
 ## Control-plane lifecycle
 
@@ -352,7 +360,7 @@ Agentic governance primitives are also available on sync/async facades:
 - average cost per successful action and handoff acceptance rate
 
 Benchmark and experimentation helpers are available for closed-loop policy tuning:
-- benchmark DTOs (`BenchmarkScenarioSpec`, `BenchmarkRunSpec`, `BenchmarkRunResult`, `FitnessWeights`)
+- benchmark types (`BenchmarkScenarioSpec`, `BenchmarkRunSpec`, `BenchmarkRunResult`, `FitnessWeights`)
 - benchmark runner utilities (`run_benchmark`, `run_batch`, `hash_config`, `WeightedFitnessEvaluator`)
 
 Policy and telemetry integration helpers:

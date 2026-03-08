@@ -24,11 +24,15 @@
   - `ControlPlaneCapability`, `StaticCapabilityProvider`, mapping helpers
 - Builder composition helpers now accept optional `capability_provider` and expose `get_capabilities()` on service bundles.
 - New compatibility reference: `docs/compatibility.md`.
+- Package version helpers at root export surface:
+  - `__version__`
+  - `get_version()`
 
 ### Changed
 
 - Documentation now includes an explicit dev/prod DB guide (SQLite vs Postgres), reliability checklist, and expanded operations runbook for deployment and incident response.
 - Architecture/README now describe capability detection as a composition-time extension point (informational only, non-authoritative for governance enforcement).
+- Naming docs now standardize role-based conventions (domain/contract types, `*Row` persistence classes, no `DTO` suffixes).
 - ADR guidance is now documented in `docs/adr/README.md` for decision context and change rationale.
 
 ## [0.7.0] - 2026-03-08

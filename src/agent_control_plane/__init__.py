@@ -2,6 +2,8 @@
 
 # ruff: noqa: RUF022
 
+from importlib.metadata import PackageNotFoundError, version
+
 from agent_control_plane.async_facade import AsyncControlPlaneFacade
 from agent_control_plane.benchmark import (
     FitnessEvaluator,
@@ -204,14 +206,26 @@ from agent_control_plane.types.query import (
 )
 from agent_control_plane.types.sessions import BudgetInfo, KillSwitchResult, SessionCreate, SessionState, SessionSummary
 
+try:
+    __version__ = version("agent-control-plane")
+except PackageNotFoundError:
+    __version__ = "0.0.0+local"
+
+
+def get_version() -> str:
+    """Return installed package version."""
+    return __version__
+
+
 __all__ = [
+    "__version__",
     # Enums
     "AbortReason",
     "ActionName",
     "ActionValue",
     "ActionProposal",
     "ActionTier",
-    # Policy DTOs
+    # Policy
     "ActionTiers",
     # Agent Registry
     "AgentCapability",
@@ -387,6 +401,7 @@ __all__ = [
     "run_benchmark",
     "ScenarioRunner",
     "create_tables",
+    "get_version",
     "register_action_names",
     "register_metadata_schema",
     "register_risk_limits_extension_schema",
