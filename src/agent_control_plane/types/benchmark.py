@@ -30,7 +30,7 @@ class BenchmarkRunSpec(BaseModel):
     weights: FitnessWeights = Field(default_factory=FitnessWeights)
 
 
-class BenchmarkRunResultDTO(BaseModel):
+class BenchmarkRunResult(BaseModel):
     run_id: UUID = Field(default_factory=uuid4)
     scenario_name: str
     scenario_version: str

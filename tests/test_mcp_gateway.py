@@ -19,7 +19,7 @@ from agent_control_plane.mcp import (
 )
 from agent_control_plane.sync import SyncControlPlane
 from agent_control_plane.types.enums import ActionName, EventKind
-from agent_control_plane.types.policies import ActionTiers, PolicySnapshotDTO
+from agent_control_plane.types.policies import ActionTiers, PolicySnapshot
 
 
 class _OkExecutor:
@@ -51,7 +51,7 @@ def test_manual_approval_creates_ticket_and_blocks(tmp_path: Path):
     cp = _new_cp(tmp_path, "mcp_approval")
     sid = cp.create_session("mcp-approval")
 
-    policy = PolicySnapshotDTO(action_tiers=ActionTiers(always_approve=[ActionName.REFUND]))
+    policy = PolicySnapshot(action_tiers=ActionTiers(always_approve=[ActionName.REFUND]))
     gateway = McpGateway(
         cp,
         _OkExecutor(),
@@ -72,7 +72,7 @@ def test_auto_approved_tool_executes_and_consumes_budget(tmp_path: Path):
     cp = _new_cp(tmp_path, "mcp_execute")
     sid = cp.create_session("mcp-execute", max_cost=Decimal("5"), max_action_count=5)
 
-    policy = PolicySnapshotDTO(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
     gateway = McpGateway(
         cp,
         _OkExecutor(),

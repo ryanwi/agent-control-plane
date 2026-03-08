@@ -16,7 +16,7 @@ from agent_control_plane.engine.budget_tracker import BudgetExhaustedError
 from agent_control_plane.engine.policy_engine import PolicyEngine
 from agent_control_plane.models.registry import ModelRegistry
 from agent_control_plane.storage.sqlalchemy_sync import SyncSqlAlchemyUnitOfWork
-from agent_control_plane.sync import DictEventMapper, MappedEventDTO, SyncControlPlane
+from agent_control_plane.sync import DictEventMapper, MappedEvent, SyncControlPlane
 from agent_control_plane.types.enums import (
     ActionName,
     ActionTier,
@@ -29,8 +29,8 @@ from agent_control_plane.types.enums import (
     parse_action_name,
 )
 from agent_control_plane.types.ids import AgentId, ResourceId
-from agent_control_plane.types.policies import PolicySnapshotDTO
-from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.policies import PolicySnapshot
+from agent_control_plane.types.proposals import ActionProposal
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ class ToolPolicyMap:
 class McpGatewayConfig(BaseModel):
     """Configuration for the embedded MCP gateway."""
 
-    policy_snapshot: PolicySnapshotDTO = Field(default_factory=PolicySnapshotDTO)
+    policy_snapshot: PolicySnapshot = Field(default_factory=PolicySnapshot)
     auto_create_sessions: bool = True
     default_max_cost: Decimal = Decimal("10000")
     default_max_action_count: int = 100
@@ -126,7 +126,7 @@ class McpEventMapper:
             }
         )
 
-    def map_event(self, event_name: str, payload: Mapping[str, Any]) -> MappedEventDTO | None:
+    def map_event(self, event_name: str, payload: Mapping[str, Any]) -> MappedEvent | None:
         return self._mapper.map_event(event_name, payload)
 
 
@@ -310,12 +310,12 @@ class McpGateway:
         if state.status in {SessionStatus.ABORTED, SessionStatus.COMPLETED, SessionStatus.PAUSED}:
             raise KillSwitchActiveError(f"Session is not executable: {state.status.value}")
 
-    def _build_proposal(self, context: ToolCallContext, session_id: UUID, action: ActionValue) -> ActionProposalDTO:
+    def _build_proposal(self, context: ToolCallContext, session_id: UUID, action: ActionValue) -> ActionProposal:
         resource_id = str(context.arguments.get("resource_id") or context.arguments.get("id") or context.tool_name)
         resource_type = str(context.arguments.get("resource_type") or "mcp_tool")
         raw_score = context.arguments.get("score", "1.0")
         score = Decimal(str(raw_score))
-        return ActionProposalDTO(
+        return ActionProposal(
             session_id=session_id,
             agent_id=AgentId(context.agent_id) if context.agent_id is not None else None,
             resource_id=ResourceId(resource_id),
@@ -327,7 +327,7 @@ class McpGateway:
             score=score,
         )
 
-    def _create_approval_request(self, session_id: UUID, proposal: ActionProposalDTO) -> UUID:
+    def _create_approval_request(self, session_id: UUID, proposal: ActionProposal) -> UUID:
         timeout_at = datetime.now(UTC) + timedelta(seconds=self._config.policy_snapshot.approval_timeout_seconds)
         with self._cp.session_scope() as db:
             uow = SyncSqlAlchemyUnitOfWork(db)
@@ -346,7 +346,7 @@ class McpGateway:
             uow.commit()
             return ticket.id
 
-    def _insert_proposal_row(self, db: Session, proposal: ActionProposalDTO) -> UUID:
+    def _insert_proposal_row(self, db: Session, proposal: ActionProposal) -> UUID:
         action_proposal_model = ModelRegistry.get("ActionProposal")
         row = action_proposal_model(
             id=proposal.id,

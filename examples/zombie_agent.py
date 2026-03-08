@@ -20,7 +20,7 @@ from agent_control_plane import (
     CrashRecovery,
     EventStore,
     ExecutionMode,
-    PolicySnapshotDTO,
+    PolicySnapshot,
     ReferenceBase,
     SessionManager,
     SessionStatus,
@@ -40,7 +40,7 @@ async def simulate_crash(session_maker):
         sm = SessionManager(uow.session_repo)
         guard = ConcurrencyGuard(uow.session_repo, uow.proposal_repo)
 
-        policy = PolicySnapshotDTO(execution_mode=ExecutionMode.LIVE)
+        policy = PolicySnapshot(execution_mode=ExecutionMode.LIVE)
         pid = await sm.create_policy(**policy.model_dump(mode="json", exclude={"id", "created_at"}))
         cs = await sm.create_session(session_name="zombie-session", max_cost=Decimal("100"), policy_id=pid)
 

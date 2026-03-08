@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
     ActionName,
+    ActionProposal,
     AgentCapability,
     AgentMetadata,
     AgentRegistry,
@@ -23,14 +24,13 @@ from agent_control_plane import (
     DelegationProposal,
     ExecutionMode,
     PolicyEngine,
-    PolicySnapshotDTO,
+    PolicySnapshot,
     ProposalRouter,
     ReferenceBase,
     RiskLevel,
     SessionManager,
     register_models,
 )
-from agent_control_plane.types.proposals import ActionProposalDTO
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ async def main():
             logger.info("  Result: Delegation ALLOWED and audited.")
 
         # 4. Propose Action with Identity Check
-        policy = PolicySnapshotDTO(
+        policy = PolicySnapshot(
             action_tiers={"unrestricted": [ActionName.REBOOT_INSTANCE]},
             execution_mode=ExecutionMode.LIVE,
             auto_approve_conditions={
@@ -101,7 +101,7 @@ async def main():
         router = ProposalRouter(PolicyEngine(policy), agent_registry=registry)
 
         logger.info("\n[ROUTING] Worker proposing reboot action...")
-        proposal = ActionProposalDTO(
+        proposal = ActionProposal(
             session_id=cs.id,
             agent_id=worker.id,
             resource_id="srv-99",
@@ -118,7 +118,7 @@ async def main():
 
         # 5. Unauthorized Action Check
         logger.info("\n[SECURITY] Dispatcher attempting unauthorized reboot...")
-        bad_proposal = ActionProposalDTO(
+        bad_proposal = ActionProposal(
             session_id=cs.id,
             agent_id=dispatcher.id,
             resource_id="srv-99",

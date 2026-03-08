@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from .enums import EvaluationDecision, GoalStatus, GuardrailPhase, PlanStepStatus
 
 
-class SessionCheckpointDTO(BaseModel):
+class SessionCheckpoint(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     session_id: UUID
     event_seq: int
@@ -20,7 +20,7 @@ class SessionCheckpointDTO(BaseModel):
     created_by: str = "system"
 
 
-class RollbackResultDTO(BaseModel):
+class RollbackResult(BaseModel):
     session_id: UUID
     from_seq: int
     to_seq: int
@@ -29,7 +29,7 @@ class RollbackResultDTO(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
-class GoalDTO(BaseModel):
+class Goal(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     session_id: UUID
     name: str
@@ -39,7 +39,7 @@ class GoalDTO(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class PlanStepDTO(BaseModel):
+class PlanStep(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     plan_id: UUID
     step_index: int
@@ -49,25 +49,25 @@ class PlanStepDTO(BaseModel):
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class PlanDTO(BaseModel):
+class Plan(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     session_id: UUID
     goal_id: UUID
     title: str
-    steps: list[PlanStepDTO] = Field(default_factory=list)
+    steps: list[PlanStep] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class PlanProgressDTO(BaseModel):
-    goal: GoalDTO
-    plan: PlanDTO | None = None
+class PlanProgress(BaseModel):
+    goal: Goal
+    plan: Plan | None = None
     total_steps: int = 0
     completed_steps: int = 0
     failed_steps: int = 0
     running_steps: int = 0
 
 
-class EvaluationResultDTO(BaseModel):
+class EvaluationResult(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     session_id: UUID
     operation: str
@@ -78,7 +78,7 @@ class EvaluationResultDTO(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class GuardrailDecisionDTO(BaseModel):
+class GuardrailDecision(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     session_id: UUID
     phase: GuardrailPhase
@@ -89,7 +89,7 @@ class GuardrailDecisionDTO(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class HandoffResultDTO(BaseModel):
+class HandoffResult(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     session_id: UUID
     source_agent_id: str
@@ -101,7 +101,7 @@ class HandoffResultDTO(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class ControlPlaneScorecardDTO(BaseModel):
+class ControlPlaneScorecard(BaseModel):
     total_events: int = 0
     checkpoints_created: int = 0
     rollbacks_completed: int = 0

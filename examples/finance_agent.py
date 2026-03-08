@@ -22,7 +22,7 @@ from agent_control_plane import (
     BudgetTracker,
     EventStore,
     PolicyEngine,
-    PolicySnapshotDTO,
+    PolicySnapshot,
     ProposalRouter,
     ProposalStatus,
     ReferenceBase,
@@ -30,7 +30,6 @@ from agent_control_plane import (
     SessionManager,
     register_models,
 )
-from agent_control_plane.types.proposals import ActionProposalDTO
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -49,7 +48,7 @@ async def main():
         uow = AsyncSqlAlchemyUnitOfWork(session)
 
         # 1. Define Policy
-        policy = PolicySnapshotDTO(
+        policy = PolicySnapshot(
             action_tiers={
                 ActionTier.BLOCKED: [ActionName.CLOSE_ACCOUNT],
                 ActionTier.ALWAYS_APPROVE: [ActionName.CHECK_BALANCE],
@@ -83,7 +82,7 @@ async def main():
 
         for action, res, weight, score in tasks:
             logger.info(f"\n[PROPOSE] {action} on {res}")
-            dto = ActionProposalDTO(
+            dto = ActionProposal(
                 session_id=cs.id,
                 resource_id=res,
                 resource_type="finance",

@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agent_control_plane.engine.budget_tracker import BudgetExhaustedError
 from agent_control_plane.models.registry import ModelRegistry
 from agent_control_plane.types.agents import AgentCapability, AgentMetadata, DelegationProposal
-from agent_control_plane.types.approvals import ApprovalTicketDTO
+from agent_control_plane.types.approvals import ApprovalTicket
 from agent_control_plane.types.enums import (
     ApprovalDecisionType,
     ApprovalStatus,
@@ -25,8 +25,8 @@ from agent_control_plane.types.enums import (
     SessionStatus,
 )
 from agent_control_plane.types.frames import EventFrame
-from agent_control_plane.types.proposals import ActionProposalDTO
-from agent_control_plane.types.query import CommandResultDTO
+from agent_control_plane.types.proposals import ActionProposal
+from agent_control_plane.types.query import CommandResult
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
 
 
@@ -269,7 +269,7 @@ class AsyncSqlAlchemyApprovalRepo:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def create_ticket(self, session_id: UUID, proposal_id: UUID, timeout_at: datetime) -> ApprovalTicketDTO:
+    async def create_ticket(self, session_id: UUID, proposal_id: UUID, timeout_at: datetime) -> ApprovalTicket:
         approval_ticket_model = ModelRegistry.get("ApprovalTicket")
         ticket = approval_ticket_model(
             id=uuid4(),
@@ -282,7 +282,7 @@ class AsyncSqlAlchemyApprovalRepo:
         await self._session.flush()
         return self._to_dto(ticket)
 
-    async def get_ticket(self, ticket_id: UUID) -> ApprovalTicketDTO | None:
+    async def get_ticket(self, ticket_id: UUID) -> ApprovalTicket | None:
         approval_ticket_model = ModelRegistry.get("ApprovalTicket")
         result = await self._session.execute(select(approval_ticket_model).where(approval_ticket_model.id == ticket_id))
         ticket = result.scalar_one_or_none()
@@ -290,7 +290,7 @@ class AsyncSqlAlchemyApprovalRepo:
             return None
         return self._to_dto(ticket)
 
-    async def get_pending_ticket_for_update(self, ticket_id: UUID) -> ApprovalTicketDTO:
+    async def get_pending_ticket_for_update(self, ticket_id: UUID) -> ApprovalTicket:
         approval_ticket_model = ModelRegistry.get("ApprovalTicket")
         result = await self._session.execute(
             select(approval_ticket_model).where(approval_ticket_model.id == ticket_id).with_for_update()
@@ -308,7 +308,7 @@ class AsyncSqlAlchemyApprovalRepo:
             update(approval_ticket_model).where(approval_ticket_model.id == ticket_id).values(**fields)
         )
 
-    async def get_pending_tickets(self, session_id: UUID | None = None) -> list[ApprovalTicketDTO]:
+    async def get_pending_tickets(self, session_id: UUID | None = None) -> list[ApprovalTicket]:
         approval_ticket_model = ModelRegistry.get("ApprovalTicket")
         query = select(approval_ticket_model).where(approval_ticket_model.status == ApprovalStatus.PENDING)
         if session_id:
@@ -324,7 +324,7 @@ class AsyncSqlAlchemyApprovalRepo:
         statuses: list[ApprovalStatus] | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[ApprovalTicketDTO]:
+    ) -> list[ApprovalTicket]:
         approval_ticket_model = ModelRegistry.get("ApprovalTicket")
         query = select(approval_ticket_model)
         if session_id is not None:
@@ -335,7 +335,7 @@ class AsyncSqlAlchemyApprovalRepo:
         result = await self._session.execute(query)
         return [self._to_dto(row) for row in result.scalars().all()]
 
-    async def get_session_scope_tickets(self, session_id: UUID) -> list[ApprovalTicketDTO]:
+    async def get_session_scope_tickets(self, session_id: UUID) -> list[ApprovalTicket]:
         approval_ticket_model = ModelRegistry.get("ApprovalTicket")
         result = await self._session.execute(
             select(approval_ticket_model)
@@ -369,7 +369,7 @@ class AsyncSqlAlchemyApprovalRepo:
         )
         return len(list(result.scalars().all()))
 
-    async def expire_timed_out(self) -> list[ApprovalTicketDTO]:
+    async def expire_timed_out(self) -> list[ApprovalTicket]:
         approval_ticket_model = ModelRegistry.get("ApprovalTicket")
         from sqlalchemy.sql import func
 
@@ -389,8 +389,8 @@ class AsyncSqlAlchemyApprovalRepo:
             dtos.append(self._to_dto(ticket))
         return dtos
 
-    def _to_dto(self, row: Any) -> ApprovalTicketDTO:
-        return ApprovalTicketDTO(
+    def _to_dto(self, row: Any) -> ApprovalTicket:
+        return ApprovalTicket(
             id=row.id,
             session_id=row.session_id,
             proposal_id=row.proposal_id,
@@ -414,7 +414,7 @@ class AsyncSqlAlchemyProposalRepo:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def create_proposal(self, proposal: ActionProposalDTO) -> ActionProposalDTO:
+    async def create_proposal(self, proposal: ActionProposal) -> ActionProposal:
         action_proposal_model = ModelRegistry.get("ActionProposal")
         row = action_proposal_model(
             id=proposal.id,
@@ -436,7 +436,7 @@ class AsyncSqlAlchemyProposalRepo:
         await self._session.flush()
         return self._to_dto(row)
 
-    async def get_proposal(self, proposal_id: UUID) -> ActionProposalDTO | None:
+    async def get_proposal(self, proposal_id: UUID) -> ActionProposal | None:
         action_proposal_model = ModelRegistry.get("ActionProposal")
         result = await self._session.execute(
             select(action_proposal_model).where(action_proposal_model.id == proposal_id)
@@ -451,7 +451,7 @@ class AsyncSqlAlchemyProposalRepo:
         statuses: list[ProposalStatus] | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[ActionProposalDTO]:
+    ) -> list[ActionProposal]:
         action_proposal_model = ModelRegistry.get("ActionProposal")
         query = select(action_proposal_model)
         if session_id is not None:
@@ -481,8 +481,8 @@ class AsyncSqlAlchemyProposalRepo:
         )
         return result.scalar_one_or_none() is not None
 
-    def _to_dto(self, row: Any) -> ActionProposalDTO:
-        return ActionProposalDTO(
+    def _to_dto(self, row: Any) -> ActionProposal:
+        return ActionProposal(
             id=row.id,
             session_id=row.session_id,
             agent_id=getattr(row, "agent_id", None),
@@ -509,7 +509,7 @@ class AsyncSqlAlchemyCommandRepo:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_command(self, command_id: str) -> CommandResultDTO | None:
+    async def get_command(self, command_id: str) -> CommandResult | None:
         command_ledger_model = ModelRegistry.get("CommandLedger")
         result = await self._session.execute(
             select(command_ledger_model).where(command_ledger_model.command_id == command_id)
@@ -517,7 +517,7 @@ class AsyncSqlAlchemyCommandRepo:
         row = result.scalar_one_or_none()
         if row is None:
             return None
-        return CommandResultDTO(
+        return CommandResult(
             command_id=row.command_id,
             operation=row.operation,
             result=row.result_json,

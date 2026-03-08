@@ -61,7 +61,7 @@ class ActionTiers(AliasProfiledModel):
         return [parse_action_name(item) for item in value]
 
 
-class PolicySnapshotDTO(AliasProfiledModel):
+class PolicySnapshot(AliasProfiledModel):
     """Immutable policy configuration frozen at session start."""
 
     id: UUID = Field(default_factory=uuid4)

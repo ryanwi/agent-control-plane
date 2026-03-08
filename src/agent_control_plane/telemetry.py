@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from agent_control_plane.types.agentic import ControlPlaneScorecardDTO
+from agent_control_plane.types.agentic import ControlPlaneScorecard
 from agent_control_plane.types.frames import EventFrame
 
 
@@ -36,7 +36,7 @@ def export_event(event: EventFrame, *, tracer: TracerLike) -> None:
     tracer.add_event("agent_control_plane.event", attrs)
 
 
-def export_scorecard(scorecard: ControlPlaneScorecardDTO, *, meter: MeterLike) -> None:
+def export_scorecard(scorecard: ControlPlaneScorecard, *, meter: MeterLike) -> None:
     base_attrs: dict[str, Any] = {"source": "agent_control_plane"}
     meter.record("cp.total_events", float(scorecard.total_events), base_attrs)
     meter.record("cp.checkpoints_created", float(scorecard.checkpoints_created), base_attrs)

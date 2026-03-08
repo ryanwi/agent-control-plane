@@ -19,11 +19,11 @@ from agent_control_plane.types.enums import (
     RiskLevel,
     RoutingResolutionStep,
 )
-from agent_control_plane.types.policies import PolicySnapshotDTO
-from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.policies import PolicySnapshot
+from agent_control_plane.types.proposals import ActionProposal
 
 
-def _policy(**overrides) -> PolicySnapshotDTO:
+def _policy(**overrides) -> PolicySnapshot:
     defaults = {
         "action_tiers": {
             "blocked": [ActionName.BAN],
@@ -42,10 +42,10 @@ def _policy(**overrides) -> PolicySnapshotDTO:
         },
     }
     defaults.update(overrides)
-    return PolicySnapshotDTO(**defaults)
+    return PolicySnapshot(**defaults)
 
 
-def _proposal(**overrides) -> ActionProposalDTO:
+def _proposal(**overrides) -> ActionProposal:
     defaults = {
         "session_id": uuid4(),
         "resource_id": "res-001",
@@ -54,7 +54,7 @@ def _proposal(**overrides) -> ActionProposalDTO:
         "reasoning": "test",
     }
     defaults.update(overrides)
-    return ActionProposalDTO(**defaults)
+    return ActionProposal(**defaults)
 
 
 # ---- DefaultRiskClassifier ----

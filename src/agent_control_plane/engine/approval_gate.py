@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agent_control_plane.engine.event_store import EventStore
-from agent_control_plane.types.approvals import ApprovalTicketDTO
+from agent_control_plane.types.approvals import ApprovalTicket
 from agent_control_plane.types.enums import (
     ApprovalDecisionType,
     ApprovalStatus,
@@ -41,7 +41,7 @@ class ApprovalGate:
         session_id: UUID,
         proposal_id: UUID,
         timeout_seconds: int = 3600,
-    ) -> ApprovalTicketDTO:
+    ) -> ApprovalTicket:
         """Create a pending approval ticket for a proposal.
 
         This is a state-bearing write -- failure aborts the operation.
@@ -74,7 +74,7 @@ class ApprovalGate:
         scope_max_cost: Decimal | None = None,
         scope_max_count: int | None = None,
         scope_expiry: datetime | None = None,
-    ) -> ApprovalTicketDTO:
+    ) -> ApprovalTicket:
         """Approve a pending ticket. State-bearing write."""
         ticket = await self._approval_repo.get_pending_ticket_for_update(ticket_id)
 
@@ -118,7 +118,7 @@ class ApprovalGate:
         *,
         decided_by: str = "operator",
         reason: str | None = None,
-    ) -> ApprovalTicketDTO:
+    ) -> ApprovalTicket:
         """Deny a pending ticket. State-bearing write."""
         ticket = await self._approval_repo.get_pending_ticket_for_update(ticket_id)
 
@@ -172,7 +172,7 @@ class ApprovalGate:
         session_id: UUID,
         resource_id: str,
         cost: Decimal = Decimal("0"),
-    ) -> ApprovalTicketDTO | None:
+    ) -> ApprovalTicket | None:
         """Check if an existing allow_for_session scope covers this proposal.
 
         Returns the matching ticket if scope applies, None otherwise.
@@ -200,6 +200,6 @@ class ApprovalGate:
         self,
         *,
         session_id: UUID | None = None,
-    ) -> list[ApprovalTicketDTO]:
+    ) -> list[ApprovalTicket]:
         """List pending approval tickets, optionally filtered by session."""
         return await self._approval_repo.get_pending_tickets(session_id=session_id)

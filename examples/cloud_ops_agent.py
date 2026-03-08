@@ -37,7 +37,7 @@ from agent_control_plane import (
     EventKind,
     EventStore,
     PolicyEngine,
-    PolicySnapshotDTO,
+    PolicySnapshot,
     ProposalRouter,
     ProposalStatus,
     ReferenceBase,
@@ -45,7 +45,6 @@ from agent_control_plane import (
     SessionManager,
     register_models,
 )
-from agent_control_plane.types.proposals import ActionProposalDTO
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -54,9 +53,9 @@ logger = logging.getLogger(__name__)
 DATABASE_URL = "sqlite+aiosqlite:///./cloud_ops_example.db"
 
 
-def create_cloud_policy() -> PolicySnapshotDTO:
+def create_cloud_policy() -> PolicySnapshot:
     """Define a governance policy for cloud operations."""
-    return PolicySnapshotDTO(
+    return PolicySnapshot(
         action_tiers={
             ActionTier.BLOCKED: [ActionName.WIPE_DATABASE, ActionName.DELETE_VBC],
             ActionTier.ALWAYS_APPROVE: [ActionName.DESCRIBE_RESOURCES, ActionName.LIST_INSTANCES],
@@ -90,7 +89,7 @@ class CloudOpsAgent:
         self.budget = BudgetTracker(uow.session_repo)
         self.guard = ConcurrencyGuard(uow.session_repo, uow.proposal_repo)
 
-    async def initialize(self, policy_snapshot: PolicySnapshotDTO):
+    async def initialize(self, policy_snapshot: PolicySnapshot):
         """Setup the session and router."""
         policy_id = await self.session_manager.create_policy(
             action_tiers=policy_snapshot.action_tiers.model_dump(mode="json"),
@@ -112,7 +111,7 @@ class CloudOpsAgent:
         """Simulate proposing and executing a cloud task."""
         logger.info(f"\n--- Task: {action_name} on {resource_id} ---")
 
-        proposal_dto = ActionProposalDTO(
+        proposal_dto = ActionProposal(
             session_id=self.session.id,
             resource_id=resource_id,
             resource_type="cloud_resource",

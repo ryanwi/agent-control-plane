@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Breaking (pre-1.0)
+
+- Removed `*DTO` suffixes from public type names in `agent_control_plane.types` and facade signatures.
+- Public model exports were renamed to `*Row` to avoid collisions with suffix-free domain type names:
+  - `ActionProposalRow`
+  - `ApprovalTicketRow`
+  - `PolicySnapshotRow`
+- Query and scorecard types were renamed to suffix-free forms (for example: `Page`, `SessionHealth`, `StateChangePage`, `ControlPlaneScorecard`).
+
 ### Added
 
 - New first-class proposal creation APIs:

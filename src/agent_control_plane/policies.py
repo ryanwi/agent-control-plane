@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
-from agent_control_plane.types.agentic import EvaluationResultDTO, GuardrailDecisionDTO
+from agent_control_plane.types.agentic import EvaluationResult, GuardrailDecision
 from agent_control_plane.types.enums import EvaluationDecision, GuardrailPhase
 
 
@@ -17,7 +17,7 @@ class EvaluatorPolicy(Protocol):
         operation: str,
         score: float,
         reasons: list[str],
-    ) -> EvaluationResultDTO: ...
+    ) -> EvaluationResult: ...
 
 
 class GuardrailPolicy(Protocol):
@@ -29,7 +29,7 @@ class GuardrailPolicy(Protocol):
         policy_code: str,
         reason: str,
         metadata: dict[str, object] | None = None,
-    ) -> GuardrailDecisionDTO: ...
+    ) -> GuardrailDecision: ...
 
 
 class ThresholdEvaluatorPolicy:
@@ -45,9 +45,9 @@ class ThresholdEvaluatorPolicy:
         operation: str,
         score: float,
         reasons: list[str],
-    ) -> EvaluationResultDTO:
+    ) -> EvaluationResult:
         decision = EvaluationDecision.PASS if score >= self._threshold else EvaluationDecision.BLOCK
-        return EvaluationResultDTO(
+        return EvaluationResult(
             session_id=session_id,
             operation=operation,
             decision=decision,
@@ -68,8 +68,8 @@ class PassThroughGuardrailPolicy:
         policy_code: str,
         reason: str,
         metadata: dict[str, object] | None = None,
-    ) -> GuardrailDecisionDTO:
-        return GuardrailDecisionDTO(
+    ) -> GuardrailDecision:
+        return GuardrailDecision(
             session_id=session_id,
             phase=phase,
             allow=True,

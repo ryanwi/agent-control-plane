@@ -33,7 +33,7 @@ from agent_control_plane import (
     EventKind,
     EventStore,
     PolicyEngine,
-    PolicySnapshotDTO,
+    PolicySnapshot,
     ProposalRouter,
     ProposalStatus,
     ReferenceBase,
@@ -41,7 +41,6 @@ from agent_control_plane import (
     SessionManager,
     register_models,
 )
-from agent_control_plane.types.proposals import ActionProposalDTO
 
 # Setup basic logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -50,9 +49,9 @@ logger = logging.getLogger(__name__)
 DATABASE_URL = "sqlite+aiosqlite:///./security_agent_example.db"
 
 
-def create_security_policy() -> PolicySnapshotDTO:
+def create_security_policy() -> PolicySnapshot:
     """Define the security governance policy."""
-    return PolicySnapshotDTO(
+    return PolicySnapshot(
         action_tiers={
             "blocked": [ActionName.UNKNOWN],  # Strictly forbidden (demonstrating unknown mapping)
             "always_approve": [ActionName.LOG_INCIDENT],  # Low risk, always allowed
@@ -87,7 +86,7 @@ class SecurityAgent:
         self.budget = BudgetTracker(uow.session_repo)
         self.guard = ConcurrencyGuard(uow.session_repo, uow.proposal_repo)
 
-    async def setup_session(self, policy_snapshot: PolicySnapshotDTO):
+    async def setup_session(self, policy_snapshot: PolicySnapshot):
         """Register policy and create a monitoring session."""
         policy_id = await self.session_manager.create_policy(
             action_tiers=policy_snapshot.action_tiers.model_dump(mode="json"),
@@ -117,7 +116,7 @@ class SecurityAgent:
         weight: float = 1.0,
     ):
         """Propose an action and handle the control flow."""
-        proposal_dto = ActionProposalDTO(
+        proposal_dto = ActionProposal(
             session_id=self.session.id,
             resource_id=resource_id,
             resource_type=resource_type,

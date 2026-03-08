@@ -15,19 +15,19 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
     ActionName,
+    ActionProposal,
     ActionTier,
     AsyncSqlAlchemyUnitOfWork,
     DefaultAssetClassifier,
     ExecutionMode,
     PolicyEngine,
-    PolicySnapshotDTO,
+    PolicySnapshot,
     ProposalRouter,
     ReferenceBase,
     RiskLevel,
     SessionManager,
     register_models,
 )
-from agent_control_plane.types.proposals import ActionProposalDTO
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ async def main():
         # Anything else (like "PCI") is unmatched and defaults to Medium/High risk.
         asset_classifier = DefaultAssetClassifier(patterns=frozenset(["PUBLIC"]))
 
-        policy = PolicySnapshotDTO(
+        policy = PolicySnapshot(
             action_tiers={"unrestricted": [ActionName.REBOOT_INSTANCE]},
             execution_mode=ExecutionMode.LIVE,
             auto_approve_conditions={
@@ -77,7 +77,7 @@ async def main():
             logger.info(f"\n  Proposing REBOOT_INSTANCE on {res}")
             logger.info(f"  {expectation}")
 
-            dto = ActionProposalDTO(
+            dto = ActionProposal(
                 session_id=cs.id,
                 resource_id=res,
                 resource_type="server",

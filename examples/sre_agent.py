@@ -16,18 +16,18 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
     ActionName,
+    ActionProposal,
     ActionTier,
     AsyncSqlAlchemyUnitOfWork,
     ConcurrencyGuard,
     PolicyEngine,
-    PolicySnapshotDTO,
+    PolicySnapshot,
     ProposalRouter,
     ReferenceBase,
     RiskLevel,
     SessionManager,
     register_models,
 )
-from agent_control_plane.types.proposals import ActionProposalDTO
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ async def main():
         uow = AsyncSqlAlchemyUnitOfWork(session)
 
         # 1. Define Policy
-        policy = PolicySnapshotDTO(
+        policy = PolicySnapshot(
             action_tiers={
                 ActionTier.BLOCKED: [ActionName.DELETE_CLUSTER, ActionName.WIPE_DISK],
                 ActionTier.ALWAYS_APPROVE: [ActionName.FETCH_METRICS, ActionName.GET_LOGS],
@@ -78,7 +78,7 @@ async def main():
 
         for action, res, weight, score in tasks:
             logger.info(f"\n[PROPOSE] {action} on {res}")
-            dto = ActionProposalDTO(
+            dto = ActionProposal(
                 session_id=cs.id,
                 resource_id=res,
                 resource_type="pod",

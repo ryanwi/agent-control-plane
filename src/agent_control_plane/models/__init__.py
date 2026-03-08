@@ -1,30 +1,30 @@
 """Control plane model utilities and reference ORM models."""
 
 from agent_control_plane.models.reference import (
-    ActionProposal,
+    ActionProposalRow,
     AgentRecord,
-    ApprovalTicket,
+    ApprovalTicketRow,
     Base,
     CommandLedger,
     ControlEvent,
     ControlSession,
     DelegationRecord,
-    PolicySnapshot,
+    PolicySnapshotRow,
     SessionSeqCounter,
     create_tables,
     register_models,
 )
 
 __all__ = [
-    "ActionProposal",
+    "ActionProposalRow",
     "AgentRecord",
-    "ApprovalTicket",
+    "ApprovalTicketRow",
     "Base",
     "CommandLedger",
     "ControlEvent",
     "ControlSession",
     "DelegationRecord",
-    "PolicySnapshot",
+    "PolicySnapshotRow",
     "SessionSeqCounter",
     "create_tables",
     "register_models",

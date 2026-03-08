@@ -7,20 +7,20 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from agent_control_plane.sync import KillResultDTO
+from agent_control_plane.sync import KillResult
 from agent_control_plane.types import (
     ApprovalDecisionType,
     ApprovalStatus,
-    ApprovalTicketDTO,
+    ApprovalTicket,
     EventKind,
     ExecutionMode,
     KillSwitchScope,
-    PageDTO,
-    SessionHealthDTO,
+    Page,
+    SessionHealth,
     SessionState,
     SessionStatus,
-    StateChangeDTO,
-    StateChangePageDTO,
+    StateChange,
+    StateChangePage,
 )
 from agent_control_plane.types.frames import EventFrame
 
@@ -61,11 +61,11 @@ class DemoFacade(FacadeProtocol):
         statuses: list[ApprovalStatus] | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> PageDTO[ApprovalTicketDTO]:
+    ) -> Page[ApprovalTicket]:
         _ = (session_id, statuses, limit, offset)
-        return PageDTO(items=[], next_offset=None)
+        return Page(items=[], next_offset=None)
 
-    async def get_ticket(self, ticket_id: UUID) -> ApprovalTicketDTO | None:
+    async def get_ticket(self, ticket_id: UUID) -> ApprovalTicket | None:
         _ = ticket_id
         return None
 
@@ -81,7 +81,7 @@ class DemoFacade(FacadeProtocol):
         scope_max_action_count: int | None = None,
         scope_expiry: str | None = None,
         command_id: str | None = None,
-    ) -> ApprovalTicketDTO:
+    ) -> ApprovalTicket:
         _ = (
             ticket_id,
             decided_by,
@@ -95,9 +95,7 @@ class DemoFacade(FacadeProtocol):
         )
         raise ValueError("Ticket not found")
 
-    async def deny_ticket(
-        self, ticket_id: UUID, *, reason: str = "", command_id: str | None = None
-    ) -> ApprovalTicketDTO:
+    async def deny_ticket(self, ticket_id: UUID, *, reason: str = "", command_id: str | None = None) -> ApprovalTicket:
         _ = (ticket_id, reason, command_id)
         raise ValueError("Ticket not found")
 
@@ -107,7 +105,7 @@ class DemoFacade(FacadeProtocol):
         session_id: UUID | None = None,
         cursor: int = 0,
         limit: int = 100,
-    ) -> StateChangePageDTO:
+    ) -> StateChangePage:
         _ = (session_id, cursor, limit)
         event = EventFrame(
             session_id=uuid4(),
@@ -116,10 +114,10 @@ class DemoFacade(FacadeProtocol):
             payload={"source": "demo"},
             state_bearing=True,
         )
-        return StateChangePageDTO(items=[StateChangeDTO(cursor=1, event=event)], next_cursor=None)
+        return StateChangePage(items=[StateChange(cursor=1, event=event)], next_cursor=None)
 
-    async def get_health_snapshot(self) -> SessionHealthDTO:
-        return SessionHealthDTO(
+    async def get_health_snapshot(self) -> SessionHealth:
+        return SessionHealth(
             total_sessions=1,
             active_sessions=1,
             created_sessions=0,
@@ -130,13 +128,13 @@ class DemoFacade(FacadeProtocol):
 
     async def kill_session(
         self, session_id: UUID, *, reason: str = "Kill switch triggered", command_id: str | None = None
-    ) -> KillResultDTO:
+    ) -> KillResult:
         _ = (reason, command_id)
-        return KillResultDTO(scope=KillSwitchScope.SESSION_ABORT, session_id=session_id, tickets_denied=0)
+        return KillResult(scope=KillSwitchScope.SESSION_ABORT, session_id=session_id, tickets_denied=0)
 
-    async def kill_system(self, *, reason: str = "System halt", command_id: str | None = None) -> KillResultDTO:
+    async def kill_system(self, *, reason: str = "System halt", command_id: str | None = None) -> KillResult:
         _ = (reason, command_id)
-        return KillResultDTO(scope=KillSwitchScope.SYSTEM_HALT, sessions_aborted=0, tickets_denied=0)
+        return KillResult(scope=KillSwitchScope.SYSTEM_HALT, sessions_aborted=0, tickets_denied=0)
 
 
 def _auth_policy() -> AllowAllAuthPolicy | BearerTokenAuthPolicy:

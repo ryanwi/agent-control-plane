@@ -34,7 +34,7 @@ class Base(DeclarativeBase):
     """Shared declarative base for reference models."""
 
 
-class PolicySnapshot(Base, PolicySnapshotMixin):
+class PolicySnapshotRow(Base, PolicySnapshotMixin):
     __tablename__ = "policy_snapshots"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
@@ -60,14 +60,14 @@ class ControlEvent(Base, ControlEventMixin):
     session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
 
 
-class ActionProposal(Base, ActionProposalMixin):
+class ActionProposalRow(Base, ActionProposalMixin):
     __tablename__ = "action_proposals"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
 
 
-class ApprovalTicket(Base, ApprovalTicketMixin):
+class ApprovalTicketRow(Base, ApprovalTicketMixin):
     __tablename__ = "approval_tickets"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
@@ -101,12 +101,12 @@ class CommandLedger(Base, CommandLedgerMixin):
 
 def register_models(registry: RegistryProtocol = DEFAULT_MODEL_REGISTRY) -> None:
     """Register all reference models with the ModelRegistry."""
-    registry.register("PolicySnapshot", PolicySnapshot)
+    registry.register("PolicySnapshot", PolicySnapshotRow)
     registry.register("ControlSession", ControlSession)
     registry.register("SessionSeqCounter", SessionSeqCounter)
     registry.register("ControlEvent", ControlEvent)
-    registry.register("ActionProposal", ActionProposal)
-    registry.register("ApprovalTicket", ApprovalTicket)
+    registry.register("ActionProposal", ActionProposalRow)
+    registry.register("ApprovalTicket", ApprovalTicketRow)
     registry.register("AgentRecord", AgentRecord)
     registry.register("DelegationRecord", DelegationRecord)
     registry.register("CommandLedger", CommandLedger)

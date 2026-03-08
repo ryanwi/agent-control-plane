@@ -22,7 +22,7 @@ from agent_control_plane import (
     ExecutionMode,
     KillSwitch,
     KillSwitchScope,
-    PolicySnapshotDTO,
+    PolicySnapshot,
     ProposalStatus,
     ReferenceBase,
     SessionManager,
@@ -51,7 +51,7 @@ async def main():
         gate = ApprovalGate(es, uow.approval_repo, uow.proposal_repo)
         ks = KillSwitch(sm, es, uow.session_repo, uow.approval_repo)
 
-        policy = PolicySnapshotDTO(execution_mode=ExecutionMode.LIVE)
+        policy = PolicySnapshot(execution_mode=ExecutionMode.LIVE)
         pid = await sm.create_policy(**policy.model_dump(mode="json", exclude={"id", "created_at"}))
 
         # 1. Setup multiple sessions with pending tickets

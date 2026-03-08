@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import uuid4
 
 from agent_control_plane.telemetry import export_event, export_scorecard
-from agent_control_plane.types.agentic import ControlPlaneScorecardDTO
+from agent_control_plane.types.agentic import ControlPlaneScorecard
 from agent_control_plane.types.enums import EventKind
 from agent_control_plane.types.frames import EventFrame
 
@@ -48,7 +48,7 @@ def test_export_event_maps_core_attributes() -> None:
 
 def test_export_scorecard_records_expected_metrics() -> None:
     meter = _Meter()
-    scorecard = ControlPlaneScorecardDTO(
+    scorecard = ControlPlaneScorecard(
         total_events=10,
         checkpoints_created=1,
         rollbacks_completed=2,

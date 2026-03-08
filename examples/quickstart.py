@@ -34,14 +34,13 @@ from agent_control_plane.types.enums import (
     ProposalStatus,
     RiskLevel,
 )
-from agent_control_plane.types.policies import PolicySnapshotDTO
-from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.policies import PolicySnapshot
 
 DATABASE_URL = "sqlite+aiosqlite:///./agent_control_plane_example.db"
 
 
-def _seed_policy() -> PolicySnapshotDTO:
-    return PolicySnapshotDTO(
+def _seed_policy() -> PolicySnapshot:
+    return PolicySnapshot(
         action_tiers={
             "blocked": [ActionName.BAN],
             "always_approve": [ActionName.REFUND],
@@ -85,7 +84,7 @@ async def run_control_flow(uow: AsyncSqlAlchemyUnitOfWork) -> None:
         policy_id=policy_id,
     )
 
-    proposal = ActionProposalDTO(
+    proposal = ActionProposal(
         session_id=session.id,
         resource_id="ticket-123",
         resource_type="support_ticket",

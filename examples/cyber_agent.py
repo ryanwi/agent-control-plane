@@ -21,7 +21,7 @@ from agent_control_plane import (
     AsyncSqlAlchemyUnitOfWork,
     EventStore,
     PolicyEngine,
-    PolicySnapshotDTO,
+    PolicySnapshot,
     ProposalRouter,
     ProposalStatus,
     ReferenceBase,
@@ -29,7 +29,6 @@ from agent_control_plane import (
     SessionManager,
     register_models,
 )
-from agent_control_plane.types.proposals import ActionProposalDTO
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -48,7 +47,7 @@ async def main():
         uow = AsyncSqlAlchemyUnitOfWork(session)
 
         # 1. Define Policy
-        policy = PolicySnapshotDTO(
+        policy = PolicySnapshot(
             action_tiers={
                 ActionTier.ALWAYS_APPROVE: [ActionName.SCAN_VULNERABILITY, ActionName.FETCH_LOGS],
                 ActionTier.AUTO_APPROVE: [],
@@ -79,7 +78,7 @@ async def main():
 
         for action, res, weight, score in tasks:
             logger.info(f"\n[PROPOSE] {action} on {res}")
-            dto = ActionProposalDTO(
+            dto = ActionProposal(
                 session_id=cs.id,
                 resource_id=res,
                 resource_type="host",

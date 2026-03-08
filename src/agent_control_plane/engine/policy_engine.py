@@ -14,8 +14,8 @@ from agent_control_plane.types.enums import (
     RiskLevel,
     RoutingResolutionStep,
 )
-from agent_control_plane.types.policies import PolicySnapshotDTO
-from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.policies import PolicySnapshot
+from agent_control_plane.types.proposals import ActionProposal
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class RiskClassifier(Protocol):
     The default implementation uses proposal weight and score fields.
     """
 
-    def classify(self, proposal: ActionProposalDTO, policy: PolicySnapshotDTO) -> RiskLevel: ...
+    def classify(self, proposal: ActionProposal, policy: PolicySnapshot) -> RiskLevel: ...
 
 
 class DefaultAssetClassifier:
@@ -60,7 +60,7 @@ class DefaultRiskClassifier:
     def __init__(self, asset_classifier: AssetClassifier | None = None) -> None:
         self._asset_classifier = asset_classifier
 
-    def classify(self, proposal: ActionProposalDTO, policy: PolicySnapshotDTO) -> RiskLevel:
+    def classify(self, proposal: ActionProposal, policy: PolicySnapshot) -> RiskLevel:
         is_matched = self._is_matched_asset(proposal.resource_id)
         auto_cond = policy.auto_approve_conditions
 
@@ -85,7 +85,7 @@ class PolicyEngine:
 
     def __init__(
         self,
-        policy: PolicySnapshotDTO,
+        policy: PolicySnapshot,
         asset_classifier: AssetClassifier | None = None,
         risk_classifier: RiskClassifier | None = None,
     ) -> None:
@@ -94,13 +94,13 @@ class PolicyEngine:
         self._risk_classifier = risk_classifier or DefaultRiskClassifier(asset_classifier)
         self._action_registry = ActionPolicyRegistry(policy)
 
-    def classify_risk_level(self, proposal: ActionProposalDTO) -> RiskLevel:
+    def classify_risk_level(self, proposal: ActionProposal) -> RiskLevel:
         """Classify a proposal's risk level using the configured risk classifier."""
         return self._risk_classifier.classify(proposal, self.policy)
 
     def classify_action_tier(
         self,
-        proposal: ActionProposalDTO,
+        proposal: ActionProposal,
         risk_level: RiskLevel,
     ) -> ActionTier:
         """Determine the action tier for a proposal.
@@ -139,13 +139,13 @@ class PolicyEngine:
             can_auto_approve=self._can_auto_approve(risk_level),
         )
 
-    def get_action_handler(self, proposal: ActionProposalDTO) -> ActionPolicyHandler:
+    def get_action_handler(self, proposal: ActionProposal) -> ActionPolicyHandler:
         """Resolve the action handler for a proposal."""
         return self._action_registry.resolve(proposal.decision)
 
     def build_routing_reason(
         self,
-        proposal: ActionProposalDTO,
+        proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
     ) -> tuple[str, RoutingResolutionStep]:
@@ -158,11 +158,11 @@ class PolicyEngine:
         handler = self.get_action_handler(proposal)
         return handler.build_routing_reason(proposal, risk_level, tier)
 
-    def _is_blocked(self, proposal: ActionProposalDTO) -> bool:
+    def _is_blocked(self, proposal: ActionProposal) -> bool:
         """Check if the proposal's action is in the blocked list."""
         return proposal.decision == ActionName.UNKNOWN or proposal.decision in self.policy.action_tiers.blocked
 
-    def _passes_asset_scope(self, proposal: ActionProposalDTO) -> bool:
+    def _passes_asset_scope(self, proposal: ActionProposal) -> bool:
         """Check if the proposal passes the asset scope filter."""
         if self.policy.asset_scope == AssetScope.MATCHED_ONLY:
             return self._is_matched_asset(proposal.resource_id)

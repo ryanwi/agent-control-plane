@@ -26,7 +26,7 @@ from agent_control_plane.types.enums import (
     SessionStatus,
     UnknownAppEventPolicy,
 )
-from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.proposals import ActionProposal
 
 
 @pytest.mark.asyncio
@@ -207,7 +207,7 @@ async def test_async_facade_create_proposal_idempotency(tmp_path: Path):
     facade = AsyncControlPlaneFacade.from_database_url(f"sqlite+aiosqlite:///{db_file}")
 
     sid = await facade.open_session("async-create-proposal")
-    proposal = ActionProposalDTO(
+    proposal = ActionProposal(
         session_id=sid,
         resource_id="async-resource-1",
         resource_type="task",

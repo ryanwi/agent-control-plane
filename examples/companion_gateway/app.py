@@ -12,16 +12,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
-from agent_control_plane.sync import KillResultDTO
+from agent_control_plane.sync import KillResult
 from agent_control_plane.types import (
     ApprovalDecisionType,
     ApprovalStatus,
-    ApprovalTicketDTO,
-    PageDTO,
-    SessionHealthDTO,
+    ApprovalTicket,
+    Page,
+    SessionHealth,
     SessionState,
     SessionStatus,
-    StateChangePageDTO,
+    StateChangePage,
 )
 
 
@@ -39,9 +39,9 @@ class FacadeProtocol(Protocol):
         statuses: list[ApprovalStatus] | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> PageDTO[ApprovalTicketDTO]: ...
+    ) -> Page[ApprovalTicket]: ...
 
-    async def get_ticket(self, ticket_id: UUID) -> ApprovalTicketDTO | None: ...
+    async def get_ticket(self, ticket_id: UUID) -> ApprovalTicket | None: ...
 
     async def approve_ticket(
         self,
@@ -55,11 +55,11 @@ class FacadeProtocol(Protocol):
         scope_max_action_count: int | None = None,
         scope_expiry: Any | None = None,
         command_id: str | None = None,
-    ) -> ApprovalTicketDTO: ...
+    ) -> ApprovalTicket: ...
 
     async def deny_ticket(
         self, ticket_id: UUID, *, reason: str = "", command_id: str | None = None
-    ) -> ApprovalTicketDTO: ...
+    ) -> ApprovalTicket: ...
 
     async def get_state_change_feed(
         self,
@@ -67,15 +67,15 @@ class FacadeProtocol(Protocol):
         session_id: UUID | None = None,
         cursor: int = 0,
         limit: int = 100,
-    ) -> StateChangePageDTO: ...
+    ) -> StateChangePage: ...
 
-    async def get_health_snapshot(self) -> SessionHealthDTO: ...
+    async def get_health_snapshot(self) -> SessionHealth: ...
 
     async def kill_session(
         self, session_id: UUID, *, reason: str = "Kill switch triggered", command_id: str | None = None
-    ) -> KillResultDTO: ...
+    ) -> KillResult: ...
 
-    async def kill_system(self, *, reason: str = "System halt", command_id: str | None = None) -> KillResultDTO: ...
+    async def kill_system(self, *, reason: str = "System halt", command_id: str | None = None) -> KillResult: ...
 
 
 class ApproveTicketRequest(BaseModel):

@@ -19,7 +19,7 @@ from agent_control_plane import (
     BudgetTracker,
     ConcurrencyGuard,
     ExecutionMode,
-    PolicySnapshotDTO,
+    PolicySnapshot,
     ReferenceBase,
     ResourceLockedError,
     SessionManager,
@@ -78,7 +78,7 @@ async def main():
     async with session_maker() as session:
         uow = AsyncSqlAlchemyUnitOfWork(session)
         sm = SessionManager(uow.session_repo)
-        policy = PolicySnapshotDTO(execution_mode=ExecutionMode.LIVE)
+        policy = PolicySnapshot(execution_mode=ExecutionMode.LIVE)
         pid = await sm.create_policy(**policy.model_dump(mode="json", exclude={"id", "created_at"}))
         # Total budget allows exactly 3 executions (30.0 cost)
         cs = await sm.create_session(session_name="rate-limit-session", max_cost=Decimal("30.0"), policy_id=pid)

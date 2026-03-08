@@ -5,8 +5,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from agent_control_plane.types.enums import ActionName, ActionTier, ActionValue, RiskLevel, RoutingResolutionStep
-from agent_control_plane.types.policies import PolicySnapshotDTO
-from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.policies import PolicySnapshot
+from agent_control_plane.types.proposals import ActionProposal
 
 
 class ActionPolicyHandler(ABC):
@@ -15,16 +15,16 @@ class ActionPolicyHandler(ABC):
     @abstractmethod
     def classify_tier(
         self,
-        proposal: ActionProposalDTO,
+        proposal: ActionProposal,
         risk_level: RiskLevel,
-        policy: PolicySnapshotDTO,
+        policy: PolicySnapshot,
         can_auto_approve: bool,
     ) -> ActionTier: ...
 
     @abstractmethod
     def build_routing_reason(
         self,
-        proposal: ActionProposalDTO,
+        proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
     ) -> tuple[str, RoutingResolutionStep]: ...
@@ -33,16 +33,16 @@ class ActionPolicyHandler(ABC):
 class BlockedActionHandler(ActionPolicyHandler):
     def classify_tier(
         self,
-        proposal: ActionProposalDTO,
+        proposal: ActionProposal,
         risk_level: RiskLevel,
-        policy: PolicySnapshotDTO,
+        policy: PolicySnapshot,
         can_auto_approve: bool,
     ) -> ActionTier:
         return ActionTier.BLOCKED
 
     def build_routing_reason(
         self,
-        proposal: ActionProposalDTO,
+        proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
     ) -> tuple[str, RoutingResolutionStep]:
@@ -55,7 +55,7 @@ class BlockedActionHandler(ActionPolicyHandler):
 class UnknownActionHandler(BlockedActionHandler):
     def build_routing_reason(
         self,
-        proposal: ActionProposalDTO,
+        proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
     ) -> tuple[str, RoutingResolutionStep]:
@@ -69,16 +69,16 @@ class UnknownActionHandler(BlockedActionHandler):
 class AlwaysApproveActionHandler(ActionPolicyHandler):
     def classify_tier(
         self,
-        proposal: ActionProposalDTO,
+        proposal: ActionProposal,
         risk_level: RiskLevel,
-        policy: PolicySnapshotDTO,
+        policy: PolicySnapshot,
         can_auto_approve: bool,
     ) -> ActionTier:
         return ActionTier.ALWAYS_APPROVE
 
     def build_routing_reason(
         self,
-        proposal: ActionProposalDTO,
+        proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
     ) -> tuple[str, RoutingResolutionStep]:
@@ -91,16 +91,16 @@ class AlwaysApproveActionHandler(ActionPolicyHandler):
 class AutoApproveActionHandler(ActionPolicyHandler):
     def classify_tier(
         self,
-        proposal: ActionProposalDTO,
+        proposal: ActionProposal,
         risk_level: RiskLevel,
-        policy: PolicySnapshotDTO,
+        policy: PolicySnapshot,
         can_auto_approve: bool,
     ) -> ActionTier:
         return ActionTier.AUTO_APPROVE if can_auto_approve else ActionTier.ALWAYS_APPROVE
 
     def build_routing_reason(
         self,
-        proposal: ActionProposalDTO,
+        proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
     ) -> tuple[str, RoutingResolutionStep]:
@@ -118,9 +118,9 @@ class AutoApproveActionHandler(ActionPolicyHandler):
 class DefaultRiskBasedHandler(ActionPolicyHandler):
     def classify_tier(
         self,
-        proposal: ActionProposalDTO,
+        proposal: ActionProposal,
         risk_level: RiskLevel,
-        policy: PolicySnapshotDTO,
+        policy: PolicySnapshot,
         can_auto_approve: bool,
     ) -> ActionTier:
         if risk_level == RiskLevel.LOW:
@@ -129,7 +129,7 @@ class DefaultRiskBasedHandler(ActionPolicyHandler):
 
     def build_routing_reason(
         self,
-        proposal: ActionProposalDTO,
+        proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
     ) -> tuple[str, RoutingResolutionStep]:
@@ -147,7 +147,7 @@ class DefaultRiskBasedHandler(ActionPolicyHandler):
 class ActionPolicyRegistry:
     """Maps actions to concrete policy handlers."""
 
-    def __init__(self, policy: PolicySnapshotDTO) -> None:
+    def __init__(self, policy: PolicySnapshot) -> None:
         self._unknown_handler = UnknownActionHandler()
         self._default_handler = DefaultRiskBasedHandler()
         self._handlers_by_action: dict[ActionValue, ActionPolicyHandler] = {}

@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 from agent_control_plane.engine.budget_tracker import BudgetExhaustedError
 from agent_control_plane.types.agents import AgentMetadata, DelegationProposal
-from agent_control_plane.types.approvals import ApprovalTicketDTO
+from agent_control_plane.types.approvals import ApprovalTicket
 from agent_control_plane.types.enums import (
     ApprovalDecisionType,
     ApprovalStatus,
@@ -21,7 +21,7 @@ from agent_control_plane.types.enums import (
     SessionStatus,
 )
 from agent_control_plane.types.frames import EventFrame
-from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
 
 
@@ -154,10 +154,10 @@ class InMemoryApprovalRepository:
     """In-memory approval repository for tests."""
 
     def __init__(self) -> None:
-        self._tickets: dict[UUID, ApprovalTicketDTO] = {}
+        self._tickets: dict[UUID, ApprovalTicket] = {}
 
-    async def create_ticket(self, session_id: UUID, proposal_id: UUID, timeout_at: datetime) -> ApprovalTicketDTO:
-        ticket = ApprovalTicketDTO(
+    async def create_ticket(self, session_id: UUID, proposal_id: UUID, timeout_at: datetime) -> ApprovalTicket:
+        ticket = ApprovalTicket(
             id=uuid4(),
             session_id=session_id,
             proposal_id=proposal_id,
@@ -167,7 +167,7 @@ class InMemoryApprovalRepository:
         self._tickets[ticket.id] = ticket
         return ticket
 
-    async def get_pending_ticket_for_update(self, ticket_id: UUID) -> ApprovalTicketDTO:
+    async def get_pending_ticket_for_update(self, ticket_id: UUID) -> ApprovalTicket:
         ticket = self._tickets.get(ticket_id)
         if ticket is None:
             raise ValueError(f"Ticket {ticket_id} not found")
@@ -183,13 +183,13 @@ class InMemoryApprovalRepository:
             if hasattr(ticket, k):
                 object.__setattr__(ticket, k, v)
 
-    async def get_pending_tickets(self, session_id: UUID | None = None) -> list[ApprovalTicketDTO]:
+    async def get_pending_tickets(self, session_id: UUID | None = None) -> list[ApprovalTicket]:
         result = [t for t in self._tickets.values() if t.status == ApprovalStatus.PENDING]
         if session_id is not None:
             result = [t for t in result if t.session_id == session_id]
         return result
 
-    async def get_session_scope_tickets(self, session_id: UUID) -> list[ApprovalTicketDTO]:
+    async def get_session_scope_tickets(self, session_id: UUID) -> list[ApprovalTicket]:
         return [
             t
             for t in self._tickets.values()
@@ -212,7 +212,7 @@ class InMemoryApprovalRepository:
                 count += 1
         return count
 
-    async def expire_timed_out(self) -> list[ApprovalTicketDTO]:
+    async def expire_timed_out(self) -> list[ApprovalTicket]:
         now = datetime.now(UTC)
         expired = []
         for ticket in self._tickets.values():
@@ -228,7 +228,7 @@ class InMemoryProposalRepository:
     """In-memory proposal repository for tests."""
 
     def __init__(self) -> None:
-        self._proposals: dict[UUID, ActionProposalDTO] = {}
+        self._proposals: dict[UUID, ActionProposal] = {}
 
     def add_proposal(
         self,
@@ -237,7 +237,7 @@ class InMemoryProposalRepository:
         resource_id: str,
         status: ProposalStatus = ProposalStatus.PENDING,
     ) -> None:
-        self._proposals[proposal_id] = ActionProposalDTO(
+        self._proposals[proposal_id] = ActionProposal(
             id=proposal_id,
             session_id=session_id,
             resource_id=resource_id,
@@ -247,11 +247,11 @@ class InMemoryProposalRepository:
             status=status,
         )
 
-    async def create_proposal(self, proposal: ActionProposalDTO) -> ActionProposalDTO:
+    async def create_proposal(self, proposal: ActionProposal) -> ActionProposal:
         self._proposals[proposal.id] = proposal
         return proposal
 
-    async def get_proposal(self, proposal_id: UUID) -> ActionProposalDTO | None:
+    async def get_proposal(self, proposal_id: UUID) -> ActionProposal | None:
         return self._proposals.get(proposal_id)
 
     async def list_proposals(
@@ -261,7 +261,7 @@ class InMemoryProposalRepository:
         statuses: list[ProposalStatus] | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[ActionProposalDTO]:
+    ) -> list[ActionProposal]:
         rows = list(self._proposals.values())
         if session_id is not None:
             rows = [row for row in rows if row.session_id == session_id]

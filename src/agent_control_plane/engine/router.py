@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from agent_control_plane.engine.policy_engine import PolicyEngine
 from agent_control_plane.types.enums import ActionTier, RiskLevel, RoutingResolutionStep
-from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.proposals import ActionProposal
 
 if TYPE_CHECKING:
     from agent_control_plane.engine.agent_registry import AgentRegistry
@@ -33,7 +33,7 @@ class ProposalRouter:
         self.policy_engine = policy_engine
         self.agent_registry = agent_registry
 
-    async def route(self, proposal: ActionProposalDTO) -> RoutingDecision:
+    async def route(self, proposal: ActionProposal) -> RoutingDecision:
         """Route a proposal and return the decision with audit trail."""
         # 1. Identity Check
         if self.agent_registry and proposal.agent_id:

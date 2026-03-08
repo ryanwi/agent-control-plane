@@ -7,7 +7,7 @@ from hashlib import sha256
 from typing import Protocol
 
 from agent_control_plane.types.benchmark import (
-    BenchmarkRunResultDTO,
+    BenchmarkRunResult,
     BenchmarkRunSpec,
 )
 
@@ -51,13 +51,13 @@ def run_benchmark(
     *,
     runner: ScenarioRunner,
     evaluator: FitnessEvaluator | None = None,
-) -> BenchmarkRunResultDTO:
+) -> BenchmarkRunResult:
     started = datetime.now(UTC)
     metrics = runner.run(spec)
     active_evaluator = evaluator or WeightedFitnessEvaluator()
     fitness, breakdown = active_evaluator.evaluate(metrics, spec)
     ended = datetime.now(UTC)
-    return BenchmarkRunResultDTO(
+    return BenchmarkRunResult(
         scenario_name=spec.scenario.name,
         scenario_version=spec.scenario.version,
         seed=spec.scenario.seed,
@@ -75,5 +75,5 @@ def run_batch(
     *,
     runner: ScenarioRunner,
     evaluator: FitnessEvaluator | None = None,
-) -> list[BenchmarkRunResultDTO]:
+) -> list[BenchmarkRunResult]:
     return [run_benchmark(spec, runner=runner, evaluator=evaluator) for spec in specs]

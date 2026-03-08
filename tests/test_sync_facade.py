@@ -16,7 +16,7 @@ from agent_control_plane.sync import (
     AppEventMapper,
     ControlPlaneFacade,
     DictEventMapper,
-    MappedEventDTO,
+    MappedEvent,
     SyncControlPlane,
     UnknownAppEventError,
 )
@@ -36,7 +36,7 @@ from agent_control_plane.types.enums import (
     RiskLevel,
     UnknownAppEventPolicy,
 )
-from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.proposals import ActionProposal
 
 
 def _insert_pending_proposal(facade: ControlPlaneFacade, session_id: UUID, *, resource_id: str) -> UUID:
@@ -134,7 +134,7 @@ def test_sync_control_plane_emit_app_event_mapper_and_unknown_policy(tmp_path: P
 
 
 class _SecurityMapper(AppEventMapper):
-    def map_event(self, event_name: str, payload: Mapping[str, Any]) -> MappedEventDTO | None:
+    def map_event(self, event_name: str, payload: Mapping[str, Any]) -> MappedEvent | None:
         if event_name == "scan_started":
             return DictEventMapper({"scan_started": EventKind.CYCLE_STARTED}).map_event(event_name, payload)
         if event_name == "scan_completed":
@@ -260,7 +260,7 @@ def test_control_plane_facade_create_proposal_idempotency(tmp_path: Path):
     facade.setup()
 
     sid = facade.open_session("sync-create-proposal")
-    proposal = ActionProposalDTO(
+    proposal = ActionProposal(
         session_id=sid,
         resource_id="sync-resource-1",
         resource_type="task",

@@ -10,8 +10,8 @@ import yaml
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
 
-from agent_control_plane.sync import KillResultDTO
-from agent_control_plane.types.approvals import ApprovalTicketDTO
+from agent_control_plane.sync import KillResult
+from agent_control_plane.types.approvals import ApprovalTicket
 from agent_control_plane.types.enums import (
     ApprovalDecisionType,
     ApprovalStatus,
@@ -21,7 +21,7 @@ from agent_control_plane.types.enums import (
     SessionStatus,
 )
 from agent_control_plane.types.frames import EventFrame
-from agent_control_plane.types.query import PageDTO, SessionHealthDTO, StateChangeDTO, StateChangePageDTO
+from agent_control_plane.types.query import Page, SessionHealth, StateChange, StateChangePage
 from agent_control_plane.types.sessions import SessionState
 from examples.companion_gateway.app import AllowAllAuthPolicy, create_app
 
@@ -49,11 +49,11 @@ class _StubFacade:
         statuses: list[ApprovalStatus] | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> PageDTO[ApprovalTicketDTO]:
+    ) -> Page[ApprovalTicket]:
         _ = (session_id, statuses, limit, offset)
-        return PageDTO(items=[self._ticket()], next_offset=None)
+        return Page(items=[self._ticket()], next_offset=None)
 
-    async def get_ticket(self, ticket_id: UUID) -> ApprovalTicketDTO | None:
+    async def get_ticket(self, ticket_id: UUID) -> ApprovalTicket | None:
         return self._ticket() if ticket_id == self.ticket_id else None
 
     async def approve_ticket(
@@ -68,7 +68,7 @@ class _StubFacade:
         scope_max_action_count: int | None = None,
         scope_expiry: Any | None = None,
         command_id: str | None = None,
-    ) -> ApprovalTicketDTO:
+    ) -> ApprovalTicket:
         _ = (
             ticket_id,
             decided_by,
@@ -92,9 +92,7 @@ class _StubFacade:
             }
         )
 
-    async def deny_ticket(
-        self, ticket_id: UUID, *, reason: str = "", command_id: str | None = None
-    ) -> ApprovalTicketDTO:
+    async def deny_ticket(self, ticket_id: UUID, *, reason: str = "", command_id: str | None = None) -> ApprovalTicket:
         _ = (ticket_id, command_id)
         ticket = self._ticket()
         return ticket.model_copy(update={"status": ApprovalStatus.DENIED, "decision_reason": reason})
@@ -105,7 +103,7 @@ class _StubFacade:
         session_id: UUID | None = None,
         cursor: int = 0,
         limit: int = 100,
-    ) -> StateChangePageDTO:
+    ) -> StateChangePage:
         _ = (session_id, cursor, limit)
         event = EventFrame(
             session_id=self.session_id,
@@ -114,10 +112,10 @@ class _StubFacade:
             payload={"cycle_id": str(uuid4())},
             state_bearing=True,
         )
-        return StateChangePageDTO(items=[StateChangeDTO(cursor=1, event=event)], next_cursor=None)
+        return StateChangePage(items=[StateChange(cursor=1, event=event)], next_cursor=None)
 
-    async def get_health_snapshot(self) -> SessionHealthDTO:
-        return SessionHealthDTO(
+    async def get_health_snapshot(self) -> SessionHealth:
+        return SessionHealth(
             total_sessions=1,
             active_sessions=1,
             created_sessions=0,
@@ -128,13 +126,13 @@ class _StubFacade:
 
     async def kill_session(
         self, session_id: UUID, *, reason: str = "Kill switch triggered", command_id: str | None = None
-    ) -> KillResultDTO:
+    ) -> KillResult:
         _ = (reason, command_id)
-        return KillResultDTO(scope=KillSwitchScope.SESSION_ABORT, session_id=session_id, tickets_denied=1)
+        return KillResult(scope=KillSwitchScope.SESSION_ABORT, session_id=session_id, tickets_denied=1)
 
-    async def kill_system(self, *, reason: str = "System halt", command_id: str | None = None) -> KillResultDTO:
+    async def kill_system(self, *, reason: str = "System halt", command_id: str | None = None) -> KillResult:
         _ = (reason, command_id)
-        return KillResultDTO(scope=KillSwitchScope.SYSTEM_HALT, sessions_aborted=3, tickets_denied=2)
+        return KillResult(scope=KillSwitchScope.SYSTEM_HALT, sessions_aborted=3, tickets_denied=2)
 
     def _session(self) -> SessionState:
         now = datetime.now(UTC)
@@ -151,9 +149,9 @@ class _StubFacade:
             updated_at=now,
         )
 
-    def _ticket(self) -> ApprovalTicketDTO:
+    def _ticket(self) -> ApprovalTicket:
         now = datetime.now(UTC)
-        return ApprovalTicketDTO(
+        return ApprovalTicket(
             id=self.ticket_id,
             session_id=self.session_id,
             proposal_id=self.proposal_id,

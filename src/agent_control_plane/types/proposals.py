@@ -20,7 +20,7 @@ from .extensions import get_metadata_schema
 from .ids import AgentId, ResourceId
 
 
-class ActionProposalDTO(AliasProfiledModel):
+class ActionProposal(AliasProfiledModel):
     """An action proposal generated from an agent recommendation."""
 
     id: UUID = Field(default_factory=uuid4)
@@ -65,7 +65,7 @@ class ActionProposalDTO(AliasProfiledModel):
         return resolved_schema.model_validate(self.metadata)
 
 
-class RiskDecisionDTO(AliasProfiledModel):
+class RiskDecision(AliasProfiledModel):
     """Risk assessment result for an action proposal."""
 
     id: UUID = Field(default_factory=uuid4)
@@ -82,7 +82,7 @@ class RiskDecisionDTO(AliasProfiledModel):
     assessed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class ExecutionIntentDTO(AliasProfiledModel):
+class ExecutionIntent(AliasProfiledModel):
     """Intent to execute an approved proposal."""
 
     id: UUID = Field(default_factory=uuid4)
@@ -97,7 +97,7 @@ class ExecutionIntentDTO(AliasProfiledModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class ExecutionResultDTO(AliasProfiledModel):
+class ExecutionResult(AliasProfiledModel):
     """Outcome of executing an action."""
 
     id: UUID = Field(default_factory=uuid4)

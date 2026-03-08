@@ -29,8 +29,8 @@ from agent_control_plane.types.extensions import (
     register_metadata_schema,
     register_risk_limits_extension_schema,
 )
-from agent_control_plane.types.policies import PolicySnapshotDTO, RiskLimits
-from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.policies import PolicySnapshot, RiskLimits
+from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.sessions import SessionCreate
 
 
@@ -64,7 +64,7 @@ def test_alias_profile_round_trip_on_action_proposal_and_session():
     )
     AliasRegistry.register_profile(profile)
 
-    proposal = ActionProposalDTO.model_validate_with_profile(
+    proposal = ActionProposal.model_validate_with_profile(
         {
             "session_id": str(uuid4()),
             "security_id": "AAPL",
@@ -99,7 +99,7 @@ def test_register_custom_action_name_with_fail_closed_unknown():
     assert parse_action_name("buy") == "buy"
     assert parse_action_name("completely_unknown") == ActionName.UNKNOWN
 
-    policy = PolicySnapshotDTO(
+    policy = PolicySnapshot(
         action_tiers={
             "blocked": ["buy"],
             "always_approve": [],
@@ -109,7 +109,7 @@ def test_register_custom_action_name_with_fail_closed_unknown():
         execution_mode=ExecutionMode.DRY_RUN,
     )
     engine = PolicyEngine(policy)
-    proposal = ActionProposalDTO(
+    proposal = ActionProposal(
         session_id=uuid4(),
         resource_id="AAPL",
         resource_type="equity",
@@ -128,8 +128,8 @@ def test_action_proposal_metadata_schema_validation():
         stop_loss: Decimal | None = None
         take_profit: Decimal | None = None
 
-    register_metadata_schema(ActionProposalDTO, TradingMetadata)
-    proposal = ActionProposalDTO(
+    register_metadata_schema(ActionProposal, TradingMetadata)
+    proposal = ActionProposal(
         session_id=uuid4(),
         resource_id="AAPL",
         resource_type="equity",
@@ -141,7 +141,7 @@ def test_action_proposal_metadata_schema_validation():
     typed = proposal.metadata_as()
     assert typed.target_price == Decimal("250")
 
-    bad = ActionProposalDTO(
+    bad = ActionProposal(
         session_id=uuid4(),
         resource_id="AAPL",
         resource_type="equity",

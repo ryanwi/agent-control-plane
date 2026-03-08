@@ -28,7 +28,7 @@ from agent_control_plane.types.enums import (
     RiskLevel,
     SessionStatus,
 )
-from agent_control_plane.types.proposals import ActionProposalDTO
+from agent_control_plane.types.proposals import ActionProposal
 
 
 @pytest.fixture(autouse=True)
@@ -202,7 +202,7 @@ async def test_proposal_repo(db_session: AsyncSession):
         max_action_count=10,
     )
 
-    proposal = ActionProposalDTO(
+    proposal = ActionProposal(
         session_id=cs.id,
         resource_id="res-1",
         resource_type="task",

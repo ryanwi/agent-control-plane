@@ -13,14 +13,14 @@ from .frames import EventFrame
 T = TypeVar("T")
 
 
-class PageDTO(BaseModel, Generic[T]):
+class Page(BaseModel, Generic[T]):
     """Offset-based page of typed results."""
 
     items: list[T]
     next_offset: int | None = None
 
 
-class StateChangeDTO(BaseModel):
+class StateChange(BaseModel):
     """Canonical state change item for projection consumers."""
 
     cursor: int
@@ -28,14 +28,14 @@ class StateChangeDTO(BaseModel):
     projected_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class StateChangePageDTO(BaseModel):
+class StateChangePage(BaseModel):
     """Page of state-bearing events with next cursor."""
 
-    items: list[StateChangeDTO]
+    items: list[StateChange]
     next_cursor: int | None = None
 
 
-class SessionHealthDTO(BaseModel):
+class SessionHealth(BaseModel):
     """Operational health snapshot for control-plane state."""
 
     total_sessions: int
@@ -47,7 +47,7 @@ class SessionHealthDTO(BaseModel):
     captured_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
-class CommandResultDTO(BaseModel):
+class CommandResult(BaseModel):
     """Idempotent command ledger item."""
 
     command_id: str

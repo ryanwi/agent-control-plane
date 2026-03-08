@@ -27,25 +27,25 @@ from agent_control_plane.sync import (
     CMD_OPEN_SESSION,
     AppEventMapper,
     ApprovalTicketUpdateFields,
-    KillResultDTO,
+    KillResult,
     SessionLifecycleResult,
     UnknownAppEventError,
     guardrail_event_kind,
     kill_command_operation,
 )
 from agent_control_plane.types.agentic import (
-    ControlPlaneScorecardDTO,
-    EvaluationResultDTO,
-    GoalDTO,
-    GuardrailDecisionDTO,
-    HandoffResultDTO,
-    PlanDTO,
-    PlanProgressDTO,
-    PlanStepDTO,
-    RollbackResultDTO,
-    SessionCheckpointDTO,
+    ControlPlaneScorecard,
+    EvaluationResult,
+    Goal,
+    GuardrailDecision,
+    HandoffResult,
+    Plan,
+    PlanProgress,
+    PlanStep,
+    RollbackResult,
+    SessionCheckpoint,
 )
-from agent_control_plane.types.approvals import ApprovalTicketDTO
+from agent_control_plane.types.approvals import ApprovalTicket
 from agent_control_plane.types.enums import (
     AbortReason,
     ApprovalDecisionType,
@@ -63,8 +63,8 @@ from agent_control_plane.types.enums import (
 )
 from agent_control_plane.types.frames import EventFrame
 from agent_control_plane.types.ids import AgentId, IdempotencyKey
-from agent_control_plane.types.proposals import ActionProposalDTO
-from agent_control_plane.types.query import PageDTO, SessionHealthDTO, StateChangeDTO, StateChangePageDTO
+from agent_control_plane.types.proposals import ActionProposal
+from agent_control_plane.types.query import Page, SessionHealth, StateChange, StateChangePage
 from agent_control_plane.types.sessions import SessionState
 
 
@@ -291,12 +291,12 @@ class AsyncControlPlaneFacade:
         timeout_at: datetime,
         *,
         command_id: IdempotencyKey | None = None,
-    ) -> ApprovalTicketDTO:
+    ) -> ApprovalTicket:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             cached = await self._get_cached_command_result(uow, command_id, CMD_CREATE_TICKET)
             if cached is not None:
-                return ApprovalTicketDTO.model_validate(cached)
+                return ApprovalTicket.model_validate(cached)
             ticket = await uow.approval_repo.create_ticket(session_id, proposal_id, timeout_at)
             await self._record_command_result(
                 uow,
@@ -310,15 +310,15 @@ class AsyncControlPlaneFacade:
 
     async def create_proposal(
         self,
-        proposal: ActionProposalDTO,
+        proposal: ActionProposal,
         *,
         command_id: IdempotencyKey | None = None,
-    ) -> ActionProposalDTO:
+    ) -> ActionProposal:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             cached = await self._get_cached_command_result(uow, command_id, CMD_CREATE_PROPOSAL)
             if cached is not None:
-                return ActionProposalDTO.model_validate(cached)
+                return ActionProposal.model_validate(cached)
             created = await uow.proposal_repo.create_proposal(proposal)
             await self._record_command_result(
                 uow,
@@ -342,12 +342,12 @@ class AsyncControlPlaneFacade:
         scope_max_action_count: int | None = None,
         scope_expiry: datetime | None = None,
         command_id: IdempotencyKey | None = None,
-    ) -> ApprovalTicketDTO:
+    ) -> ApprovalTicket:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             cached = await self._get_cached_command_result(uow, command_id, CMD_APPROVE_TICKET)
             if cached is not None:
-                return ApprovalTicketDTO.model_validate(cached)
+                return ApprovalTicket.model_validate(cached)
             ticket = await uow.approval_repo.get_pending_ticket_for_update(ticket_id)
             fields: ApprovalTicketUpdateFields = {
                 "status": ApprovalStatus.APPROVED,
@@ -380,12 +380,12 @@ class AsyncControlPlaneFacade:
         *,
         reason: str = "",
         command_id: IdempotencyKey | None = None,
-    ) -> ApprovalTicketDTO:
+    ) -> ApprovalTicket:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             cached = await self._get_cached_command_result(uow, command_id, CMD_DENY_TICKET)
             if cached is not None:
-                return ApprovalTicketDTO.model_validate(cached)
+                return ApprovalTicket.model_validate(cached)
             ticket = await uow.approval_repo.get_pending_ticket_for_update(ticket_id)
             fields: ApprovalTicketUpdateFields = {
                 "status": ApprovalStatus.DENIED,
@@ -405,12 +405,12 @@ class AsyncControlPlaneFacade:
             await uow.commit()
             return result
 
-    async def get_pending_tickets(self, session_id: UUID | None = None) -> list[ApprovalTicketDTO]:
+    async def get_pending_tickets(self, session_id: UUID | None = None) -> list[ApprovalTicket]:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             return await uow.approval_repo.get_pending_tickets(session_id)
 
-    async def get_ticket(self, ticket_id: UUID) -> ApprovalTicketDTO | None:
+    async def get_ticket(self, ticket_id: UUID) -> ApprovalTicket | None:
         """Return a single approval ticket by ID, or None if not found."""
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
@@ -423,7 +423,7 @@ class AsyncControlPlaneFacade:
         statuses: list[ApprovalStatus] | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> PageDTO[ApprovalTicketDTO]:
+    ) -> Page[ApprovalTicket]:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             rows = await uow.approval_repo.list_tickets(
@@ -433,9 +433,9 @@ class AsyncControlPlaneFacade:
                 offset=offset,
             )
             has_more = len(rows) > limit
-            return PageDTO(items=rows[:limit], next_offset=(offset + limit if has_more else None))
+            return Page(items=rows[:limit], next_offset=(offset + limit if has_more else None))
 
-    async def get_proposal(self, proposal_id: UUID) -> ActionProposalDTO | None:
+    async def get_proposal(self, proposal_id: UUID) -> ActionProposal | None:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             return await uow.proposal_repo.get_proposal(proposal_id)
@@ -447,7 +447,7 @@ class AsyncControlPlaneFacade:
         statuses: list[ProposalStatus] | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> PageDTO[ActionProposalDTO]:
+    ) -> Page[ActionProposal]:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             rows = await uow.proposal_repo.list_proposals(
@@ -457,7 +457,7 @@ class AsyncControlPlaneFacade:
                 offset=offset,
             )
             has_more = len(rows) > limit
-            return PageDTO(items=rows[:limit], next_offset=(offset + limit if has_more else None))
+            return Page(items=rows[:limit], next_offset=(offset + limit if has_more else None))
 
     async def expire_timed_out_tickets(self) -> int:
         async with self.session_scope() as db:
@@ -582,7 +582,7 @@ class AsyncControlPlaneFacade:
         session_id: UUID | None = None,
         cursor: int = 0,
         limit: int = 100,
-    ) -> StateChangePageDTO:
+    ) -> StateChangePage:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             rows = await uow.event_repo.list_state_bearing_events(
@@ -591,16 +591,16 @@ class AsyncControlPlaneFacade:
                 limit=limit + 1,
             )
             has_more = len(rows) > limit
-            items = [StateChangeDTO(cursor=cursor + idx + 1, event=row) for idx, row in enumerate(rows[:limit])]
-            return StateChangePageDTO(items=items, next_cursor=(cursor + limit if has_more else None))
+            items = [StateChange(cursor=cursor + idx + 1, event=row) for idx, row in enumerate(rows[:limit])]
+            return StateChangePage(items=items, next_cursor=(cursor + limit if has_more else None))
 
-    async def get_health_snapshot(self) -> SessionHealthDTO:
+    async def get_health_snapshot(self) -> SessionHealth:
         created = await self.list_sessions(statuses=[SessionStatus.CREATED], limit=10_000)
         active = await self.list_sessions(statuses=[SessionStatus.ACTIVE], limit=10_000)
         paused = await self.list_sessions(statuses=[SessionStatus.PAUSED], limit=10_000)
         pending = await self.get_pending_tickets()
         sessions_with_cycles = sum(1 for session in created + active + paused if session.active_cycle_id is not None)
-        return SessionHealthDTO(
+        return SessionHealth(
             total_sessions=len(created) + len(active) + len(paused),
             active_sessions=len(active),
             created_sessions=len(created),
@@ -617,15 +617,15 @@ class AsyncControlPlaneFacade:
         metadata: dict[str, object] | None = None,
         created_by: str = "system",
         command_id: IdempotencyKey | None = None,
-    ) -> SessionCheckpointDTO:
+    ) -> SessionCheckpoint:
         operation = "checkpoint:create"
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             cached = await self._get_cached_command_result(uow, command_id, operation)
             if cached is not None:
-                return SessionCheckpointDTO.model_validate(cached)
+                return SessionCheckpoint.model_validate(cached)
             last = await uow.event_repo.get_last_event(session_id)
-            cp = SessionCheckpointDTO(
+            cp = SessionCheckpoint(
                 session_id=session_id,
                 event_seq=last.seq if last is not None else 0,
                 label=label,
@@ -648,18 +648,16 @@ class AsyncControlPlaneFacade:
             await uow.commit()
             return cp
 
-    async def list_checkpoints(
-        self, session_id: UUID, *, limit: int = 50, offset: int = 0
-    ) -> PageDTO[SessionCheckpointDTO]:
+    async def list_checkpoints(self, session_id: UUID, *, limit: int = 50, offset: int = 0) -> Page[SessionCheckpoint]:
         rows = await self.replay(session_id, after_seq=0, limit=10_000)
         checkpoints = [
-            SessionCheckpointDTO.model_validate(e.payload)
+            SessionCheckpoint.model_validate(e.payload)
             for e in rows
             if e.event_kind == EventKind.CHECKPOINT_CREATED and isinstance(e.payload, dict)
         ]
         sliced = checkpoints[offset : offset + limit + 1]
         has_more = len(sliced) > limit
-        return PageDTO(items=sliced[:limit], next_offset=(offset + limit if has_more else None))
+        return Page(items=sliced[:limit], next_offset=(offset + limit if has_more else None))
 
     async def rollback_to_checkpoint(
         self,
@@ -668,13 +666,13 @@ class AsyncControlPlaneFacade:
         *,
         reason: str,
         command_id: IdempotencyKey | None = None,
-    ) -> RollbackResultDTO:
+    ) -> RollbackResult:
         operation = "checkpoint:rollback"
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             cached = await self._get_cached_command_result(uow, command_id, operation)
             if cached is not None:
-                return RollbackResultDTO.model_validate(cached)
+                return RollbackResult.model_validate(cached)
             cps = (await self.list_checkpoints(session_id, limit=10_000, offset=0)).items
             target = next((cp for cp in cps if cp.id == checkpoint_id), None)
             if target is None:
@@ -687,7 +685,7 @@ class AsyncControlPlaneFacade:
                 {"checkpoint_id": str(checkpoint_id), "reason": reason},
                 state_bearing=True,
             )
-            result = RollbackResultDTO(
+            result = RollbackResult(
                 session_id=session_id,
                 from_seq=from_seq,
                 to_seq=target.event_seq,
@@ -717,8 +715,8 @@ class AsyncControlPlaneFacade:
         name: str,
         description: str = "",
         metadata: dict[str, object] | None = None,
-    ) -> GoalDTO:
-        goal = GoalDTO(
+    ) -> Goal:
+        goal = Goal(
             session_id=session_id,
             name=name,
             description=description,
@@ -728,15 +726,15 @@ class AsyncControlPlaneFacade:
         await self.emit(session_id, EventKind.GOAL_CREATED, goal.model_dump(mode="json"), state_bearing=True)
         return goal
 
-    async def create_plan(self, session_id: UUID, goal_id: UUID, *, title: str, steps: list[str]) -> PlanDTO:
-        plan_steps = [PlanStepDTO(plan_id=UUID(int=0), step_index=i, title=step) for i, step in enumerate(steps)]
-        plan = PlanDTO(session_id=session_id, goal_id=goal_id, title=title, steps=plan_steps)
+    async def create_plan(self, session_id: UUID, goal_id: UUID, *, title: str, steps: list[str]) -> Plan:
+        plan_steps = [PlanStep(plan_id=UUID(int=0), step_index=i, title=step) for i, step in enumerate(steps)]
+        plan = Plan(session_id=session_id, goal_id=goal_id, title=title, steps=plan_steps)
         plan.steps = [step.model_copy(update={"plan_id": plan.id}) for step in plan.steps]
         await self.emit(session_id, EventKind.PLAN_CREATED, plan.model_dump(mode="json"), state_bearing=True)
         return plan
 
-    async def start_plan_step(self, session_id: UUID, plan_id: UUID, *, step_index: int) -> PlanStepDTO:
-        step = PlanStepDTO(
+    async def start_plan_step(self, session_id: UUID, plan_id: UUID, *, step_index: int) -> PlanStep:
+        step = PlanStep(
             plan_id=plan_id,
             step_index=step_index,
             title=f"step-{step_index}",
@@ -747,8 +745,8 @@ class AsyncControlPlaneFacade:
 
     async def complete_plan_step(
         self, session_id: UUID, plan_id: UUID, *, step_index: int, notes: str | None = None
-    ) -> PlanStepDTO:
-        step = PlanStepDTO(
+    ) -> PlanStep:
+        step = PlanStep(
             plan_id=plan_id,
             step_index=step_index,
             title=f"step-{step_index}",
@@ -758,11 +756,11 @@ class AsyncControlPlaneFacade:
         await self.emit(session_id, EventKind.PLAN_STEP_COMPLETED, step.model_dump(mode="json"), state_bearing=True)
         return step
 
-    async def get_plan_progress(self, session_id: UUID, goal_id: UUID) -> PlanProgressDTO:
+    async def get_plan_progress(self, session_id: UUID, goal_id: UUID) -> PlanProgress:
         events = await self.replay(session_id, after_seq=0, limit=10_000)
         goal = next(
             (
-                GoalDTO.model_validate(e.payload)
+                Goal.model_validate(e.payload)
                 for e in events
                 if (
                     e.event_kind == EventKind.GOAL_CREATED
@@ -776,7 +774,7 @@ class AsyncControlPlaneFacade:
             raise ValueError(f"Goal not found: {goal_id}")
         plan = next(
             (
-                PlanDTO.model_validate(e.payload)
+                Plan.model_validate(e.payload)
                 for e in events
                 if (
                     e.event_kind == EventKind.PLAN_CREATED
@@ -802,7 +800,7 @@ class AsyncControlPlaneFacade:
                     running_steps += 1
         else:
             total_steps = 0
-        return PlanProgressDTO(
+        return PlanProgress(
             goal=goal,
             plan=plan,
             total_steps=total_steps,
@@ -820,8 +818,8 @@ class AsyncControlPlaneFacade:
         score: float,
         reasons: list[str],
         actions: list[str] | None = None,
-    ) -> EvaluationResultDTO:
-        result = EvaluationResultDTO(
+    ) -> EvaluationResult:
+        result = EvaluationResult(
             session_id=session_id,
             operation=operation,
             decision=decision,
@@ -844,8 +842,8 @@ class AsyncControlPlaneFacade:
         policy_code: str,
         reason: str,
         metadata: dict[str, object] | None = None,
-    ) -> GuardrailDecisionDTO:
-        result = GuardrailDecisionDTO(
+    ) -> GuardrailDecision:
+        result = GuardrailDecision(
             session_id=session_id,
             phase=phase,
             allow=allow,
@@ -871,9 +869,9 @@ class AsyncControlPlaneFacade:
         accepted: bool = True,
         lease_seconds: int = 900,
         metadata: dict[str, object] | None = None,
-    ) -> HandoffResultDTO:
+    ) -> HandoffResult:
         expires_at = datetime.now(UTC) + timedelta(seconds=lease_seconds)
-        result = HandoffResultDTO(
+        result = HandoffResult(
             session_id=session_id,
             source_agent_id=source_agent_id,
             target_agent_id=target_agent_id,
@@ -892,9 +890,9 @@ class AsyncControlPlaneFacade:
         session_id: UUID | None = None,
         window_start: datetime | None = None,
         window_end: datetime | None = None,
-    ) -> ControlPlaneScorecardDTO:
+    ) -> ControlPlaneScorecard:
         sessions = [session_id] if session_id is not None else [s.id for s in await self.list_sessions(limit=10_000)]
-        scorecard = ControlPlaneScorecardDTO()
+        scorecard = ControlPlaneScorecard()
         normalized_window_start = _normalize_utc(window_start) if window_start is not None else None
         normalized_window_end = _normalize_utc(window_end) if window_end is not None else None
         approval_latencies: list[float] = []
@@ -1056,7 +1054,7 @@ class AsyncControlPlaneFacade:
         *,
         reason: str = "Kill switch triggered",
         command_id: IdempotencyKey | None = None,
-    ) -> KillResultDTO:
+    ) -> KillResult:
         return await self._trigger_kill(
             KillSwitchScope.SESSION_ABORT,
             session_id=session_id,
@@ -1069,7 +1067,7 @@ class AsyncControlPlaneFacade:
         *,
         reason: str = "System halt",
         command_id: IdempotencyKey | None = None,
-    ) -> KillResultDTO:
+    ) -> KillResult:
         return await self._trigger_kill(KillSwitchScope.SYSTEM_HALT, reason=reason, command_id=command_id)
 
     async def recover_stuck_sessions(self) -> dict[str, int]:
@@ -1157,13 +1155,13 @@ class AsyncControlPlaneFacade:
         session_id: UUID | None = None,
         reason: str = "Kill switch triggered",
         command_id: IdempotencyKey | None = None,
-    ) -> KillResultDTO:
+    ) -> KillResult:
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             operation = kill_command_operation(scope)
             cached = await self._get_cached_command_result(uow, command_id, operation)
             if cached is not None:
-                return KillResultDTO.model_validate(cached)
+                return KillResult.model_validate(cached)
             if scope == KillSwitchScope.SESSION_ABORT:
                 if session_id is None:
                     raise ValueError("session_id required for session_abort")
@@ -1182,7 +1180,7 @@ class AsyncControlPlaneFacade:
                     {"reason": reason, "tickets_denied": denied},
                     state_bearing=True,
                 )
-                result = KillResultDTO(
+                result = KillResult(
                     scope=KillSwitchScope.SESSION_ABORT,
                     session_id=session_id,
                     tickets_denied=denied,
@@ -1216,7 +1214,7 @@ class AsyncControlPlaneFacade:
                         {"scope": "system_halt", "reason": reason},
                         state_bearing=True,
                     )
-                result = KillResultDTO(
+                result = KillResult(
                     scope=KillSwitchScope.SYSTEM_HALT,
                     sessions_aborted=len(sessions),
                     tickets_denied=denied_total,

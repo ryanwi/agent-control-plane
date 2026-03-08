@@ -23,7 +23,7 @@ from agent_control_plane import (
     ExecutionMode,
     ModelRegistry,
     PolicyEngine,
-    PolicySnapshotDTO,
+    PolicySnapshot,
     ProposalRouter,
     ProposalStatus,
     ReferenceBase,
@@ -31,7 +31,6 @@ from agent_control_plane import (
     SessionManager,
     register_models,
 )
-from agent_control_plane.types.proposals import ActionProposalDTO
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -54,7 +53,7 @@ async def main():
         gate = ApprovalGate(es, uow.approval_repo, uow.proposal_repo)
 
         # Policy with a very short timeout (2 seconds)
-        policy = PolicySnapshotDTO(
+        policy = PolicySnapshot(
             action_tiers={
                 "unrestricted": [ActionName.TERMINATE_INSTANCE],
                 "blocked": [],
@@ -76,7 +75,7 @@ async def main():
 
         # 1. Propose action requiring approval
         logger.info("\n[PROPOSE] Agent requesting TERMINATE_INSTANCE...")
-        dto = ActionProposalDTO(
+        dto = ActionProposal(
             session_id=cs.id,
             resource_id="i-123",
             resource_type="ec2",

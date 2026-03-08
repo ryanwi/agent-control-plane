@@ -10,7 +10,7 @@ from .enums import ApprovalDecisionType, ApprovalStatus
 from .ids import ResourceId
 
 
-class ApprovalScopeDTO(BaseModel):
+class ApprovalScope(BaseModel):
     """Scope constraints for an approval decision."""
 
     resource_ids: list[ResourceId] = Field(default_factory=list)
@@ -19,7 +19,7 @@ class ApprovalScopeDTO(BaseModel):
     expiry: datetime | None = None
 
 
-class ApprovalTicketDTO(BaseModel):
+class ApprovalTicket(BaseModel):
     """Human-in-the-loop approval ticket."""
 
     id: UUID = Field(default_factory=uuid4)
@@ -50,4 +50,4 @@ class ApprovalDecisionRequest(BaseModel):
     decided_by: str = "operator"
 
     # Optional scope override (for allow_for_session)
-    scope: ApprovalScopeDTO | None = None
+    scope: ApprovalScope | None = None
