@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-03-08
+
+### Changed
+
+- Published release for guarded release-tag workflow and tag/version parity checks.
+
 ## [0.9.4] - 2026-03-08
 
 ### Fixed
