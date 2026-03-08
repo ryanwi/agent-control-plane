@@ -10,6 +10,11 @@ from agent_control_plane.engine.budget_tracker import BudgetTracker
 from agent_control_plane.engine.event_store import EventStore
 from agent_control_plane.engine.kill_switch import KillSwitch
 from agent_control_plane.engine.session_manager import SessionManager
+from agent_control_plane.experimental.capabilities import (
+    CapabilityProvider,
+    CapabilitySet,
+    resolve_capabilities,
+)
 from agent_control_plane.storage.protocols import (
     AsyncApprovalRepository,
     AsyncEventRepository,
@@ -23,6 +28,10 @@ class SessionEventBudgetServices:
     session_manager: SessionManager
     event_store: EventStore
     budget_tracker: BudgetTracker
+    capability_provider: CapabilityProvider | None = None
+
+    def get_capabilities(self) -> CapabilitySet:
+        return resolve_capabilities(self.capability_provider)
 
 
 @dataclass
@@ -30,6 +39,10 @@ class KillSwitchServices:
     session_manager: SessionManager
     event_store: EventStore
     kill_switch: KillSwitch
+    capability_provider: CapabilityProvider | None = None
+
+    def get_capabilities(self) -> CapabilitySet:
+        return resolve_capabilities(self.capability_provider)
 
 
 class AsyncProposalRepositoryNoop(Protocol):
@@ -41,12 +54,17 @@ def build_session_event_budget(
     *,
     session_repo: AsyncSessionRepository,
     event_repo: AsyncEventRepository,
+    capability_provider: CapabilityProvider | None = None,
 ) -> SessionEventBudgetServices:
-    """Build only session/event/budget services for minimal integrations."""
+    """Build only session/event/budget services for minimal integrations.
+
+    Capability descriptors are informational and do not alter governance behavior.
+    """
     return SessionEventBudgetServices(
         session_manager=SessionManager(session_repo),
         event_store=EventStore(event_repo),
         budget_tracker=BudgetTracker(session_repo),
+        capability_provider=capability_provider,
     )
 
 
@@ -55,8 +73,12 @@ def build_kill_switch_stack(
     session_repo: AsyncSessionRepository,
     event_repo: AsyncEventRepository,
     approval_repo: AsyncApprovalRepository,
+    capability_provider: CapabilityProvider | None = None,
 ) -> KillSwitchServices:
-    """Build kill-switch stack without requiring proposal/approval gate wiring."""
+    """Build kill-switch stack without requiring proposal/approval gate wiring.
+
+    Capability descriptors are informational and do not alter governance behavior.
+    """
     session_manager = SessionManager(session_repo)
     event_store = EventStore(event_repo)
     kill_switch = KillSwitch(session_manager, event_store, session_repo, approval_repo)
@@ -64,4 +86,5 @@ def build_kill_switch_stack(
         session_manager=session_manager,
         event_store=event_store,
         kill_switch=kill_switch,
+        capability_provider=capability_provider,
     )

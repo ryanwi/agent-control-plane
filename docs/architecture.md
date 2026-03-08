@@ -167,6 +167,10 @@ Future roadmap:
 - Replace asset policy checks with a custom classifier while keeping proposal fields unchanged.
 - Add new `ActionTier` and `RiskLevel` mappings as your domain adds higher granularity risk controls.
 - Customize approval scope semantics (resource/region/project/team) using existing scoped ticket fields.
+- For deployment/runtime composition, use experimental capability contracts in
+  `agent_control_plane.experimental.capabilities` and wire providers at composition boundaries
+  (for example, builder helpers). These descriptors are informational only and should not
+  be treated as core governance enforcement.
 
 ## 7) Open-source framing
 
@@ -199,6 +203,7 @@ Exports are centralized through [agent_control_plane/__init__.py](../src/agent_c
 | `agent_control_plane` | `ActionName`, `ActionTier`, `RiskLevel`, `ApprovalStatus`, `ApprovalDecisionType`, `ProposalStatus`, `SessionStatus`, `EventKind`, `ExecutionMode`, `AbortReason`, `KillSwitchScope`, `RoutingResolutionStep`, `AssetMatch`, `AgentScope` | Enumerations used by all engines; considered stable between minor releases. |
 | `agent_control_plane` | `ActionProposalDTO`, `AgentMetadata`, `AgentCapability`, `DelegationProposal`, `SessionCreate`, `SessionSummary`, `PolicySnapshotDTO`, `ApprovalScopeDTO`, `ApprovalTicketDTO`, `RequestFrame`, `EventFrame`, `ResponseFrame`, `KillResultDTO` | DTOs are semantically stable; add optional fields in minor releases only. |
 | `agent_control_plane.models` | `ModelRegistry`, `ControlSessionMixin`, `ControlEventMixin`, `ApprovalTicketMixin`, `PolicySnapshotMixin`, `AgentMixin`, `DelegationMixin` | Intended for embedding into host SQLAlchemy models and runtime bootstrapping. |
+| `agent_control_plane.experimental.*` | capability contracts and other extension scaffolding | Experimental surface; may change between minor releases in pre-1.0. |
 | Private internals (non-API) | `engine.*`, `recovery.*`, `types.*`, `models.*` modules | Import by direct module path only when needed; avoid for long-term compatibility. |
 
 ## 9) v0.2 packaging / release checklist
@@ -224,6 +229,8 @@ Recommended pre-release validation:
 6. Publish checklist:
    - Validate `uv`/pip install from sdist and wheel.
    - Validate import path from installed package.
+
+Compatibility posture and migration guidance are documented in [compatibility.md](compatibility.md).
 
 ## 10) Operational gotchas and anti-patterns
 
