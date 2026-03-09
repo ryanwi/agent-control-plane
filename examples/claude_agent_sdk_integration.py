@@ -18,8 +18,13 @@ from decimal import Decimal
 from pathlib import Path
 
 from agent_control_plane.sync import ControlPlaneFacade, DictEventMapper
-from agent_control_plane.types.enums import ApprovalDecisionType, EventKind
+from agent_control_plane.types.enums import EventKind
 from agent_control_plane.types.proposals import ActionProposal
+from examples.governance_demo_common import (
+    GovernanceDecision,
+    apply_governance_decision,
+    parse_governance_decision,
+)
 
 try:
     from claude_agent_sdk import ClaudeAgentOptions, query
@@ -35,16 +40,7 @@ class CaseInput:
     summary: str
 
 
-def _parse_decision(text: str) -> str:
-    normalized = text.strip().upper()
-    if "DENY" in normalized:
-        return "DENY"
-    if "APPROVE" in normalized:
-        return "APPROVE"
-    return "DENY"
-
-
-async def _get_claude_decision(case: CaseInput) -> str:
+async def _get_claude_decision(case: CaseInput) -> GovernanceDecision:
     assert query is not None
     assert ClaudeAgentOptions is not None
 
@@ -54,7 +50,7 @@ async def _get_claude_decision(case: CaseInput) -> str:
         "Return exactly one word: APPROVE or DENY."
     )
 
-    last_text = "DENY"
+    last_text = GovernanceDecision.DENY.value
     async for message in query(
         prompt=prompt,
         options=ClaudeAgentOptions(allowed_tools=[]),
@@ -66,7 +62,7 @@ async def _get_claude_decision(case: CaseInput) -> str:
             msg_text = str(message).strip()
             if msg_text:
                 last_text = msg_text
-    return _parse_decision(last_text)
+    return parse_governance_decision(last_text)
 
 
 async def main() -> None:
@@ -99,7 +95,6 @@ async def main() -> None:
 
     for idx, case in enumerate(cases, start=1):
         model_decision = await _get_claude_decision(case)
-        should_approve = model_decision == "APPROVE"
 
         proposal = ActionProposal(
             session_id=session_id,
@@ -120,45 +115,19 @@ async def main() -> None:
             command_id=f"claude-cycle-{idx}-ticket",
         )
 
-        if should_approve:
-            cp.approve_ticket(
-                ticket.id,
-                decided_by="claude-triage",
-                reason=f"Model returned {model_decision}",
-                decision_type=ApprovalDecisionType.ALLOW_ONCE,
-                command_id=f"claude-cycle-{idx}-approve",
-            )
-            cp.emit(
-                session_id,
-                EventKind.APPROVAL_GRANTED,
-                {"case_id": case.case_id, "decision": model_decision, "provider": "claude_agent_sdk"},
-                state_bearing=True,
-                command_id=f"claude-cycle-{idx}-emit-approval-granted",
-            )
-            cp.emit(
-                session_id,
-                EventKind.EXECUTION_COMPLETED,
-                {"case_id": case.case_id, "result": "status sent"},
-                state_bearing=True,
-                agent_id="claude-agent-sdk",
-                command_id=f"claude-cycle-{idx}-emit-executed",
-            )
-            print(f"{case.case_id}: APPROVED")
-        else:
-            cp.deny_ticket(
-                ticket.id,
-                reason=f"Model returned {model_decision}",
-                command_id=f"claude-cycle-{idx}-deny",
-            )
-            cp.emit(
-                session_id,
-                EventKind.APPROVAL_DENIED,
-                {"case_id": case.case_id, "decision": model_decision, "provider": "claude_agent_sdk"},
-                state_bearing=True,
-                agent_id="claude-agent-sdk",
-                command_id=f"claude-cycle-{idx}-emit-approval-denied",
-            )
-            print(f"{case.case_id}: DENIED")
+        outcome = apply_governance_decision(
+            cp=cp,
+            session_id=session_id,
+            proposal=proposal,
+            ticket_id=ticket.id,
+            decision=model_decision,
+            provider="claude_agent_sdk",
+            decided_by="claude-triage",
+            agent_id="claude-agent-sdk",
+            reason=f"Model returned {model_decision.value}",
+            command_prefix=f"claude-cycle-{idx}",
+        )
+        print(f"{case.case_id}: {outcome}")
 
     cp.close_session(
         session_id,

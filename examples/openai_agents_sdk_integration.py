@@ -17,8 +17,13 @@ from decimal import Decimal
 from pathlib import Path
 
 from agent_control_plane.sync import ControlPlaneFacade, DictEventMapper
-from agent_control_plane.types.enums import ApprovalDecisionType, EventKind
+from agent_control_plane.types.enums import EventKind
 from agent_control_plane.types.proposals import ActionProposal
+from examples.governance_demo_common import (
+    GovernanceDecision,
+    apply_governance_decision,
+    parse_governance_decision,
+)
 
 try:
     from agents import Agent, Runner
@@ -32,15 +37,6 @@ class CaseInput:
     case_id: str
     priority: str
     summary: str
-
-
-def _parse_decision(text: str) -> str:
-    normalized = text.strip().upper()
-    if "DENY" in normalized:
-        return "DENY"
-    if "APPROVE" in normalized:
-        return "APPROVE"
-    return "DENY"
 
 
 def _build_case_triage_agent() -> Agent:
@@ -87,8 +83,7 @@ def main() -> None:
             triage_agent,
             (f"Case {case.case_id} priority={case.priority}. Request: {case.summary}. Return APPROVE or DENY only."),
         )
-        model_decision = _parse_decision(str(run_result.final_output))
-        should_approve = model_decision == "APPROVE"
+        model_decision = parse_governance_decision(str(run_result.final_output))
 
         proposal = ActionProposal(
             session_id=session_id,
@@ -109,45 +104,19 @@ def main() -> None:
             command_id=f"openai-cycle-{idx}-ticket",
         )
 
-        if should_approve:
-            cp.approve_ticket(
-                ticket.id,
-                decided_by="openai-triage",
-                reason=f"Model returned {model_decision}",
-                decision_type=ApprovalDecisionType.ALLOW_ONCE,
-                command_id=f"openai-cycle-{idx}-approve",
-            )
-            cp.emit(
-                session_id,
-                EventKind.APPROVAL_GRANTED,
-                {"case_id": case.case_id, "decision": model_decision, "provider": "openai_agents_sdk"},
-                state_bearing=True,
-                command_id=f"openai-cycle-{idx}-emit-approval-granted",
-            )
-            cp.emit(
-                session_id,
-                EventKind.EXECUTION_COMPLETED,
-                {"case_id": case.case_id, "result": "status sent"},
-                state_bearing=True,
-                agent_id="openai-agents-sdk",
-                command_id=f"openai-cycle-{idx}-emit-executed",
-            )
-            print(f"{case.case_id}: APPROVED")
-        else:
-            cp.deny_ticket(
-                ticket.id,
-                reason=f"Model returned {model_decision}",
-                command_id=f"openai-cycle-{idx}-deny",
-            )
-            cp.emit(
-                session_id,
-                EventKind.APPROVAL_DENIED,
-                {"case_id": case.case_id, "decision": model_decision, "provider": "openai_agents_sdk"},
-                state_bearing=True,
-                agent_id="openai-agents-sdk",
-                command_id=f"openai-cycle-{idx}-emit-approval-denied",
-            )
-            print(f"{case.case_id}: DENIED")
+        outcome = apply_governance_decision(
+            cp=cp,
+            session_id=session_id,
+            proposal=proposal,
+            ticket_id=ticket.id,
+            decision=GovernanceDecision(model_decision.value),
+            provider="openai_agents_sdk",
+            decided_by="openai-triage",
+            agent_id="openai-agents-sdk",
+            reason=f"Model returned {model_decision.value}",
+            command_prefix=f"openai-cycle-{idx}",
+        )
+        print(f"{case.case_id}: {outcome}")
 
     cp.close_session(
         session_id,
