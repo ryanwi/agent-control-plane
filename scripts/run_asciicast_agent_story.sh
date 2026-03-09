@@ -77,6 +77,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from time import sleep
 
 from agent_control_plane.sync import ControlPlaneFacade as ControlPlaneClient, DictEventMapper
 from agent_control_plane.types.enums import ApprovalDecisionType, EventKind
@@ -94,26 +95,20 @@ class SupportAgent:
         self.control_plane = ControlPlaneClient.from_database_url(f"sqlite:///{db_path}", mapper=mapper)
         self.control_plane.setup()
 
-    def run_once(self) -> None:
-        session_id = self.control_plane.open_session(
-            "support-agent-demo",
-            max_cost=Decimal("20.00"),
-            max_action_count=3,
-            command_id="story-open-session",
-        )
-        print(f"session_id={session_id}")
+    def process_case(self, *, session_id, case_id: str, cycle_no: int, should_approve: bool) -> None:
+        cycle_tag = f"cycle-{cycle_no}"
 
         proposal = ActionProposal(
             session_id=session_id,
-            resource_id="case-9001",
+            resource_id=case_id,
             resource_type="customer_case",
             decision="status",
             reasoning="Fetch latest status for customer case",
-            metadata={"priority": "high", "source": "terminal-story"},
+            metadata={"priority": "high", "source": "terminal-story", "cycle": cycle_no},
             weight=Decimal("0.75"),
             score=Decimal("0.88"),
         )
-        proposal = self.control_plane.create_proposal(proposal, command_id="story-create-proposal")
+        proposal = self.control_plane.create_proposal(proposal, command_id=f"story-{cycle_tag}-create-proposal")
         print(f"proposal_id={proposal.id}")
         print(
             "approval_request="
@@ -124,16 +119,45 @@ class SupportAgent:
             session_id,
             proposal.id,
             timeout_at=datetime.now(UTC) + timedelta(minutes=5),
-            command_id="story-create-ticket",
+            command_id=f"story-{cycle_tag}-create-ticket",
         )
         print(f"approval_ticket_id={approval_ticket.id}")
+
+        if not should_approve:
+            denied_ticket = self.control_plane.deny_ticket(
+                approval_ticket.id,
+                reason="Denied in demo cycle",
+                command_id=f"story-{cycle_tag}-deny-ticket",
+            )
+            self.control_plane.emit(
+                session_id,
+                EventKind.APPROVAL_DENIED,
+                {"proposal_id": str(proposal.id), "resource_id": proposal.resource_id, "cycle": cycle_no},
+                state_bearing=True,
+                agent_id="support-agent",
+                command_id=f"story-{cycle_tag}-emit-approval-denied",
+            )
+            print(f"approval_status={denied_ticket.status}")
+            print(
+                "approval_denied_for="
+                f"decision={proposal.decision} on {proposal.resource_type}:{proposal.resource_id}"
+            )
+            return
 
         approved_ticket = self.control_plane.approve_ticket(
             approval_ticket.id,
             decided_by="operator-demo",
             reason="Approved for demo",
             decision_type=ApprovalDecisionType.ALLOW_ONCE,
-            command_id="story-approve-ticket",
+            command_id=f"story-{cycle_tag}-approve-ticket",
+        )
+        self.control_plane.emit(
+            session_id,
+            EventKind.APPROVAL_GRANTED,
+            {"proposal_id": str(proposal.id), "resource_id": proposal.resource_id, "cycle": cycle_no},
+            state_bearing=True,
+            agent_id="support-agent",
+            command_id=f"story-{cycle_tag}-emit-approval-granted",
         )
         print(f"approval_status={approved_ticket.status}")
         print(
@@ -147,21 +171,48 @@ class SupportAgent:
         self.control_plane.emit_app(
             session_id,
             "agent_started",
-            {"agent": "support", "proposal_id": str(proposal.id)},
+            {"agent": "support", "proposal_id": str(proposal.id), "cycle": cycle_no},
             state_bearing=True,
         )
         self.control_plane.emit(
             session_id,
             EventKind.EXECUTION_COMPLETED,
-            {"proposal_id": str(proposal.id), "status": "ok"},
+            {"proposal_id": str(proposal.id), "status": "ok", "cycle": cycle_no},
             state_bearing=True,
             agent_id="support-agent",
-            command_id="story-emit-execution",
+            command_id=f"story-{cycle_tag}-emit-execution",
         )
+        print("execution_status=completed")
+
+    def run_forever(self, *, max_cycles: int = 2, loop_sleep_seconds: float = 0.3) -> None:
+        session_id = self.control_plane.open_session(
+            "support-agent-demo",
+            max_cost=Decimal("20.00"),
+            max_action_count=3,
+            command_id="story-open-session",
+        )
+        print(f"session_id={session_id}")
+        print("loop_mode=continuous (demo bounded to 2 cycles)")
+
+        cycle_plan = [
+            ("case-9001", False),  # denied: shows governance blocking path
+            ("case-9002", True),   # approved: shows execution path
+        ]
+        for cycle_no, (case_id, should_approve) in enumerate(cycle_plan, start=1):
+            if cycle_no > max_cycles:
+                break
+            print(f"loop_cycle={cycle_no} case_id={case_id} should_approve={should_approve}")
+            self.process_case(
+                session_id=session_id,
+                case_id=case_id,
+                cycle_no=cycle_no,
+                should_approve=should_approve,
+            )
+            sleep(loop_sleep_seconds)
 
         result = self.control_plane.close_session(
             session_id,
-            payload={"summary": "agent cycle completed"},
+            payload={"summary": "continuous loop demo completed", "cycles": max_cycles},
             command_id="story-close-session",
         )
         print(f"final_status={result.session.status}")
@@ -171,15 +222,15 @@ if __name__ == "__main__":
     db = Path("DB_PATH_PLACEHOLDER")
     db.unlink(missing_ok=True)
     agent = SupportAgent(db)
-    agent.run_once()
+    agent.run_forever()
 PY
 
 sed -i.bak "s|DB_PATH_PLACEHOLDER|${DB_PATH}|g" "${AGENT_FILE}" && rm -f "${AGENT_FILE}.bak"
 
 echo
 say_step "Agent source"
-say_what "Show generated code that opens a session, proposes action, approves, emits events, closes."
-say_why "Viewers can audit the exact agent logic before execution."
+say_what "Show generated code for a continuous loop: one denied cycle, one approved cycle."
+say_why "Viewers can audit both governance outcomes before execution."
 printf "%s$ nl -ba %s%s\n" "${C_CMD}" "${AGENT_FILE}" "${C_RESET}"
 while IFS= read -r line; do
   printf "%s\n" "$line"
@@ -189,11 +240,11 @@ pause_step1
 
 echo
 say_step "Step 2: Run the agent"
-say_what "Execute one agent cycle through control-plane governance."
-say_why "Demonstrate runtime behavior and returned IDs/status."
+say_what "Execute a continuous-style loop (bounded demo) through control-plane governance."
+say_why "Demonstrate real-world behavior: blocked action first, then approved/executed action."
 pause
 run_cmd uv run python "${AGENT_FILE}"
-say_what "The agent acted on a client customer_case; governance created a separate control-plane approval_ticket."
+say_what "Cycle 1 is denied; Cycle 2 is approved and executed on a customer_case."
 pause
 
 echo
