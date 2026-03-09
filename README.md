@@ -53,16 +53,16 @@ Use the runnable sync quickstart:
 uv run python examples/quickstart_sync.py
 ```
 
-Or run the full continuous-loop story demo (denied + approved outcomes):
+Run the continuous-loop governance example (denied + approved outcomes):
+
+```bash
+uv run python examples/continuous_loop_governance.py
+```
+
+For the narrated terminal walkthrough used in the demo video:
 
 ```bash
 make demo-asciicast-agent
-```
-
-Record a cast:
-
-```bash
-asciinema rec --overwrite control-plane-agent-story.cast -c "make demo-asciicast-agent"
 ```
 
 ## Core Capabilities
@@ -96,6 +96,7 @@ asciinema rec --overwrite control-plane-agent-story.cast -c "make demo-asciicast
 - Sync quickstart: [examples/quickstart_sync.py](examples/quickstart_sync.py)
 - Async quickstart: [examples/quickstart.py](examples/quickstart.py)
 - Asciicast sync demo: [examples/asciinema_sync_demo.py](examples/asciinema_sync_demo.py)
+- Continuous-loop governance example: [examples/continuous_loop_governance.py](examples/continuous_loop_governance.py)
 - Asciicast story runner: [scripts/run_asciicast_agent_story.sh](scripts/run_asciicast_agent_story.sh)
 - Audit replay: [examples/audit_viewer.py](examples/audit_viewer.py)
 - MCP gateway demo: [examples/mcp_tool_gateway.py](examples/mcp_tool_gateway.py)
