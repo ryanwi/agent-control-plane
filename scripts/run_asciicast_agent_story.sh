@@ -5,6 +5,17 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEMO_DIR="$(mktemp -d /tmp/acp-agent-story-XXXXXX)"
 AGENT_FILE="${DEMO_DIR}/support_agent_demo.py"
 DB_PATH="${DEMO_DIR}/support_agent_demo.db"
+PAUSE_SECONDS="${DEMO_PAUSE_SECONDS:-0.8}"
+LINE_PAUSE_SECONDS="${DEMO_LINE_PAUSE_SECONDS:-0.03}"
+
+pause() {
+  sleep "${PAUSE_SECONDS}"
+}
+
+run_cmd() {
+  echo "\$ $*"
+  "$@"
+}
 
 if ! command -v sqlite3 >/dev/null 2>&1; then
   echo "sqlite3 is required for DB inspection output" >&2
@@ -13,9 +24,12 @@ fi
 
 echo "==> Demo workspace"
 echo "${DEMO_DIR}"
+pause
 
 echo
 echo "==> Step 1: Create a Python agent file"
+pause
+echo "\$ cat > ${AGENT_FILE} <<'PY'  # (agent source shown below)"
 cat > "${AGENT_FILE}" <<'PY'
 from __future__ import annotations
 
@@ -114,30 +128,42 @@ sed -i.bak "s|DB_PATH_PLACEHOLDER|${DB_PATH}|g" "${AGENT_FILE}" && rm -f "${AGEN
 
 echo
 echo "==> Agent source"
-nl -ba "${AGENT_FILE}"
+echo "\$ nl -ba ${AGENT_FILE}"
+while IFS= read -r line; do
+  printf "%s\n" "$line"
+  sleep "${LINE_PAUSE_SECONDS}"
+done < <(nl -ba "${AGENT_FILE}")
+pause
 
 echo
 echo "==> Step 2: Run the agent"
-uv run python "${AGENT_FILE}"
+pause
+run_cmd uv run python "${AGENT_FILE}"
+pause
 
 echo
 echo "==> Step 3: Show persisted control-plane data"
+pause
 
 echo
 echo "[tables]"
-sqlite3 "${DB_PATH}" '.tables'
+run_cmd sqlite3 "${DB_PATH}" '.tables'
+pause
 
 echo
 echo "[control_sessions]"
+echo "\$ sqlite3 ${DB_PATH} <<'SQL'"
 sqlite3 "${DB_PATH}" <<'SQL'
 .headers on
 .mode column
 SELECT id, session_name, status, max_cost, used_cost, max_action_count, used_action_count
 FROM control_sessions;
 SQL
+pause
 
 echo
 echo "[action_proposals]"
+echo "\$ sqlite3 ${DB_PATH} <<'SQL'"
 sqlite3 "${DB_PATH}" <<'SQL'
 .headers on
 .mode column
@@ -145,9 +171,11 @@ SELECT id, session_id, resource_id, decision, status, action_tier, risk_level
 FROM action_proposals
 ORDER BY created_at;
 SQL
+pause
 
 echo
 echo "[approval_tickets]"
+echo "\$ sqlite3 ${DB_PATH} <<'SQL'"
 sqlite3 "${DB_PATH}" <<'SQL'
 .headers on
 .mode column
@@ -155,9 +183,11 @@ SELECT id, session_id, proposal_id, status, decision_type, decided_by
 FROM approval_tickets
 ORDER BY created_at;
 SQL
+pause
 
 echo
 echo "[control_events]"
+echo "\$ sqlite3 ${DB_PATH} <<'SQL'"
 sqlite3 "${DB_PATH}" <<'SQL'
 .headers on
 .mode column
@@ -165,9 +195,11 @@ SELECT session_id, seq, event_kind, state_bearing, agent_id
 FROM control_events
 ORDER BY seq;
 SQL
+pause
 
 echo
 echo "[command_ledger]"
+echo "\$ sqlite3 ${DB_PATH} <<'SQL'"
 sqlite3 "${DB_PATH}" <<'SQL'
 .headers on
 .mode column
@@ -175,6 +207,7 @@ SELECT command_id, operation, session_id
 FROM command_ledger
 ORDER BY created_at;
 SQL
+pause
 
 echo
 echo "==> Demo artifacts"
