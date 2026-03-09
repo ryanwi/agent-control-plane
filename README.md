@@ -11,7 +11,7 @@ The **data plane** is the execution path that actually sends orders, calls servi
 
 [Watch interactive terminal recording](https://asciinema.org/a/Mrl2E8gMbNLzNKuM)
 
-![Agent story terminal demo](docs/demo/control-plane-agent-story.gif)
+[![Agent story terminal demo](docs/demo/control-plane-agent-story.gif)](https://asciinema.org/a/Mrl2E8gMbNLzNKuM)
 
 ## Why this exists
 
