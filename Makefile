@@ -5,11 +5,13 @@ MYPY ?= uv run mypy
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync docs-drift openapi-check test lint format typecheck check release-tag
+.PHONY: help sync demo-asciinema demo-asciicast-agent docs-drift openapi-check test lint format typecheck check release-tag
 
 help:
 	@printf "Targets:\n"
 	@printf "  make sync       - install/update dependencies (uv sync --extra dev)\n"
+	@printf "  make demo-asciinema - run sync demo and print persisted SQLite data for terminal recording\n"
+	@printf "  make demo-asciicast-agent - create a Python agent file live, run it, and show persisted SQLite data\n"
 	@printf "  make docs-drift - verify AGENTS.md / CLAUDE.md / GEMINI.md stay aligned\n"
 	@printf "  make openapi-check - validate OpenAPI contract files\n"
 	@printf "  make test       - run test suite\n"
@@ -21,6 +23,12 @@ help:
 
 sync:
 	uv sync --extra dev
+
+demo-asciinema:
+	./scripts/run_asciinema_demo.sh
+
+demo-asciicast-agent:
+	./scripts/run_asciicast_agent_story.sh
 
 docs-drift:
 	bash scripts/docs_drift_check.sh

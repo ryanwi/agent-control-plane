@@ -337,6 +337,42 @@ async def handle_proposal(db_session: AsyncSession, request: dict) -> None:
 For a native sync host, use `SyncControlPlane` or `ControlPlaneFacade` and `examples/quickstart_sync.py`.
 For async hosts (FastAPI/async workers), use `AsyncControlPlaneFacade`.
 
+## Terminal Demo (asciinema)
+
+Use the sync demo runner to show library usage and the persisted SQLite rows in one terminal flow:
+
+```bash
+make sync
+./scripts/run_asciinema_demo.sh
+```
+
+Record and replay with asciinema:
+
+```bash
+asciinema rec ./control-plane-sync-demo.cast -c "./scripts/run_asciinema_demo.sh"
+asciinema play ./control-plane-sync-demo.cast
+```
+
+Notes:
+- The runner script executes `examples/asciinema_sync_demo.py` and then prints key tables using `sqlite3`.
+- The `.cast` file is a local artifact for sharing/demo capture; do not commit it.
+
+For a short “create an agent like a framework demo, then run it” story, use:
+
+```bash
+make demo-asciicast-agent
+asciinema rec ./control-plane-agent-story.cast -c "make demo-asciicast-agent"
+```
+
+GitHub README embedding pattern:
+
+- Interactive recording link: replace `RECORDING_ID` after upload.
+- Inline preview image: `docs/demo/control-plane-agent-story.gif`.
+
+[Watch interactive terminal recording](https://asciinema.org/a/RECORDING_ID)
+
+![Agent story terminal demo](docs/demo/control-plane-agent-story.gif)
+
 `AsyncControlPlaneFacade` now also covers the common operational flows that previously required direct UoW access:
 - session transitions (`activate_session`, `pause_session`, `resume_session`, `list_sessions`)
 - cycle coordination (`acquire_cycle`, `release_cycle`, `set_active_cycle`)
@@ -526,6 +562,9 @@ class ControlEvent(Base, ControlEventMixin):
   - Asset Scoping: [`examples/compliance_agent.py`](examples/compliance_agent.py)
 - Utilities:
   - Audit Trail Replay: [`examples/audit_viewer.py`](examples/audit_viewer.py)
+  - Asciinema Sync Demo: [`examples/asciinema_sync_demo.py`](examples/asciinema_sync_demo.py)
+  - Asciinema Runner (usage + DB output): [`scripts/run_asciinema_demo.sh`](scripts/run_asciinema_demo.sh)
+  - Asciicast Agent Story (create code + run + inspect DB): [`scripts/run_asciicast_agent_story.sh`](scripts/run_asciicast_agent_story.sh)
   - MCP Gateway Demo: [`examples/mcp_tool_gateway.py`](examples/mcp_tool_gateway.py)
   - Companion REST+Dashboard Starter: [`examples/companion_gateway`](examples/companion_gateway)
     - runnable entrypoint: `uv run uvicorn examples.companion_gateway.main:app --reload --port 8000`
