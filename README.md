@@ -7,6 +7,12 @@ Embeddable governance framework for autonomous agent runtimes.
 In this library, the **control plane** is the authoritative layer that decides when and how an agent may act.
 The **data plane** is the execution path that actually sends orders, calls services, or writes external state.
 
+## Watch Demo
+
+[Watch interactive terminal recording](https://asciinema.org/a/Mrl2E8gMbNLzNKuM)
+
+![Agent story terminal demo](docs/demo/control-plane-agent-story.gif)
+
 ## Why this exists
 
 Most agent stacks have strong data/IO layers but weak governance. This package provides:
@@ -339,39 +345,18 @@ For async hosts (FastAPI/async workers), use `AsyncControlPlaneFacade`.
 
 ## Terminal Demo (asciinema)
 
-Use the sync demo runner to show library usage and the persisted SQLite rows in one terminal flow:
+Use the quick sync runner for a minimal usage + DB walkthrough:
 
 ```bash
-make sync
 ./scripts/run_asciinema_demo.sh
 ```
 
-Record and replay with asciinema:
-
-```bash
-asciinema rec ./control-plane-sync-demo.cast -c "./scripts/run_asciinema_demo.sh"
-asciinema play ./control-plane-sync-demo.cast
-```
-
-Notes:
-- The runner script executes `examples/asciinema_sync_demo.py` and then prints key tables using `sqlite3`.
-- The `.cast` file is a local artifact for sharing/demo capture; do not commit it.
-
-For a short “create an agent like a framework demo, then run it” story, use:
+Use the full agent story (create code, run loop, show denied+approved outcomes):
 
 ```bash
 make demo-asciicast-agent
 asciinema rec ./control-plane-agent-story.cast -c "make demo-asciicast-agent"
 ```
-
-GitHub README embedding pattern:
-
-- Interactive recording link: https://asciinema.org/a/Mrl2E8gMbNLzNKuM
-- Inline preview image: `docs/demo/control-plane-agent-story.gif`.
-
-[Watch interactive terminal recording](https://asciinema.org/a/Mrl2E8gMbNLzNKuM)
-
-![Agent story terminal demo](docs/demo/control-plane-agent-story.gif)
 
 `AsyncControlPlaneFacade` now also covers the common operational flows that previously required direct UoW access:
 - session transitions (`activate_session`, `pause_session`, `resume_session`, `list_sessions`)
