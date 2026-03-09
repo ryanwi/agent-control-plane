@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/ryanwi/agent-control-plane/actions/workflows/ci.yml/badge.svg)](https://github.com/ryanwi/agent-control-plane/actions/workflows/ci.yml)
 
-Embeddable governance framework for autonomous agent runtimes.
+Safety and approval controls for AI agents.
 
 The **control plane** decides when/how an agent may act. The **data plane** executes side effects.
 
