@@ -53,10 +53,19 @@ Use the runnable sync quickstart:
 uv run python examples/quickstart_sync.py
 ```
 
-Run the continuous-loop governance example (denied + approved outcomes):
+ACP-first continuous loop examples:
 
 ```bash
+uv run python examples/single_agent_continuous_loop.py
+uv run python examples/multi_agent_continuous_loop.py
 uv run python examples/continuous_loop_governance.py
+```
+
+Optional SDK integrations (requires provider SDK + API key):
+
+```bash
+uv run python examples/openai_agents_sdk_integration.py
+uv run python examples/claude_agent_sdk_integration.py
 ```
 
 For the narrated terminal walkthrough used in the demo video:
@@ -95,8 +104,12 @@ make demo-asciicast-agent
 
 - Sync quickstart: [examples/quickstart_sync.py](examples/quickstart_sync.py)
 - Async quickstart: [examples/quickstart.py](examples/quickstart.py)
+- Single-agent continuous loop: [examples/single_agent_continuous_loop.py](examples/single_agent_continuous_loop.py)
+- Multi-agent continuous loop: [examples/multi_agent_continuous_loop.py](examples/multi_agent_continuous_loop.py)
 - Asciicast sync demo: [examples/asciinema_sync_demo.py](examples/asciinema_sync_demo.py)
 - Continuous-loop governance example: [examples/continuous_loop_governance.py](examples/continuous_loop_governance.py)
+- OpenAI Agents SDK integration: [examples/openai_agents_sdk_integration.py](examples/openai_agents_sdk_integration.py)
+- Claude Agent SDK integration: [examples/claude_agent_sdk_integration.py](examples/claude_agent_sdk_integration.py)
 - Asciicast story runner: [scripts/run_asciicast_agent_story.sh](scripts/run_asciicast_agent_story.sh)
 - Audit replay: [examples/audit_viewer.py](examples/audit_viewer.py)
 - MCP gateway demo: [examples/mcp_tool_gateway.py](examples/mcp_tool_gateway.py)
