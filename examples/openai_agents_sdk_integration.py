@@ -85,11 +85,7 @@ def main() -> None:
     for idx, case in enumerate(cases, start=1):
         run_result = Runner.run_sync(
             triage_agent,
-            (
-                f"Case {case.case_id} priority={case.priority}. "
-                f"Request: {case.summary}. "
-                "Return APPROVE or DENY only."
-            ),
+            (f"Case {case.case_id} priority={case.priority}. Request: {case.summary}. Return APPROVE or DENY only."),
         )
         model_decision = _parse_decision(str(run_result.final_output))
         should_approve = model_decision == "APPROVE"

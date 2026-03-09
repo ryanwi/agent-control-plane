@@ -45,9 +45,7 @@ class SupportAgent:
         )
         proposal = self.control_plane.create_proposal(proposal, command_id=f"story-{cycle_tag}-create-proposal")
         print(f"proposal_id={proposal.id}")
-        print(
-            "approval_request=" f"allow decision={proposal.decision} on {proposal.resource_type}:{proposal.resource_id}"
-        )
+        print(f"approval_request=allow decision={proposal.decision} on {proposal.resource_type}:{proposal.resource_id}")
 
         approval_ticket = self.control_plane.create_ticket(
             session_id,
@@ -73,8 +71,7 @@ class SupportAgent:
             )
             print(f"approval_status={denied_ticket.status}")
             print(
-                "approval_denied_for="
-                f"decision={proposal.decision} on {proposal.resource_type}:{proposal.resource_id}"
+                f"approval_denied_for=decision={proposal.decision} on {proposal.resource_type}:{proposal.resource_id}"
             )
             return
 
@@ -94,9 +91,7 @@ class SupportAgent:
             command_id=f"story-{cycle_tag}-emit-approval-granted",
         )
         print(f"approval_status={approved_ticket.status}")
-        print(
-            "approval_granted_for=" f"decision={proposal.decision} on {proposal.resource_type}:{proposal.resource_id}"
-        )
+        print(f"approval_granted_for=decision={proposal.decision} on {proposal.resource_type}:{proposal.resource_id}")
 
         if self.control_plane.check_budget(session_id, cost=proposal.weight, action_count=1):
             self.control_plane.increment_budget(session_id, cost=proposal.weight, action_count=1)
