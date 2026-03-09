@@ -60,6 +60,12 @@ echo "${DEMO_DIR}"
 pause
 
 echo
+say_step "Domain framing"
+say_what "Client app resource: customer case (resource_id=case-9001, resource_type=customer_case)."
+say_why "Control-plane approval_ticket is a separate governance record created to authorize that action."
+pause
+
+echo
 say_step "Step 1: Create a Python agent file"
 say_what "Write a minimal support agent that uses a control-plane client."
 say_why "This proves integration starts with ordinary Python code, not framework magic."
@@ -99,31 +105,40 @@ class SupportAgent:
 
         proposal = ActionProposal(
             session_id=session_id,
-            resource_id="ticket-9001",
-            resource_type="support_ticket",
+            resource_id="case-9001",
+            resource_type="customer_case",
             decision="status",
-            reasoning="Fetch latest status for customer",
+            reasoning="Fetch latest status for customer case",
             metadata={"priority": "high", "source": "terminal-story"},
             weight=Decimal("0.75"),
             score=Decimal("0.88"),
         )
         proposal = self.control_plane.create_proposal(proposal, command_id="story-create-proposal")
         print(f"proposal_id={proposal.id}")
+        print(
+            "approval_request="
+            f"allow decision={proposal.decision} on {proposal.resource_type}:{proposal.resource_id}"
+        )
 
-        ticket = self.control_plane.create_ticket(
+        approval_ticket = self.control_plane.create_ticket(
             session_id,
             proposal.id,
             timeout_at=datetime.now(UTC) + timedelta(minutes=5),
             command_id="story-create-ticket",
         )
-        print(f"ticket_id={ticket.id}")
+        print(f"approval_ticket_id={approval_ticket.id}")
 
-        self.control_plane.approve_ticket(
-            ticket.id,
+        approved_ticket = self.control_plane.approve_ticket(
+            approval_ticket.id,
             decided_by="operator-demo",
             reason="Approved for demo",
             decision_type=ApprovalDecisionType.ALLOW_ONCE,
             command_id="story-approve-ticket",
+        )
+        print(f"approval_status={approved_ticket.status}")
+        print(
+            "approval_granted_for="
+            f"decision={proposal.decision} on {proposal.resource_type}:{proposal.resource_id}"
         )
 
         if self.control_plane.check_budget(session_id, cost=proposal.weight, action_count=1):
@@ -178,6 +193,7 @@ say_what "Execute one agent cycle through control-plane governance."
 say_why "Demonstrate runtime behavior and returned IDs/status."
 pause
 run_cmd uv run python "${AGENT_FILE}"
+say_what "The agent acted on a client customer_case; governance created a separate control-plane approval_ticket."
 pause
 
 echo
@@ -204,21 +220,21 @@ SQL
 pause
 
 echo
-say_step "[action_proposals]"
-say_what "Action candidate produced by the agent and its governance status."
+say_step "[action_proposals (client resource actions)]"
+say_what "Rows here reference client-domain resources (customer cases), not control-plane approval records."
 printf "%s$ sqlite3 %s <<'SQL'%s\n" "${C_CMD}" "${DB_PATH}" "${C_RESET}"
 sqlite3 "${DB_PATH}" <<'SQL'
 .headers on
 .mode column
-SELECT id, session_id, resource_id, decision, status, action_tier, risk_level
+SELECT id, session_id, resource_id, resource_type, decision, status, action_tier, risk_level
 FROM action_proposals
 ORDER BY created_at;
 SQL
 pause
 
 echo
-say_step "[approval_tickets]"
-say_what "Human/automation approval decision persisted with scope metadata."
+say_step "[approval_tickets (control-plane governance records)]"
+say_what "Rows here are control-plane approvals linked to proposals; they are not client customer cases."
 printf "%s$ sqlite3 %s <<'SQL'%s\n" "${C_CMD}" "${DB_PATH}" "${C_RESET}"
 sqlite3 "${DB_PATH}" <<'SQL'
 .headers on
@@ -226,6 +242,25 @@ sqlite3 "${DB_PATH}" <<'SQL'
 SELECT id, session_id, proposal_id, status, decision_type, decided_by
 FROM approval_tickets
 ORDER BY created_at;
+SQL
+pause
+
+echo
+say_step "[approval_context (what was approved)]"
+say_what "Join approvals to proposals to show the exact approved action on the client resource."
+printf "%s$ sqlite3 %s <<'SQL'%s\n" "${C_CMD}" "${DB_PATH}" "${C_RESET}"
+sqlite3 "${DB_PATH}" <<'SQL'
+.headers on
+.mode column
+SELECT
+  t.id AS approval_ticket_id,
+  p.resource_type,
+  p.resource_id,
+  p.decision,
+  t.status AS approval_status
+FROM approval_tickets t
+JOIN action_proposals p ON p.id = t.proposal_id
+ORDER BY t.created_at;
 SQL
 pause
 
