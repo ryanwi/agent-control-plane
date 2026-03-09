@@ -7,9 +7,15 @@ AGENT_FILE="${DEMO_DIR}/support_agent_demo.py"
 DB_PATH="${DEMO_DIR}/support_agent_demo.db"
 PAUSE_SECONDS="${DEMO_PAUSE_SECONDS:-0.8}"
 LINE_PAUSE_SECONDS="${DEMO_LINE_PAUSE_SECONDS:-0.03}"
+STEP1_PAUSE_SECONDS="${DEMO_STEP1_PAUSE_SECONDS:-${PAUSE_SECONDS}}"
+STEP1_LINE_PAUSE_SECONDS="${DEMO_STEP1_LINE_PAUSE_SECONDS:-0.08}"
 
 pause() {
   sleep "${PAUSE_SECONDS}"
+}
+
+pause_step1() {
+  sleep "${STEP1_PAUSE_SECONDS}"
 }
 
 run_cmd() {
@@ -28,7 +34,7 @@ pause
 
 echo
 echo "==> Step 1: Create a Python agent file"
-pause
+pause_step1
 echo "\$ cat > ${AGENT_FILE} <<'PY'  # (agent source shown below)"
 cat > "${AGENT_FILE}" <<'PY'
 from __future__ import annotations
@@ -131,9 +137,9 @@ echo "==> Agent source"
 echo "\$ nl -ba ${AGENT_FILE}"
 while IFS= read -r line; do
   printf "%s\n" "$line"
-  sleep "${LINE_PAUSE_SECONDS}"
+  sleep "${STEP1_LINE_PAUSE_SECONDS}"
 done < <(nl -ba "${AGENT_FILE}")
-pause
+pause_step1
 
 echo
 echo "==> Step 2: Run the agent"
