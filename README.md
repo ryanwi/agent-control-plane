@@ -366,10 +366,10 @@ asciinema rec ./control-plane-agent-story.cast -c "make demo-asciicast-agent"
 
 GitHub README embedding pattern:
 
-- Interactive recording link: replace `RECORDING_ID` after upload.
+- Interactive recording link: https://asciinema.org/a/5qS8KsZKNtYnSPIf
 - Inline preview image: `docs/demo/control-plane-agent-story.gif`.
 
-[Watch interactive terminal recording](https://asciinema.org/a/RECORDING_ID)
+[Watch interactive terminal recording](https://asciinema.org/a/5qS8KsZKNtYnSPIf)
 
 ![Agent story terminal demo](docs/demo/control-plane-agent-story.gif)
 
