@@ -9,6 +9,21 @@ PAUSE_SECONDS="${DEMO_PAUSE_SECONDS:-0.8}"
 LINE_PAUSE_SECONDS="${DEMO_LINE_PAUSE_SECONDS:-0.03}"
 STEP1_PAUSE_SECONDS="${DEMO_STEP1_PAUSE_SECONDS:-${PAUSE_SECONDS}}"
 STEP1_LINE_PAUSE_SECONDS="${DEMO_STEP1_LINE_PAUSE_SECONDS:-0.08}"
+COLOR_MODE="${DEMO_COLOR:-auto}"
+
+if [[ "${COLOR_MODE}" == "1" || "${COLOR_MODE}" == "true" || ( "${COLOR_MODE}" == "auto" && -t 1 ) ]]; then
+  C_RESET=$'\033[0m'
+  C_HDR=$'\033[1;36m'
+  C_WHAT=$'\033[1;33m'
+  C_WHY=$'\033[0;32m'
+  C_CMD=$'\033[0;35m'
+else
+  C_RESET=""
+  C_HDR=""
+  C_WHAT=""
+  C_WHY=""
+  C_CMD=""
+fi
 
 pause() {
   sleep "${PAUSE_SECONDS}"
@@ -19,8 +34,20 @@ pause_step1() {
 }
 
 run_cmd() {
-  echo "\$ $*"
+  printf "%s$ %s%s\n" "${C_CMD}" "$*" "${C_RESET}"
   "$@"
+}
+
+say_step() {
+  printf "%s==> %s%s\n" "${C_HDR}" "$1" "${C_RESET}"
+}
+
+say_what() {
+  printf "%sWHAT:%s %s\n" "${C_WHAT}" "${C_RESET}" "$1"
+}
+
+say_why() {
+  printf "%sWHY:%s  %s\n" "${C_WHY}" "${C_RESET}" "$1"
 }
 
 if ! command -v sqlite3 >/dev/null 2>&1; then
@@ -28,14 +55,16 @@ if ! command -v sqlite3 >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "==> Demo workspace"
+say_step "Demo workspace"
 echo "${DEMO_DIR}"
 pause
 
 echo
-echo "==> Step 1: Create a Python agent file"
+say_step "Step 1: Create a Python agent file"
+say_what "Write a minimal support agent that uses a control-plane client."
+say_why "This proves integration starts with ordinary Python code, not framework magic."
 pause_step1
-echo "\$ cat > ${AGENT_FILE} <<'PY'  # (agent source shown below)"
+printf "%s$ cat > %s <<'PY'  # (agent source shown below)%s\n" "${C_CMD}" "${AGENT_FILE}" "${C_RESET}"
 cat > "${AGENT_FILE}" <<'PY'
 from __future__ import annotations
 
@@ -43,7 +72,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
-from agent_control_plane.sync import ControlPlaneFacade, DictEventMapper
+from agent_control_plane.sync import ControlPlaneFacade as ControlPlaneClient, DictEventMapper
 from agent_control_plane.types.enums import ApprovalDecisionType, EventKind
 from agent_control_plane.types.proposals import ActionProposal
 
@@ -56,11 +85,11 @@ class SupportAgent:
                 "agent_finished": EventKind.CYCLE_COMPLETED,
             }
         )
-        self.facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_path}", mapper=mapper)
-        self.facade.setup()
+        self.control_plane = ControlPlaneClient.from_database_url(f"sqlite:///{db_path}", mapper=mapper)
+        self.control_plane.setup()
 
     def run_once(self) -> None:
-        session_id = self.facade.open_session(
+        session_id = self.control_plane.open_session(
             "support-agent-demo",
             max_cost=Decimal("20.00"),
             max_action_count=3,
@@ -78,10 +107,10 @@ class SupportAgent:
             weight=Decimal("0.75"),
             score=Decimal("0.88"),
         )
-        proposal = self.facade.create_proposal(proposal, command_id="story-create-proposal")
+        proposal = self.control_plane.create_proposal(proposal, command_id="story-create-proposal")
         print(f"proposal_id={proposal.id}")
 
-        ticket = self.facade.create_ticket(
+        ticket = self.control_plane.create_ticket(
             session_id,
             proposal.id,
             timeout_at=datetime.now(UTC) + timedelta(minutes=5),
@@ -89,7 +118,7 @@ class SupportAgent:
         )
         print(f"ticket_id={ticket.id}")
 
-        self.facade.approve_ticket(
+        self.control_plane.approve_ticket(
             ticket.id,
             decided_by="operator-demo",
             reason="Approved for demo",
@@ -97,16 +126,16 @@ class SupportAgent:
             command_id="story-approve-ticket",
         )
 
-        if self.facade.check_budget(session_id, cost=proposal.weight, action_count=1):
-            self.facade.increment_budget(session_id, cost=proposal.weight, action_count=1)
+        if self.control_plane.check_budget(session_id, cost=proposal.weight, action_count=1):
+            self.control_plane.increment_budget(session_id, cost=proposal.weight, action_count=1)
 
-        self.facade.emit_app(
+        self.control_plane.emit_app(
             session_id,
             "agent_started",
             {"agent": "support", "proposal_id": str(proposal.id)},
             state_bearing=True,
         )
-        self.facade.emit(
+        self.control_plane.emit(
             session_id,
             EventKind.EXECUTION_COMPLETED,
             {"proposal_id": str(proposal.id), "status": "ok"},
@@ -115,7 +144,7 @@ class SupportAgent:
             command_id="story-emit-execution",
         )
 
-        result = self.facade.close_session(
+        result = self.control_plane.close_session(
             session_id,
             payload={"summary": "agent cycle completed"},
             command_id="story-close-session",
@@ -133,8 +162,10 @@ PY
 sed -i.bak "s|DB_PATH_PLACEHOLDER|${DB_PATH}|g" "${AGENT_FILE}" && rm -f "${AGENT_FILE}.bak"
 
 echo
-echo "==> Agent source"
-echo "\$ nl -ba ${AGENT_FILE}"
+say_step "Agent source"
+say_what "Show generated code that opens a session, proposes action, approves, emits events, closes."
+say_why "Viewers can audit the exact agent logic before execution."
+printf "%s$ nl -ba %s%s\n" "${C_CMD}" "${AGENT_FILE}" "${C_RESET}"
 while IFS= read -r line; do
   printf "%s\n" "$line"
   sleep "${STEP1_LINE_PAUSE_SECONDS}"
@@ -142,23 +173,28 @@ done < <(nl -ba "${AGENT_FILE}")
 pause_step1
 
 echo
-echo "==> Step 2: Run the agent"
+say_step "Step 2: Run the agent"
+say_what "Execute one agent cycle through control-plane governance."
+say_why "Demonstrate runtime behavior and returned IDs/status."
 pause
 run_cmd uv run python "${AGENT_FILE}"
 pause
 
 echo
-echo "==> Step 3: Show persisted control-plane data"
+say_step "Step 3: Show persisted control-plane data"
+say_what "Inspect canonical tables written by the run."
+say_why "Prove durability, auditability, and idempotent command tracking."
 pause
 
 echo
-echo "[tables]"
+say_step "[tables]"
 run_cmd sqlite3 "${DB_PATH}" '.tables'
 pause
 
 echo
-echo "[control_sessions]"
-echo "\$ sqlite3 ${DB_PATH} <<'SQL'"
+say_step "[control_sessions]"
+say_what "Session lifecycle and budget counters."
+printf "%s$ sqlite3 %s <<'SQL'%s\n" "${C_CMD}" "${DB_PATH}" "${C_RESET}"
 sqlite3 "${DB_PATH}" <<'SQL'
 .headers on
 .mode column
@@ -168,8 +204,9 @@ SQL
 pause
 
 echo
-echo "[action_proposals]"
-echo "\$ sqlite3 ${DB_PATH} <<'SQL'"
+say_step "[action_proposals]"
+say_what "Action candidate produced by the agent and its governance status."
+printf "%s$ sqlite3 %s <<'SQL'%s\n" "${C_CMD}" "${DB_PATH}" "${C_RESET}"
 sqlite3 "${DB_PATH}" <<'SQL'
 .headers on
 .mode column
@@ -180,8 +217,9 @@ SQL
 pause
 
 echo
-echo "[approval_tickets]"
-echo "\$ sqlite3 ${DB_PATH} <<'SQL'"
+say_step "[approval_tickets]"
+say_what "Human/automation approval decision persisted with scope metadata."
+printf "%s$ sqlite3 %s <<'SQL'%s\n" "${C_CMD}" "${DB_PATH}" "${C_RESET}"
 sqlite3 "${DB_PATH}" <<'SQL'
 .headers on
 .mode column
@@ -192,8 +230,9 @@ SQL
 pause
 
 echo
-echo "[control_events]"
-echo "\$ sqlite3 ${DB_PATH} <<'SQL'"
+say_step "[control_events]"
+say_what "State-bearing event trail suitable for replay/projection."
+printf "%s$ sqlite3 %s <<'SQL'%s\n" "${C_CMD}" "${DB_PATH}" "${C_RESET}"
 sqlite3 "${DB_PATH}" <<'SQL'
 .headers on
 .mode column
@@ -204,8 +243,10 @@ SQL
 pause
 
 echo
-echo "[command_ledger]"
-echo "\$ sqlite3 ${DB_PATH} <<'SQL'"
+say_step "[command_ledger]"
+say_what "Idempotency records for mutating operations."
+say_why "If retried with same command_id, writes are replay-safe."
+printf "%s$ sqlite3 %s <<'SQL'%s\n" "${C_CMD}" "${DB_PATH}" "${C_RESET}"
 sqlite3 "${DB_PATH}" <<'SQL'
 .headers on
 .mode column
@@ -216,6 +257,6 @@ SQL
 pause
 
 echo
-echo "==> Demo artifacts"
+say_step "Demo artifacts"
 echo "agent_file=${AGENT_FILE}"
 echo "db_path=${DB_PATH}"
