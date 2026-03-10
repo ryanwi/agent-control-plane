@@ -59,6 +59,7 @@ ACP-first continuous loop examples:
 uv run python examples/single_agent_continuous_loop.py
 uv run python examples/multi_agent_continuous_loop.py
 uv run python examples/continuous_loop_governance.py
+uv run python examples/long_running_autonomous_agent.py --horizon day
 ```
 
 Optional SDK integrations (requires provider SDK + API key):
@@ -94,6 +95,7 @@ make demo-asciicast-agent
 
 - Architecture: [docs/architecture.md](docs/architecture.md)
 - Operations runbook: [docs/operations_runbook.md](docs/operations_runbook.md)
+- Continuous operation playbook (1h/day/week/month): [docs/continuous_operation_playbook.md](docs/continuous_operation_playbook.md)
 - Security model: [docs/security_model.md](docs/security_model.md)
 - Identity integration: [docs/integration_identity.md](docs/integration_identity.md)
 - Compatibility posture: [docs/compatibility.md](docs/compatibility.md)
@@ -108,6 +110,7 @@ make demo-asciicast-agent
 - Multi-agent continuous loop: [examples/multi_agent_continuous_loop.py](examples/multi_agent_continuous_loop.py)
 - Asciicast sync demo: [examples/asciinema_sync_demo.py](examples/asciinema_sync_demo.py)
 - Continuous-loop governance example: [examples/continuous_loop_governance.py](examples/continuous_loop_governance.py)
+- Long-running autonomous example: [examples/long_running_autonomous_agent.py](examples/long_running_autonomous_agent.py)
 - OpenAI Agents SDK integration: [examples/openai_agents_sdk_integration.py](examples/openai_agents_sdk_integration.py)
 - Claude Agent SDK integration: [examples/claude_agent_sdk_integration.py](examples/claude_agent_sdk_integration.py)
 - Asciicast story runner: [scripts/run_asciicast_agent_story.sh](scripts/run_asciicast_agent_story.sh)
