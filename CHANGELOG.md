@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-03-18
+
+### Added
+
+- **`SessionRiskAccumulator` engine** (`engine/session_risk_accumulator.py`): watches action chains across a session and escalates risk when accumulated score thresholds or named action-sequence patterns are detected.
+  - Score-based escalation: LOW=1.0, MEDIUM=3.0, HIGH=5.0 per action; configurable thresholds for MEDIUM (default 5.0) and HIGH (default 10.0) escalation.
+  - Pattern-based escalation: contiguous sliding-window matching of ordered action sequences (e.g. `read_crm → query_database → send_email` = data-exfiltration chain).
+  - Slots between `classify_risk_level()` and `classify_action_tier()` as an optional host-app step; not wired into `ProposalRouter` or `SyncControlPlane`.
+  - Emits `SESSION_RISK_ESCALATED` telemetry event (non-state-bearing) when escalation occurs and an `EventStore` is configured.
+- **`RiskPattern` / `SessionRiskState` / `SessionRiskEscalation` DTOs** (`types/risk.py`): typed contracts for pattern definitions, per-session accumulation state, and escalation results.
+- **`EventKind.SESSION_RISK_ESCALATED`** added to the `EventKind` enum for structured telemetry.
+- New example: `examples/session_risk_accumulator_demo.py` — demonstrates score accumulation, pattern detection, session isolation, and event emission.
+
 ## [0.9.5] - 2026-03-08
 
 ### Changed

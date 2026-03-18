@@ -49,6 +49,7 @@ The package is organized around explicit layers:
   - `concurrency` — lock/serialize overlapping work paths
   - `kill_switch` — emergency stop semantics by scope
   - `event_store` — monotonic event persistence and buffering
+  - `session_risk_accumulator` — cross-action risk accumulation and pattern detection per session
 - `recovery/`
   - `crash_recovery` — resume control state after process interruption
   - `timeout_escalation` — escalate stuck active cycles

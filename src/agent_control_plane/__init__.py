@@ -38,6 +38,7 @@ from agent_control_plane.engine.policy_engine import (
 )
 from agent_control_plane.engine.router import ProposalRouter, RoutingDecision
 from agent_control_plane.engine.session_manager import SessionManager
+from agent_control_plane.engine.session_risk_accumulator import SessionRiskAccumulator
 from agent_control_plane.idempotency import proposal_command_id
 from agent_control_plane.mcp import (
     ApprovalRequiredError,
@@ -204,6 +205,7 @@ from agent_control_plane.types.query import (
     StateChange,
     StateChangePage,
 )
+from agent_control_plane.types.risk import RiskPattern, SessionRiskEscalation, SessionRiskState
 from agent_control_plane.types.sessions import BudgetInfo, KillSwitchResult, SessionCreate, SessionState, SessionSummary
 
 try:
@@ -356,10 +358,14 @@ __all__ = [
     "RiskClassifier",
     "RiskDecision",
     "RiskLevel",
+    "RiskPattern",
     "RiskLimits",
     "RoutingDecision",
     "RoutingResolutionStep",
     "ScopedModelRegistry",
+    "SessionRiskAccumulator",
+    "SessionRiskEscalation",
+    "SessionRiskState",
     # Session
     "SessionCreate",
     "SessionCheckpoint",

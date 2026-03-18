@@ -148,6 +148,7 @@ class EventKind(StrEnum):
     HANDOFF_ACCEPTED = "handoff_accepted"
     HANDOFF_REJECTED = "handoff_rejected"
     LEASE_EXPIRED = "lease_expired"
+    SESSION_RISK_ESCALATED = "session_risk_escalated"
 
 
 class ProposalStatus(StrEnum):
