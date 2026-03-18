@@ -137,7 +137,7 @@ async def demo_event_emission() -> None:
 
 
 async def main() -> None:
-    print("SessionRiskAccumulator demo — agent-control-plane v0.9.6")
+    print("SessionRiskAccumulator demo — agent-control-plane v0.10.0")
     await demo_score_accumulation()
     await demo_pattern_detection()
     await demo_session_isolation()
