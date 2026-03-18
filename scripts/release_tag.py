@@ -52,8 +52,7 @@ def main() -> None:
     pyproject_version = _read_pyproject_version()
     if pyproject_version != version:
         raise SystemExit(
-            f"Version mismatch: pyproject.toml={pyproject_version}, requested={version}. "
-            "Bump pyproject first."
+            f"Version mismatch: pyproject.toml={pyproject_version}, requested={version}. Bump pyproject first."
         )
 
     _assert_clean_worktree()

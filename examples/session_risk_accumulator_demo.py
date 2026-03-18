@@ -75,7 +75,7 @@ async def demo_pattern_detection() -> None:
     ]
     for decision, risk in steps:
         result = await acc.assess(sid, _proposal(sid, decision), risk)
-        print(f"  {decision}: escalated_risk={result.escalated_risk.value}  " f"was_escalated={result.was_escalated}")
+        print(f"  {decision}: escalated_risk={result.escalated_risk.value}  was_escalated={result.was_escalated}")
         for r in result.escalation_reasons:
             print(f"    reason: {r}")
 
