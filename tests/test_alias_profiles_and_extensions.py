@@ -49,7 +49,7 @@ def _reset_registries():
 
 def test_alias_profile_round_trip_on_action_proposal_and_session():
     profile = AliasProfile(
-        name="alphabond",
+        name="acme",
         aliases=FieldAliasMap(
             canonical_to_alias={
                 "resource_id": "security_id",
@@ -74,21 +74,21 @@ def test_alias_profile_round_trip_on_action_proposal_and_session():
             "position_size_pct": "1.5",
             "confidence": "0.8",
         },
-        profile="alphabond",
+        profile="acme",
     )
     assert proposal.resource_id == "AAPL"
-    dumped = proposal.model_dump_with_profile(profile="alphabond")
+    dumped = proposal.model_dump_with_profile(profile="acme")
     assert dumped["security_id"] == "AAPL"
     assert dumped["position_size_pct"] == Decimal("1.5")
 
     session = SessionCreate.model_validate_with_profile(
         {
-            "session_name": "ab-session",
+            "session_name": "acme-session",
             "trading_mode": "dry_run",
             "max_notional": "1000",
             "max_trade_count": 20,
         },
-        profile="alphabond",
+        profile="acme",
     )
     assert session.max_cost == Decimal("1000")
     assert session.max_action_count == 20
