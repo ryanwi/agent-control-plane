@@ -73,7 +73,7 @@ class SessionRiskAccumulator:
         score_risk, score_reasons = self._check_score_escalation(new_score, action_risk_level)
 
         # Check pattern-based escalation against updated window
-        pattern_risk, pattern_reasons = self._check_pattern_escalation(new_recent)
+        pattern_risk, pattern_reasons, matched_pattern_names = self._check_pattern_escalation(new_recent)
 
         # Determine final escalated risk (max of all sources)
         candidates = [action_risk_level, score_risk]
@@ -84,12 +84,11 @@ class SessionRiskAccumulator:
         all_reasons = score_reasons + pattern_reasons
         was_escalated = escalated_risk.rank > action_risk_level.rank
 
-        # Update detected_patterns list
+        # Update detected_patterns list using matches from the pattern check
         new_detected = list(state.detected_patterns)
-        for p in self._patterns:
-            window = new_recent[-p.window_size :] if p.window_size > 0 else new_recent
-            if _is_contiguous_subsequence(p.action_sequence, window) and p.name not in new_detected:
-                new_detected.append(p.name)
+        for name in matched_pattern_names:
+            if name not in new_detected:
+                new_detected.append(name)
 
         new_state = SessionRiskState(
             session_id=session_id,
@@ -151,17 +150,19 @@ class SessionRiskAccumulator:
                 return level, [f"Accumulated score {accumulated} >= medium threshold {self._score_threshold_medium}"]
         return current_action_risk, []
 
-    def _check_pattern_escalation(self, recent_actions: list[str]) -> tuple[RiskLevel | None, list[str]]:
-        """Return the highest escalation level from any matched patterns, and reasons."""
+    def _check_pattern_escalation(self, recent_actions: list[str]) -> tuple[RiskLevel | None, list[str], list[str]]:
+        """Return the highest escalation level, reasons, and matched pattern names."""
         matched_level: RiskLevel | None = None
         reasons: list[str] = []
+        matched_names: list[str] = []
         for p in self._patterns:
             window = recent_actions[-p.window_size :] if p.window_size > 0 else recent_actions
             if _is_contiguous_subsequence(p.action_sequence, window):
                 reasons.append(f"Pattern matched: {p.name}")
+                matched_names.append(p.name)
                 if matched_level is None or p.escalate_to.rank > matched_level.rank:
                     matched_level = p.escalate_to
-        return matched_level, reasons
+        return matched_level, reasons, matched_names
 
     def _get_or_create_state(self, session_id: UUID) -> SessionRiskState:
         if session_id not in self._states:

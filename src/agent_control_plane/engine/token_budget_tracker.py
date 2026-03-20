@@ -12,6 +12,7 @@ from agent_control_plane.types.enums import BudgetPeriod, EventKind
 from agent_control_plane.types.token_governance import (
     IdentityContext,
     TokenBudgetCheckResult,
+    TokenBudgetConfig,
     TokenBudgetState,
     TokenUsage,
 )
@@ -67,18 +68,60 @@ class TokenBudgetTracker:
     ) -> TokenBudgetCheckResult:
         """Check if the proposed usage fits within all applicable budgets."""
         configs = await self._repo.list_budget_configs(identity)
+        return await self._check_budget_with_configs(configs, identity, usage)
+
+    async def record_usage(
+        self,
+        session_id: UUID,
+        identity: IdentityContext,
+        usage: TokenUsage,
+    ) -> None:
+        """Check budget, record usage, and emit event. Raises on exhaustion."""
+        configs = await self._repo.list_budget_configs(identity)
+        result = await self._check_budget_with_configs(configs, identity, usage)
+        if not result.allowed:
+            raise TokenBudgetExhaustedError("; ".join(result.denial_reasons))
+
+        for config in configs:
+            window_start, window_end = _compute_window(config.period)
+            await self._repo.increment_usage(
+                config.id, window_start, window_end, usage.total_tokens, usage.estimated_cost_usd
+            )
+
+        await self._repo.record_usage(session_id, usage, identity)
+
+        if self._event_store is not None:
+            await self._event_store.append(
+                session_id=session_id,
+                event_kind=EventKind.TOKEN_USAGE_RECORDED,
+                payload={
+                    "model_id": str(usage.model_id),
+                    "total_tokens": usage.total_tokens,
+                    "estimated_cost_usd": str(usage.estimated_cost_usd),
+                    "user_id": str(identity.user_id) if identity.user_id else None,
+                    "org_id": str(identity.org_id) if identity.org_id else None,
+                },
+            )
+
+    async def _check_budget_with_configs(
+        self,
+        configs: list[TokenBudgetConfig],
+        identity: IdentityContext,
+        usage: TokenUsage,
+    ) -> TokenBudgetCheckResult:
+        """Check usage against resolved configs (avoids double-fetching)."""
         if not configs:
             return TokenBudgetCheckResult(allowed=True)
 
         denial_reasons: list[str] = []
-        last_state: TokenBudgetState | None = None
+        budget_states: list[TokenBudgetState] = []
 
         for config in configs:
             window_start, window_end = _compute_window(config.period)
             state = await self._repo.get_budget_state(config.id, window_start)
 
             used_tokens = state.used_tokens if state else 0
-            used_cost = state.used_cost_usd if state else usage.estimated_cost_usd.__class__("0")
+            used_cost = state.used_cost_usd if state else Decimal("0")
 
             # Check token limit
             if config.max_tokens is not None:
@@ -102,59 +145,27 @@ class TokenBudgetTracker:
             if config.allowed_models is not None and usage.model_id not in config.allowed_models:
                 denial_reasons.append(f"Model {usage.model_id} not in allowed models for budget {config.id}")
 
-            # Build state for response
             remaining_tokens = (config.max_tokens - used_tokens) if config.max_tokens is not None else None
             remaining_cost = (config.max_cost_usd - used_cost) if config.max_cost_usd is not None else None
-            last_state = TokenBudgetState(
-                config_id=config.id,
-                identity=identity,
-                period=config.period,
-                window_start=window_start,
-                window_end=window_end,
-                used_tokens=used_tokens,
-                used_cost_usd=used_cost,
-                remaining_tokens=remaining_tokens,
-                remaining_cost_usd=remaining_cost,
+            budget_states.append(
+                TokenBudgetState(
+                    config_id=config.id,
+                    identity=identity,
+                    period=config.period,
+                    window_start=window_start,
+                    window_end=window_end,
+                    used_tokens=used_tokens,
+                    used_cost_usd=used_cost,
+                    remaining_tokens=remaining_tokens,
+                    remaining_cost_usd=remaining_cost,
+                )
             )
 
         return TokenBudgetCheckResult(
             allowed=len(denial_reasons) == 0,
             denial_reasons=denial_reasons,
-            budget_state=last_state,
+            budget_states=budget_states,
         )
-
-    async def record_usage(
-        self,
-        session_id: UUID,
-        identity: IdentityContext,
-        usage: TokenUsage,
-    ) -> None:
-        """Check budget, record usage, and emit event. Raises on exhaustion."""
-        result = await self.check_budget(identity, usage)
-        if not result.allowed:
-            raise TokenBudgetExhaustedError("; ".join(result.denial_reasons))
-
-        configs = await self._repo.list_budget_configs(identity)
-        for config in configs:
-            window_start, window_end = _compute_window(config.period)
-            await self._repo.increment_usage(
-                config.id, window_start, window_end, usage.total_tokens, usage.estimated_cost_usd
-            )
-
-        await self._repo.record_usage(session_id, usage, identity)
-
-        if self._event_store is not None:
-            await self._event_store.append(
-                session_id=session_id,
-                event_kind=EventKind.TOKEN_USAGE_RECORDED,
-                payload={
-                    "model_id": str(usage.model_id),
-                    "total_tokens": usage.total_tokens,
-                    "estimated_cost_usd": str(usage.estimated_cost_usd),
-                    "user_id": str(identity.user_id) if identity.user_id else None,
-                    "org_id": str(identity.org_id) if identity.org_id else None,
-                },
-            )
 
     async def get_budget_states(self, identity: IdentityContext) -> list[TokenBudgetState]:
         """Get current budget states for all configs matching the identity."""

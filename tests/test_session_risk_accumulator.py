@@ -44,22 +44,8 @@ def _proposal(session_id: UUID, decision: str = "read_crm") -> ActionProposal:
     )
 
 
-def _low_proposal(session_id: UUID, decision: str = "read_crm") -> ActionProposal:
-    return _proposal(session_id, decision)
-
-
-def _medium_proposal(session_id: UUID, decision: str = "query_database") -> ActionProposal:
-    return _proposal(session_id, decision)
-
-
-def _high_proposal(session_id: UUID, decision: str = "wire_transfer") -> ActionProposal:
-    return _proposal(session_id, decision)
-
-
 def _accumulator(**overrides) -> SessionRiskAccumulator:
-    defaults: dict = {}
-    defaults.update(overrides)
-    return SessionRiskAccumulator(**defaults)
+    return SessionRiskAccumulator(**overrides)
 
 
 def _exfil_pattern() -> RiskPattern:
@@ -82,7 +68,7 @@ class TestScoreAccumulation:
     async def test_single_low_no_escalation(self):
         acc = _accumulator()
         sid = uuid4()
-        result = await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
+        result = await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
         assert result.escalated_risk == RiskLevel.LOW
         assert result.was_escalated is False
 
@@ -92,7 +78,7 @@ class TestScoreAccumulation:
         sid = uuid4()
         # 4 LOW actions = score 4.0 (below medium threshold of 5.0)
         for _ in range(4):
-            result = await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
+            result = await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
         assert result.session_state.accumulated_score == Decimal("4.0")
         assert result.was_escalated is False
 
@@ -100,7 +86,7 @@ class TestScoreAccumulation:
     async def test_high_action_bumps_score(self):
         acc = _accumulator()
         sid = uuid4()
-        result = await acc.assess(sid, _high_proposal(sid), RiskLevel.HIGH)
+        result = await acc.assess(sid, _proposal(sid), RiskLevel.HIGH)
         assert result.session_state.accumulated_score == Decimal("5.0")
 
     @pytest.mark.asyncio
@@ -109,8 +95,8 @@ class TestScoreAccumulation:
         acc = _accumulator()
         sid = uuid4()
         for _ in range(4):
-            await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
-        result = await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
+            await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
+        result = await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
         assert result.escalated_risk == RiskLevel.MEDIUM
         assert result.was_escalated is True
 
@@ -120,8 +106,8 @@ class TestScoreAccumulation:
         acc = _accumulator()
         sid = uuid4()
         for _ in range(9):
-            await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
-        result = await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
+            await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
+        result = await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
         assert result.escalated_risk == RiskLevel.HIGH
         assert result.was_escalated is True
 
@@ -132,8 +118,8 @@ class TestScoreAccumulation:
         acc = _accumulator()
         sid = uuid4()
         # 2 HIGH actions → score 10.0 → crosses high threshold, but action is already HIGH
-        await acc.assess(sid, _high_proposal(sid), RiskLevel.HIGH)
-        result = await acc.assess(sid, _high_proposal(sid), RiskLevel.HIGH)
+        await acc.assess(sid, _proposal(sid), RiskLevel.HIGH)
+        result = await acc.assess(sid, _proposal(sid), RiskLevel.HIGH)
         # score is 10.0 which hits HIGH threshold, but action_risk is already HIGH
         assert result.escalated_risk == RiskLevel.HIGH
         assert result.was_escalated is False
@@ -142,8 +128,8 @@ class TestScoreAccumulation:
     async def test_score_in_state(self):
         acc = _accumulator()
         sid = uuid4()
-        await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
-        await acc.assess(sid, _medium_proposal(sid), RiskLevel.MEDIUM)
+        await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid), RiskLevel.MEDIUM)
         state = acc.get_state(sid)
         assert state is not None
         assert state.accumulated_score == Decimal("4.0")  # 1.0 + 3.0
@@ -153,7 +139,7 @@ class TestScoreAccumulation:
         acc = _accumulator()
         sid = uuid4()
         for _ in range(3):
-            await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
+            await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
         state = acc.get_state(sid)
         assert state is not None
         assert state.action_count == 3
@@ -169,9 +155,9 @@ class TestPatternDetection:
     async def test_complete_sequence_triggers(self):
         acc = _accumulator(patterns=[_exfil_pattern()])
         sid = uuid4()
-        await acc.assess(sid, _low_proposal(sid, "read_crm"), RiskLevel.LOW)
-        await acc.assess(sid, _medium_proposal(sid, "query_database"), RiskLevel.MEDIUM)
-        result = await acc.assess(sid, _low_proposal(sid, "send_email"), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid, "read_crm"), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid, "query_database"), RiskLevel.MEDIUM)
+        result = await acc.assess(sid, _proposal(sid, "send_email"), RiskLevel.LOW)
         assert result.escalated_risk == RiskLevel.HIGH
         assert result.was_escalated is True
 
@@ -179,8 +165,8 @@ class TestPatternDetection:
     async def test_partial_sequence_no_escalation(self):
         acc = _accumulator(patterns=[_exfil_pattern()])
         sid = uuid4()
-        await acc.assess(sid, _low_proposal(sid, "read_crm"), RiskLevel.LOW)
-        result = await acc.assess(sid, _medium_proposal(sid, "query_database"), RiskLevel.MEDIUM)
+        await acc.assess(sid, _proposal(sid, "read_crm"), RiskLevel.LOW)
+        result = await acc.assess(sid, _proposal(sid, "query_database"), RiskLevel.MEDIUM)
         # Only 2 of 3 steps matched — no escalation from pattern
         assert result.escalated_risk == RiskLevel.MEDIUM
         assert "data_exfiltration" not in result.escalation_reasons
@@ -190,9 +176,9 @@ class TestPatternDetection:
         acc = _accumulator(patterns=[_exfil_pattern()])
         sid = uuid4()
         # Wrong order: query_database before read_crm
-        await acc.assess(sid, _medium_proposal(sid, "query_database"), RiskLevel.MEDIUM)
-        await acc.assess(sid, _low_proposal(sid, "read_crm"), RiskLevel.LOW)
-        result = await acc.assess(sid, _low_proposal(sid, "send_email"), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid, "query_database"), RiskLevel.MEDIUM)
+        await acc.assess(sid, _proposal(sid, "read_crm"), RiskLevel.LOW)
+        result = await acc.assess(sid, _proposal(sid, "send_email"), RiskLevel.LOW)
         # Pattern not matched (wrong order)
         assert "Pattern matched: data_exfiltration" not in result.escalation_reasons
 
@@ -208,12 +194,12 @@ class TestPatternDetection:
         )
         acc = _accumulator(patterns=[pattern])
         sid = uuid4()
-        await acc.assess(sid, _low_proposal(sid, "read_crm"), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid, "read_crm"), RiskLevel.LOW)
         # Fill window with 3 other actions, pushing read_crm out
-        await acc.assess(sid, _low_proposal(sid, "other_a"), RiskLevel.LOW)
-        await acc.assess(sid, _low_proposal(sid, "other_b"), RiskLevel.LOW)
-        await acc.assess(sid, _low_proposal(sid, "other_c"), RiskLevel.LOW)
-        result = await acc.assess(sid, _low_proposal(sid, "send_email"), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid, "other_a"), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid, "other_b"), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid, "other_c"), RiskLevel.LOW)
+        result = await acc.assess(sid, _proposal(sid, "send_email"), RiskLevel.LOW)
         assert "Pattern matched: tight_window" not in result.escalation_reasons
 
     @pytest.mark.asyncio
@@ -228,9 +214,9 @@ class TestPatternDetection:
         pattern_high = _exfil_pattern()
         acc = _accumulator(patterns=[pattern_medium, pattern_high])
         sid = uuid4()
-        await acc.assess(sid, _low_proposal(sid, "read_crm"), RiskLevel.LOW)
-        await acc.assess(sid, _medium_proposal(sid, "query_database"), RiskLevel.MEDIUM)
-        result = await acc.assess(sid, _low_proposal(sid, "send_email"), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid, "read_crm"), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid, "query_database"), RiskLevel.MEDIUM)
+        result = await acc.assess(sid, _proposal(sid, "send_email"), RiskLevel.LOW)
         # Both patterns match; highest escalation (HIGH) wins
         assert result.escalated_risk == RiskLevel.HIGH
 
@@ -238,9 +224,9 @@ class TestPatternDetection:
     async def test_pattern_name_in_reasons(self):
         acc = _accumulator(patterns=[_exfil_pattern()])
         sid = uuid4()
-        await acc.assess(sid, _low_proposal(sid, "read_crm"), RiskLevel.LOW)
-        await acc.assess(sid, _medium_proposal(sid, "query_database"), RiskLevel.MEDIUM)
-        result = await acc.assess(sid, _low_proposal(sid, "send_email"), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid, "read_crm"), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid, "query_database"), RiskLevel.MEDIUM)
+        result = await acc.assess(sid, _proposal(sid, "send_email"), RiskLevel.LOW)
         assert any("data_exfiltration" in r for r in result.escalation_reasons)
 
 
@@ -257,9 +243,9 @@ class TestSessionIsolation:
         sid_b = uuid4()
         # Session A: 5 LOW actions → score 5.0
         for _ in range(5):
-            await acc.assess(sid_a, _low_proposal(sid_a), RiskLevel.LOW)
+            await acc.assess(sid_a, _proposal(sid_a), RiskLevel.LOW)
         # Session B: 1 LOW action → score 1.0
-        await acc.assess(sid_b, _low_proposal(sid_b), RiskLevel.LOW)
+        await acc.assess(sid_b, _proposal(sid_b), RiskLevel.LOW)
         state_b = acc.get_state(sid_b)
         assert state_b is not None
         assert state_b.accumulated_score == Decimal("1.0")
@@ -270,10 +256,10 @@ class TestSessionIsolation:
         sid_a = uuid4()
         sid_b = uuid4()
         # Session A: partial exfil sequence
-        await acc.assess(sid_a, _low_proposal(sid_a, "read_crm"), RiskLevel.LOW)
-        await acc.assess(sid_a, _medium_proposal(sid_a, "query_database"), RiskLevel.MEDIUM)
+        await acc.assess(sid_a, _proposal(sid_a, "read_crm"), RiskLevel.LOW)
+        await acc.assess(sid_a, _proposal(sid_a, "query_database"), RiskLevel.MEDIUM)
         # Session B: only the final action (no prior context)
-        result = await acc.assess(sid_b, _low_proposal(sid_b, "send_email"), RiskLevel.LOW)
+        result = await acc.assess(sid_b, _proposal(sid_b, "send_email"), RiskLevel.LOW)
         assert "Pattern matched: data_exfiltration" not in result.escalation_reasons
 
 
@@ -288,7 +274,7 @@ class TestSessionReset:
         acc = _accumulator()
         sid = uuid4()
         for _ in range(5):
-            await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
+            await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
         acc.reset_session(sid)
         assert acc.get_state(sid) is None
 
@@ -296,8 +282,8 @@ class TestSessionReset:
     async def test_reset_clears_actions(self):
         acc = _accumulator(patterns=[_exfil_pattern()])
         sid = uuid4()
-        await acc.assess(sid, _low_proposal(sid, "read_crm"), RiskLevel.LOW)
-        await acc.assess(sid, _medium_proposal(sid, "query_database"), RiskLevel.MEDIUM)
+        await acc.assess(sid, _proposal(sid, "read_crm"), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid, "query_database"), RiskLevel.MEDIUM)
         acc.reset_session(sid)
         # After reset, state is gone
         assert acc.get_state(sid) is None
@@ -312,10 +298,10 @@ class TestSessionReset:
         acc = _accumulator()
         sid = uuid4()
         for _ in range(5):
-            await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
+            await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
         acc.reset_session(sid)
         # One LOW after reset → score 1.0, no escalation
-        result = await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
+        result = await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
         assert result.session_state.accumulated_score == Decimal("1.0")
         assert result.was_escalated is False
 
@@ -334,8 +320,8 @@ class TestEventEmission:
         sid = uuid4()
         # 5 LOW actions → score 5.0 → MEDIUM escalation on action 5
         for _ in range(4):
-            await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
-        await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
+            await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
         events = await event_repo.replay(sid)
         assert any(e.event_kind == EventKind.SESSION_RISK_ESCALATED for e in events)
 
@@ -346,7 +332,7 @@ class TestEventEmission:
         acc = _accumulator(event_store=event_store)
         sid = uuid4()
         # 1 LOW action — no escalation
-        await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
+        await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
         events = await event_repo.replay(sid)
         assert not any(e.event_kind == EventKind.SESSION_RISK_ESCALATED for e in events)
 
@@ -356,6 +342,6 @@ class TestEventEmission:
         acc = _accumulator()
         sid = uuid4()
         for _ in range(5):
-            result = await acc.assess(sid, _low_proposal(sid), RiskLevel.LOW)
+            result = await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
         # Reaches here without error
         assert result.was_escalated is True

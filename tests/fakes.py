@@ -355,36 +355,21 @@ class InMemoryTokenBudgetRepository:
         if config is None:
             raise ValueError(f"Config {config_id} not found")
         existing = self._states.get(key)
-        if existing is not None:
-            new_tokens = existing.used_tokens + tokens
-            new_cost = existing.used_cost_usd + cost_usd
-            remaining_tokens = (config.max_tokens - new_tokens) if config.max_tokens is not None else None
-            remaining_cost = (config.max_cost_usd - new_cost) if config.max_cost_usd is not None else None
-            state = TokenBudgetState(
-                config_id=config_id,
-                identity=config.identity,
-                period=config.period,
-                window_start=window_start,
-                window_end=window_end,
-                used_tokens=new_tokens,
-                used_cost_usd=new_cost,
-                remaining_tokens=remaining_tokens,
-                remaining_cost_usd=remaining_cost,
-            )
-        else:
-            remaining_tokens = (config.max_tokens - tokens) if config.max_tokens is not None else None
-            remaining_cost = (config.max_cost_usd - cost_usd) if config.max_cost_usd is not None else None
-            state = TokenBudgetState(
-                config_id=config_id,
-                identity=config.identity,
-                period=config.period,
-                window_start=window_start,
-                window_end=window_end,
-                used_tokens=tokens,
-                used_cost_usd=cost_usd,
-                remaining_tokens=remaining_tokens,
-                remaining_cost_usd=remaining_cost,
-            )
+        used_tokens = (existing.used_tokens + tokens) if existing else tokens
+        used_cost = (existing.used_cost_usd + cost_usd) if existing else cost_usd
+        remaining_tokens = (config.max_tokens - used_tokens) if config.max_tokens is not None else None
+        remaining_cost = (config.max_cost_usd - used_cost) if config.max_cost_usd is not None else None
+        state = TokenBudgetState(
+            config_id=config_id,
+            identity=config.identity,
+            period=config.period,
+            window_start=window_start,
+            window_end=window_end,
+            used_tokens=used_tokens,
+            used_cost_usd=used_cost,
+            remaining_tokens=remaining_tokens,
+            remaining_cost_usd=remaining_cost,
+        )
         self._states[key] = state
         return state
 

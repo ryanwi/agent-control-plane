@@ -37,7 +37,6 @@ class TokenBudgetConfig(BaseModel):
     max_tokens: int | None = None
     max_cost_usd: Decimal | None = None
     allowed_models: list[ModelId] | None = None
-    allowed_model_tiers: list[ModelTier] | None = None
 
 
 class TokenBudgetState(BaseModel):
@@ -59,7 +58,7 @@ class TokenBudgetCheckResult(BaseModel):
 
     allowed: bool
     denial_reasons: list[str] = Field(default_factory=list)
-    budget_state: TokenBudgetState | None = None
+    budget_states: list[TokenBudgetState] = Field(default_factory=list)
 
 
 class ModelAccessResult(BaseModel):

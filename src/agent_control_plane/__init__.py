@@ -173,6 +173,8 @@ from agent_control_plane.types.enums import (
     EventKind,
     ExecutionIntentStatus,
     ExecutionMode,
+    GoalStatus,
+    GuardrailPhase,
     KillSwitchScope,
     McpEventName,
     ModelTier,

@@ -254,7 +254,6 @@ class TokenBudgetConfigMixin:
     max_tokens: Mapped[int | None] = mapped_column(nullable=True)
     max_cost_usd: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 6), nullable=True)
     allowed_models: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
-    allowed_model_tiers: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         default=func.current_timestamp(),

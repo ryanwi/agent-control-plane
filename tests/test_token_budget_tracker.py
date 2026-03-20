@@ -169,8 +169,8 @@ class TestCheckBudget:
         )
         await repo.create_budget_config(config)
         result = await tracker.check_budget(identity, _make_usage())
-        assert result.budget_state is not None
-        assert result.budget_state.remaining_tokens == 1000
+        assert len(result.budget_states) == 1
+        assert result.budget_states[0].remaining_tokens == 1000
 
 
 class TestRecordUsage:

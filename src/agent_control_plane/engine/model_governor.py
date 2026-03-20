@@ -57,7 +57,7 @@ class ModelGovernor:
                 )
 
         # Check tier restrictions
-        tier_key = str(action_tier.value) if isinstance(action_tier, ActionTier) else str(action_tier)
+        tier_key = action_tier.value
         if tier_key in self._policy.tier_restrictions:
             allowed_tiers = self._policy.tier_restrictions[tier_key]
             if str(model_tier.value) not in allowed_tiers:
@@ -80,10 +80,20 @@ class ModelGovernor:
         identity: IdentityContext | None = None,
     ) -> list[ModelId]:
         """Return all model IDs allowed for the given action tier and identity."""
+        # Resolve identity override list once
+        user_key = str(identity.user_id) if identity and identity.user_id else None
+        override_list = self._policy.identity_overrides.get(user_key) if user_key else None
+
+        # Resolve tier restrictions once
+        tier_key = action_tier.value
+        allowed_tiers = self._policy.tier_restrictions.get(tier_key)
+
         allowed: list[ModelId] = []
-        for model_id_str in self._policy.model_tier_assignments:
+        for model_id_str, model_tier in self._policy.model_tier_assignments.items():
             model_id = ModelId(model_id_str)
-            result = self.check_access(model_id, action_tier, identity)
-            if result.allowed:
+            if override_list is not None:
+                if model_id_str in override_list:
+                    allowed.append(model_id)
+            elif allowed_tiers is None or model_tier.value in allowed_tiers:
                 allowed.append(model_id)
         return allowed
