@@ -19,6 +19,7 @@ tags:
   - name: Events
   - name: Health
   - name: Safety
+  - name: Token Governance
 paths:
   /v1/sessions:
     get:
@@ -215,6 +216,151 @@ paths:
                 $ref: '#/components/schemas/SessionHealth'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /v1/token-budgets:
+    get:
+      tags: [Token Governance]
+      summary: List token budget configs for an identity
+      operationId: listTokenBudgetConfigs
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: org_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: team_id
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Token budget configs returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TokenBudgetConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/Error'
+    post:
+      tags: [Token Governance]
+      summary: Create a token budget config
+      operationId: createTokenBudgetConfig
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTokenBudgetConfigRequest'
+      responses:
+        '201':
+          description: Token budget config created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenBudgetConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /v1/token-budgets/states:
+    get:
+      tags: [Token Governance]
+      summary: Get current budget states for an identity
+      operationId: getTokenBudgetStates
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: org_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: team_id
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Budget states returned
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TokenBudgetState'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/Error'
+
+  /v1/token-budgets/usage-summary:
+    get:
+      tags: [Token Governance]
+      summary: Get aggregated usage summary for an identity
+      operationId: getTokenUsageSummary
+      parameters:
+        - name: user_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: org_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: team_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: period
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/BudgetPeriod'
+        - name: window_start
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Usage summary returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenUsageSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Error'
 
@@ -434,6 +580,9 @@ components:
         - session_aborted
         - kill_switch_triggered
         - budget_exhausted
+        - token_budget_exhausted
+        - model_access_denied
+        - token_usage_recorded
 
     KillSwitchScope:
       type: string
@@ -758,6 +907,164 @@ components:
             - type: integer
             - type: 'null'
         tickets_denied:
+          type: integer
+
+    BudgetPeriod:
+      type: string
+      enum: [daily, weekly, monthly, unlimited]
+
+    ModelTier:
+      type: string
+      enum: [standard, premium, restricted]
+
+    IdentityContext:
+      type: object
+      properties:
+        user_id:
+          anyOf:
+            - type: string
+            - type: 'null'
+        org_id:
+          anyOf:
+            - type: string
+            - type: 'null'
+        team_id:
+          anyOf:
+            - type: string
+            - type: 'null'
+
+    TokenBudgetConfig:
+      type: object
+      required:
+        - id
+        - identity
+        - period
+      properties:
+        id:
+          type: string
+          format: uuid
+        identity:
+          $ref: '#/components/schemas/IdentityContext'
+        period:
+          $ref: '#/components/schemas/BudgetPeriod'
+        max_tokens:
+          anyOf:
+            - type: integer
+            - type: 'null'
+        max_cost_usd:
+          anyOf:
+            - type: string
+              description: Decimal serialized as string
+            - type: 'null'
+        allowed_models:
+          anyOf:
+            - type: array
+              items:
+                type: string
+            - type: 'null'
+
+    CreateTokenBudgetConfigRequest:
+      type: object
+      required:
+        - identity
+        - period
+      properties:
+        identity:
+          $ref: '#/components/schemas/IdentityContext'
+        period:
+          $ref: '#/components/schemas/BudgetPeriod'
+        max_tokens:
+          anyOf:
+            - type: integer
+            - type: 'null'
+        max_cost_usd:
+          anyOf:
+            - type: string
+              description: Decimal serialized as string
+            - type: 'null'
+        allowed_models:
+          anyOf:
+            - type: array
+              items:
+                type: string
+            - type: 'null'
+
+    TokenBudgetState:
+      type: object
+      required:
+        - config_id
+        - identity
+        - period
+        - window_start
+        - window_end
+        - used_tokens
+        - used_cost_usd
+      properties:
+        config_id:
+          type: string
+          format: uuid
+        identity:
+          $ref: '#/components/schemas/IdentityContext'
+        period:
+          $ref: '#/components/schemas/BudgetPeriod'
+        window_start:
+          type: string
+          format: date-time
+        window_end:
+          type: string
+          format: date-time
+        used_tokens:
+          type: integer
+        used_cost_usd:
+          type: string
+          description: Decimal serialized as string
+        remaining_tokens:
+          anyOf:
+            - type: integer
+            - type: 'null'
+        remaining_cost_usd:
+          anyOf:
+            - type: string
+              description: Decimal serialized as string
+            - type: 'null'
+
+    TokenUsageSummary:
+      type: object
+      required:
+        - identity
+        - period
+        - window_start
+        - window_end
+        - total_input_tokens
+        - total_output_tokens
+        - total_tokens
+        - total_cost_usd
+        - action_count
+      properties:
+        identity:
+          $ref: '#/components/schemas/IdentityContext'
+        period:
+          $ref: '#/components/schemas/BudgetPeriod'
+        window_start:
+          type: string
+          format: date-time
+        window_end:
+          type: string
+          format: date-time
+        total_input_tokens:
+          type: integer
+        total_output_tokens:
+          type: integer
+        total_tokens:
+          type: integer
+        total_cost_usd:
+          type: string
+          description: Decimal serialized as string
+        model_breakdown:
+          type: object
+          additionalProperties:
+            type: integer
+        action_count:
           type: integer
 
     ErrorResponse:

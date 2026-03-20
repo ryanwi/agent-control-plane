@@ -75,6 +75,15 @@ uv run python examples/long_running_autonomous_agent.py --horizon day
 - Tune per-session limits from observed usage.
 - Alert on rate changes, not just absolute counts.
 
+### Token governance
+
+- Create `TokenBudgetConfig` entries per identity scope (user, team, org) and period (daily, weekly, monthly).
+- Call `ModelGovernor.check_access()` before routing to enforce model tier restrictions.
+- Call `TokenBudgetTracker.check_budget()` before execution and `record_usage()` after.
+- Monitor `TOKEN_BUDGET_EXHAUSTED` and `MODEL_ACCESS_DENIED` events for policy tuning.
+- Review token usage summaries weekly to validate budget thresholds against actual consumption.
+- Use identity overrides sparingly — they bypass tier restrictions for specific users.
+
 ### Audit and recovery
 
 - Persist event trail for replay.

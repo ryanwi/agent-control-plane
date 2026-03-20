@@ -80,6 +80,7 @@ make demo-asciicast-agent
 - Policy and routing: `PolicyEngine`, `ProposalRouter`
 - Human approvals: `ApprovalGate`, scoped ticket decisions
 - Budget enforcement: `BudgetTracker`
+- Token governance: `TokenBudgetTracker` (identity-scoped token/cost budgets), `ModelGovernor` (model tier access policy)
 - Concurrency and kill switches: `ConcurrencyGuard`, `KillSwitch`
 - Durable events and replay: `EventStore`
 - Session lifecycle and recovery: `SessionManager`, `CrashRecovery`, `TimeoutEscalation`
@@ -115,6 +116,7 @@ make demo-asciicast-agent
 - Claude Agent SDK integration: [examples/claude_agent_sdk_integration.py](examples/claude_agent_sdk_integration.py)
 - Asciicast story runner: [scripts/run_asciicast_agent_story.sh](scripts/run_asciicast_agent_story.sh)
 - Audit replay: [examples/audit_viewer.py](examples/audit_viewer.py)
+- Token governance demo: [examples/token_governance_demo.py](examples/token_governance_demo.py)
 - MCP gateway demo: [examples/mcp_tool_gateway.py](examples/mcp_tool_gateway.py)
 - Companion REST/dashboard starter: [examples/companion_gateway](examples/companion_gateway)
 

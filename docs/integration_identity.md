@@ -35,6 +35,30 @@ Integrate `agent-control-plane` with strong identity attribution and fail-closed
 - Use deterministic tool-name -> action mapping (`ToolPolicyMap`).
 - Treat unmapped tools as denied until explicitly mapped.
 
+## Token governance identity mapping
+
+Token budget enforcement and model access policy require `IdentityContext` populated from the authenticated caller:
+
+1. Map authenticated principal to `IdentityContext` fields:
+   - `user_id` — individual user or service account identity
+   - `org_id` — organization/tenant boundary
+   - `team_id` — team/department for cost attribution
+2. Pass `IdentityContext` to `TokenBudgetTracker` and `ModelGovernor` calls.
+3. Populate `ToolCallContext` identity fields when using the MCP gateway:
+   - `identity_user_id`, `identity_org_id`, `identity_team_id`
+4. Budget configs use subset matching: a config with only `org_id` set matches any user in that org. Design configs to match your identity hierarchy.
+
+```python
+from agent_control_plane import IdentityContext, UserId, OrgId, TeamId
+
+# Map from your auth layer
+identity = IdentityContext(
+    user_id=UserId(authn_principal.user_id),
+    org_id=OrgId(authn_principal.org_id),
+    team_id=TeamId(authn_principal.team_id),
+)
+```
+
 ## Quick checklist
 
 - [ ] Authn at edge implemented and validated.
@@ -43,3 +67,6 @@ Integrate `agent-control-plane` with strong identity attribution and fail-closed
 - [ ] Correlation/idempotency propagation implemented.
 - [ ] Unknown event/tool defaults set to fail-closed.
 - [ ] Critical events marked state-bearing.
+- [ ] `IdentityContext` populated from authenticated principal for token governance.
+- [ ] Token budget configs scoped to appropriate identity level (user/org/team).
+- [ ] Model access policy checked before routing (`ModelGovernor.check_access()`).

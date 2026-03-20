@@ -42,6 +42,25 @@ This document defines the security posture of `agent-control-plane` as an embedd
 - Propagate principal identity to `agent_id` and correlation metadata.
 - Prefer explicit deny/fail-closed defaults for unknown events/tools.
 
+## Token governance trust boundaries
+
+Token budget enforcement and model access policy introduce additional trust considerations:
+
+6. Identity spoofing for budget bypass
+- Control: `IdentityContext` (user/org/team) must be populated from authenticated principal at the app boundary, never from untrusted client input. Budget configs match on identity fields — a spoofed `user_id` could consume another user's budget or bypass restrictions.
+
+7. Budget config tampering
+- Control: `TokenBudgetConfig` creation should be restricted to admin/operator roles. Budget configs are persisted via `AsyncTokenBudgetRepository` — protect write paths with authorization checks at the host boundary.
+
+8. Model access policy bypass
+- Control: `ModelGovernor.check_access()` is a sync pre-routing check. Host apps must invoke it before routing; the control plane does not auto-enforce it. Skipping the check bypasses model tier restrictions.
+
+9. Cost attribution integrity
+- Control: `TokenUsage.estimated_cost_usd` is caller-provided. Host apps should compute cost from authoritative LLM billing data, not from client-reported values. Inaccurate cost reporting undermines budget enforcement.
+
+10. Cross-identity budget leakage
+- Control: identity matching uses subset semantics (an org-level config matches any user in that org). Ensure budget configs are scoped appropriately — an overly broad config (e.g., only `org_id` set) applies to all users in that org.
+
 ## Out of scope
 
 - Identity provider management (OIDC provider, key rotation, SSO lifecycle).
