@@ -22,14 +22,23 @@ from agent_control_plane.types.approvals import ApprovalTicket
 from agent_control_plane.types.enums import (
     ApprovalDecisionType,
     ApprovalStatus,
+    BudgetPeriod,
     EventKind,
     ProposalStatus,
     SessionStatus,
 )
 from agent_control_plane.types.frames import EventFrame
+from agent_control_plane.types.ids import ModelId, OrgId, TeamId, UserId
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import CommandResult
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
+from agent_control_plane.types.token_governance import (
+    IdentityContext,
+    TokenBudgetConfig,
+    TokenBudgetState,
+    TokenUsage,
+    TokenUsageSummary,
+)
 
 
 class SyncSqlAlchemySessionRepo:
@@ -600,6 +609,212 @@ class SyncSqlAlchemyAgentRepo:
         )
         self._session.add(record)
         self._session.flush()
+
+
+class SyncSqlAlchemyTokenBudgetRepo:
+    """Sync SQLAlchemy implementation of TokenBudgetRepository."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get_budget_config(self, config_id: UUID) -> TokenBudgetConfig | None:
+        model = ModelRegistry.get("TokenBudgetConfig")
+        result = self._session.execute(select(model).where(model.id == config_id))
+        row = result.scalar_one_or_none()
+        return self._config_to_dto(row) if row else None
+
+    def list_budget_configs(self, identity: IdentityContext) -> list[TokenBudgetConfig]:
+        model = ModelRegistry.get("TokenBudgetConfig")
+        query = select(model)
+        conditions = []
+        if identity.user_id is not None:
+            conditions.append((model.user_id == str(identity.user_id)) | (model.user_id.is_(None)))
+        else:
+            conditions.append(model.user_id.is_(None))
+        if identity.org_id is not None:
+            conditions.append((model.org_id == str(identity.org_id)) | (model.org_id.is_(None)))
+        else:
+            conditions.append(model.org_id.is_(None))
+        if identity.team_id is not None:
+            conditions.append((model.team_id == str(identity.team_id)) | (model.team_id.is_(None)))
+        else:
+            conditions.append(model.team_id.is_(None))
+        for cond in conditions:
+            query = query.where(cond)
+        result = self._session.execute(query)
+        return [self._config_to_dto(row) for row in result.scalars().all()]
+
+    def create_budget_config(self, config: TokenBudgetConfig) -> TokenBudgetConfig:
+        model = ModelRegistry.get("TokenBudgetConfig")
+        row = model(
+            id=config.id,
+            user_id=str(config.identity.user_id) if config.identity.user_id else None,
+            org_id=str(config.identity.org_id) if config.identity.org_id else None,
+            team_id=str(config.identity.team_id) if config.identity.team_id else None,
+            period=config.period.value,
+            max_tokens=config.max_tokens,
+            max_cost_usd=config.max_cost_usd,
+            allowed_models=[str(m) for m in config.allowed_models] if config.allowed_models else None,
+        )
+        self._session.add(row)
+        self._session.flush()
+        return config
+
+    def get_budget_state(self, config_id: UUID, window_start: datetime) -> TokenBudgetState | None:
+        model = ModelRegistry.get("TokenBudgetState")
+        result = self._session.execute(
+            select(model).where(model.config_id == config_id, model.window_start == window_start)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        config = self.get_budget_config(config_id)
+        if config is None:
+            return None
+        remaining_tokens = (config.max_tokens - row.used_tokens) if config.max_tokens is not None else None
+        remaining_cost = (config.max_cost_usd - row.used_cost_usd) if config.max_cost_usd is not None else None
+        return TokenBudgetState(
+            config_id=config_id,
+            identity=config.identity,
+            period=config.period,
+            window_start=row.window_start,
+            window_end=row.window_end,
+            used_tokens=row.used_tokens,
+            used_cost_usd=row.used_cost_usd,
+            remaining_tokens=remaining_tokens,
+            remaining_cost_usd=remaining_cost,
+        )
+
+    def increment_usage(
+        self, config_id: UUID, window_start: datetime, window_end: datetime, tokens: int, cost_usd: Decimal
+    ) -> TokenBudgetState:
+        state_model = ModelRegistry.get("TokenBudgetState")
+        result = self._session.execute(
+            select(state_model).where(state_model.config_id == config_id, state_model.window_start == window_start)
+        )
+        row = result.scalar_one_or_none()
+        if row is not None:
+            new_tokens = row.used_tokens + tokens
+            new_cost = row.used_cost_usd + cost_usd
+            self._session.execute(
+                update(state_model)
+                .where(state_model.config_id == config_id, state_model.window_start == window_start)
+                .values(used_tokens=new_tokens, used_cost_usd=new_cost)
+            )
+        else:
+            new_tokens = tokens
+            new_cost = cost_usd
+            new_row = state_model(
+                id=uuid4(),
+                config_id=config_id,
+                window_start=window_start,
+                window_end=window_end,
+                used_tokens=new_tokens,
+                used_cost_usd=new_cost,
+            )
+            self._session.add(new_row)
+            self._session.flush()
+
+        config = self.get_budget_config(config_id)
+        identity = config.identity if config else IdentityContext()
+        period = config.period if config else BudgetPeriod.DAILY
+        remaining_tokens = (config.max_tokens - new_tokens) if config and config.max_tokens is not None else None
+        remaining_cost = (config.max_cost_usd - new_cost) if config and config.max_cost_usd is not None else None
+        return TokenBudgetState(
+            config_id=config_id,
+            identity=identity,
+            period=period,
+            window_start=window_start,
+            window_end=window_end,
+            used_tokens=new_tokens,
+            used_cost_usd=new_cost,
+            remaining_tokens=remaining_tokens,
+            remaining_cost_usd=remaining_cost,
+        )
+
+    def record_usage(self, session_id: UUID, usage: TokenUsage, identity: IdentityContext) -> None:
+        model = ModelRegistry.get("TokenUsageLedger")
+        row = model(
+            id=uuid4(),
+            session_id=session_id,
+            user_id=str(identity.user_id) if identity.user_id else None,
+            org_id=str(identity.org_id) if identity.org_id else None,
+            team_id=str(identity.team_id) if identity.team_id else None,
+            model_id=str(usage.model_id),
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            total_tokens=usage.total_tokens,
+            estimated_cost_usd=usage.estimated_cost_usd,
+        )
+        self._session.add(row)
+        self._session.flush()
+
+    def get_usage_summary(
+        self, identity: IdentityContext, period: BudgetPeriod, window_start: datetime
+    ) -> TokenUsageSummary | None:
+        from sqlalchemy import func as sa_func
+
+        model = ModelRegistry.get("TokenUsageLedger")
+        query = select(
+            sa_func.sum(model.input_tokens).label("total_input"),
+            sa_func.sum(model.output_tokens).label("total_output"),
+            sa_func.sum(model.total_tokens).label("total"),
+            sa_func.sum(model.estimated_cost_usd).label("total_cost"),
+            sa_func.count().label("action_count"),
+        ).where(model.created_at >= window_start)
+        if identity.user_id is not None:
+            query = query.where(model.user_id == str(identity.user_id))
+        if identity.org_id is not None:
+            query = query.where(model.org_id == str(identity.org_id))
+        if identity.team_id is not None:
+            query = query.where(model.team_id == str(identity.team_id))
+        result = self._session.execute(query)
+        row = result.one_or_none()
+        if row is None or row.action_count == 0:
+            return None
+
+        breakdown_query = (
+            select(model.model_id, sa_func.sum(model.total_tokens).label("tokens"))
+            .where(model.created_at >= window_start)
+            .group_by(model.model_id)
+        )
+        if identity.user_id is not None:
+            breakdown_query = breakdown_query.where(model.user_id == str(identity.user_id))
+        if identity.org_id is not None:
+            breakdown_query = breakdown_query.where(model.org_id == str(identity.org_id))
+        if identity.team_id is not None:
+            breakdown_query = breakdown_query.where(model.team_id == str(identity.team_id))
+        breakdown_result = self._session.execute(breakdown_query)
+        model_breakdown = {r.model_id: int(r.tokens) for r in breakdown_result.all()}
+
+        return TokenUsageSummary(
+            identity=identity,
+            period=period,
+            window_start=window_start,
+            window_end=datetime.now(UTC),
+            total_input_tokens=int(row.total_input or 0),
+            total_output_tokens=int(row.total_output or 0),
+            total_tokens=int(row.total or 0),
+            total_cost_usd=row.total_cost or Decimal("0"),
+            model_breakdown=model_breakdown,
+            action_count=int(row.action_count),
+        )
+
+    def _config_to_dto(self, row: Any) -> TokenBudgetConfig:
+        allowed_models_raw = getattr(row, "allowed_models", None)
+        allowed_models = [ModelId(m) for m in allowed_models_raw] if allowed_models_raw else None
+        return TokenBudgetConfig(
+            id=row.id,
+            identity=IdentityContext(
+                user_id=UserId(row.user_id) if row.user_id else None,
+                org_id=OrgId(row.org_id) if row.org_id else None,
+                team_id=TeamId(row.team_id) if row.team_id else None,
+            ),
+            period=BudgetPeriod(row.period),
+            max_tokens=row.max_tokens,
+            max_cost_usd=row.max_cost_usd,
+            allowed_models=allowed_models,
+        )
 
 
 class SyncSqlAlchemyUnitOfWork:

@@ -9,6 +9,7 @@ Architecture Decision Records (ADRs) capture why important design choices were m
 - [0005: State-Bearing Event Semantics](0005-state-bearing-event-semantics.md): defines fail-closed durability behavior.
 - [0006: Projection Feed vs Canonical Reads](0006-projection-vs-canonical-reads.md): defines when projection is warranted.
 - [0007: Experimental Capability Contracts Are Informational Only](0007-experimental-capabilities-informational-only.md): defines non-enforcement intent for capability detection.
+- [0008: Token Governance Engines Are Optional Composable Steps](0008-token-governance-composable-engines.md): defines composable (not auto-wired) pattern for TokenBudgetTracker and ModelGovernor.
 
 ## How to write/update ADRs
 

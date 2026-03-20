@@ -22,6 +22,7 @@ from agent_control_plane.storage.sqlalchemy_async import (
     AsyncSqlAlchemyEventRepo,
     AsyncSqlAlchemyProposalRepo,
     AsyncSqlAlchemySessionRepo,
+    AsyncSqlAlchemyTokenBudgetRepo,
     AsyncSqlAlchemyUnitOfWork,
 )
 from agent_control_plane.storage.sqlalchemy_sync import (
@@ -30,6 +31,7 @@ from agent_control_plane.storage.sqlalchemy_sync import (
     SyncSqlAlchemyEventRepo,
     SyncSqlAlchemyProposalRepo,
     SyncSqlAlchemySessionRepo,
+    SyncSqlAlchemyTokenBudgetRepo,
     SyncSqlAlchemyUnitOfWork,
 )
 
@@ -45,6 +47,7 @@ __all__ = [
     "AsyncSqlAlchemyEventRepo",
     "AsyncSqlAlchemyProposalRepo",
     "AsyncSqlAlchemySessionRepo",
+    "AsyncSqlAlchemyTokenBudgetRepo",
     "AsyncSqlAlchemyUnitOfWork",
     "AsyncTokenBudgetRepository",
     "AsyncUnitOfWork",
@@ -57,6 +60,7 @@ __all__ = [
     "SyncSqlAlchemyEventRepo",
     "SyncSqlAlchemyProposalRepo",
     "SyncSqlAlchemySessionRepo",
+    "SyncSqlAlchemyTokenBudgetRepo",
     "SyncSqlAlchemyUnitOfWork",
     "SyncUnitOfWork",
     "TokenBudgetRepository",

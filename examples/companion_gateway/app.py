@@ -23,6 +23,13 @@ from agent_control_plane.types import (
     SessionStatus,
     StateChangePage,
 )
+from agent_control_plane.types.enums import BudgetPeriod
+from agent_control_plane.types.token_governance import (
+    IdentityContext,
+    TokenBudgetConfig,
+    TokenBudgetState,
+    TokenUsageSummary,
+)
 
 
 class FacadeProtocol(Protocol):
@@ -76,6 +83,25 @@ class FacadeProtocol(Protocol):
     ) -> KillResult: ...
 
     async def kill_system(self, *, reason: str = "System halt", command_id: str | None = None) -> KillResult: ...
+
+
+class TokenBudgetFacadeProtocol(Protocol):
+    async def list_token_budget_configs(self, identity: IdentityContext) -> list[TokenBudgetConfig]: ...
+    async def create_token_budget_config(self, config: TokenBudgetConfig) -> TokenBudgetConfig: ...
+    async def get_token_budget_states(self, identity: IdentityContext) -> list[TokenBudgetState]: ...
+    async def get_token_usage_summary(
+        self, identity: IdentityContext, period: BudgetPeriod, window_start: Any
+    ) -> TokenUsageSummary | None: ...
+
+
+class CreateTokenBudgetConfigRequest(BaseModel):
+    user_id: str | None = None
+    org_id: str | None = None
+    team_id: str | None = None
+    period: str
+    max_tokens: int | None = None
+    max_cost_usd: str | None = None
+    allowed_models: list[str] | None = None
 
 
 class ApproveTicketRequest(BaseModel):
@@ -162,7 +188,12 @@ def _normalize_conflict_error(exc: ValueError) -> tuple[int, str]:
     return 409, text
 
 
-def create_app(facade: FacadeProtocol, *, auth_policy: AuthPolicy | None = None) -> FastAPI:  # noqa: C901
+def create_app(  # noqa: C901
+    facade: FacadeProtocol,
+    *,
+    auth_policy: AuthPolicy | None = None,
+    token_budget_facade: TokenBudgetFacadeProtocol | None = None,
+) -> FastAPI:
     app = FastAPI(
         title="agent-control-plane-gateway",
         version="0.1.0",
@@ -315,5 +346,74 @@ def create_app(facade: FacadeProtocol, *, auth_policy: AuthPolicy | None = None)
         reason = (body.reason if body else None) or "System halt"
         result = await facade.kill_system(reason=reason, command_id=x_idempotency_key)
         return _dump(result)
+
+    # Token governance endpoints (optional — only registered if facade provided)
+    if token_budget_facade is not None:
+        _tb = token_budget_facade
+
+        def _parse_identity(
+            user_id: str | None = None, org_id: str | None = None, team_id: str | None = None
+        ) -> IdentityContext:
+            from agent_control_plane.types.ids import OrgId, TeamId, UserId
+
+            return IdentityContext(
+                user_id=UserId(user_id) if user_id else None,
+                org_id=OrgId(org_id) if org_id else None,
+                team_id=TeamId(team_id) if team_id else None,
+            )
+
+        @app.get("/v1/token-budgets")
+        async def list_token_budgets(
+            user_id: str | None = None, org_id: str | None = None, team_id: str | None = None
+        ) -> list[dict[str, Any]]:
+            identity = _parse_identity(user_id, org_id, team_id)
+            configs = await _tb.list_token_budget_configs(identity)
+            return [_dump(c) for c in configs]
+
+        @app.post("/v1/token-budgets", status_code=201)
+        async def create_token_budget(body: CreateTokenBudgetConfigRequest) -> dict[str, Any]:
+            from decimal import Decimal
+
+            from agent_control_plane.types.ids import ModelId, OrgId, TeamId, UserId
+
+            identity = IdentityContext(
+                user_id=UserId(body.user_id) if body.user_id else None,
+                org_id=OrgId(body.org_id) if body.org_id else None,
+                team_id=TeamId(body.team_id) if body.team_id else None,
+            )
+            config = TokenBudgetConfig(
+                identity=identity,
+                period=BudgetPeriod(body.period),
+                max_tokens=body.max_tokens,
+                max_cost_usd=Decimal(body.max_cost_usd) if body.max_cost_usd else None,
+                allowed_models=[ModelId(m) for m in body.allowed_models] if body.allowed_models else None,
+            )
+            created = await _tb.create_token_budget_config(config)
+            return _dump(created)
+
+        @app.get("/v1/token-budgets/states")
+        async def get_token_budget_states(
+            user_id: str | None = None, org_id: str | None = None, team_id: str | None = None
+        ) -> list[dict[str, Any]]:
+            identity = _parse_identity(user_id, org_id, team_id)
+            states = await _tb.get_token_budget_states(identity)
+            return [_dump(s) for s in states]
+
+        @app.get("/v1/token-budgets/usage-summary")
+        async def get_token_usage_summary(
+            period: str,
+            window_start: str,
+            user_id: str | None = None,
+            org_id: str | None = None,
+            team_id: str | None = None,
+        ) -> dict[str, Any]:
+            from datetime import datetime
+
+            identity = _parse_identity(user_id, org_id, team_id)
+            parsed_start = datetime.fromisoformat(window_start)
+            summary = await _tb.get_token_usage_summary(identity, BudgetPeriod(period), parsed_start)
+            if summary is None:
+                raise HTTPException(status_code=404, detail="No usage data found")
+            return _dump(summary)
 
     return app
