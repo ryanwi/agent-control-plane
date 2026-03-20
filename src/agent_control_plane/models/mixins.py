@@ -244,6 +244,54 @@ class DelegationMixin:
     )
 
 
+class TokenBudgetConfigMixin:
+    """Mixin for token budget configuration model."""
+
+    user_id: Mapped[str | None] = mapped_column(VARCHAR(100), nullable=True)
+    org_id: Mapped[str | None] = mapped_column(VARCHAR(100), nullable=True)
+    team_id: Mapped[str | None] = mapped_column(VARCHAR(100), nullable=True)
+    period: Mapped[str] = mapped_column(VARCHAR(20), nullable=False)
+    max_tokens: Mapped[int | None] = mapped_column(nullable=True)
+    max_cost_usd: Mapped[Decimal | None] = mapped_column(DECIMAL(15, 6), nullable=True)
+    allowed_models: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    allowed_model_tiers: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        default=func.current_timestamp(),
+        server_default=func.current_timestamp(),
+    )
+
+
+class TokenUsageLedgerMixin:
+    """Mixin for token usage ledger model."""
+
+    user_id: Mapped[str | None] = mapped_column(VARCHAR(100), nullable=True)
+    org_id: Mapped[str | None] = mapped_column(VARCHAR(100), nullable=True)
+    team_id: Mapped[str | None] = mapped_column(VARCHAR(100), nullable=True)
+    model_id: Mapped[str] = mapped_column(VARCHAR(100), nullable=False)
+    input_tokens: Mapped[int] = mapped_column(nullable=False)
+    output_tokens: Mapped[int] = mapped_column(nullable=False)
+    total_tokens: Mapped[int] = mapped_column(nullable=False)
+    estimated_cost_usd: Mapped[Decimal] = mapped_column(DECIMAL(15, 6), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        default=func.current_timestamp(),
+        server_default=func.current_timestamp(),
+    )
+
+
+class TokenBudgetStateMixin:
+    """Mixin for token budget state model."""
+
+    config_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    window_start: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    window_end: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False)
+    used_tokens: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+    used_cost_usd: Mapped[Decimal] = mapped_column(
+        DECIMAL(15, 6), nullable=False, default=Decimal("0"), server_default="0"
+    )
+
+
 class CommandLedgerMixin:
     """Mixin for idempotent command ledger."""
 

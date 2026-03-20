@@ -73,6 +73,10 @@ class ToolCallContext(BaseModel):
     correlation_id: UUID | None = None
     idempotency_key: str | None = None
     estimated_cost: Decimal = Decimal("0")
+    model_id: str | None = None
+    identity_user_id: str | None = None
+    identity_org_id: str | None = None
+    identity_team_id: str | None = None
 
 
 class ToolCallResult(BaseModel):
@@ -82,6 +86,9 @@ class ToolCallResult(BaseModel):
     output: dict[str, Any] = Field(default_factory=dict)
     error: str | None = None
     cost: Decimal = Decimal("0")
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    model_id: str | None = None
 
 
 @runtime_checkable

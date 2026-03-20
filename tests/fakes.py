@@ -16,6 +16,7 @@ from agent_control_plane.types.approvals import ApprovalTicket
 from agent_control_plane.types.enums import (
     ApprovalDecisionType,
     ApprovalStatus,
+    BudgetPeriod,
     EventKind,
     ProposalStatus,
     SessionStatus,
@@ -23,6 +24,13 @@ from agent_control_plane.types.enums import (
 from agent_control_plane.types.frames import EventFrame
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
+from agent_control_plane.types.token_governance import (
+    IdentityContext,
+    TokenBudgetConfig,
+    TokenBudgetState,
+    TokenUsage,
+    TokenUsageSummary,
+)
 
 
 class InMemorySessionRepository:
@@ -301,3 +309,118 @@ class InMemoryAgentRepository:
 
     async def record_delegation(self, delegation: DelegationProposal) -> None:
         self._delegations.append(delegation)
+
+
+class InMemoryTokenBudgetRepository:
+    """In-memory token budget repository for tests."""
+
+    def __init__(self) -> None:
+        self._configs: dict[UUID, TokenBudgetConfig] = {}
+        self._states: dict[tuple[UUID, datetime], TokenBudgetState] = {}
+        self._usage_records: list[dict[str, Any]] = []
+
+    async def get_budget_config(self, config_id: UUID) -> TokenBudgetConfig | None:
+        return self._configs.get(config_id)
+
+    async def list_budget_configs(self, identity: IdentityContext) -> list[TokenBudgetConfig]:
+        results: list[TokenBudgetConfig] = []
+        for config in self._configs.values():
+            ci = config.identity
+            if ci.user_id is not None and ci.user_id != identity.user_id:
+                continue
+            if ci.org_id is not None and ci.org_id != identity.org_id:
+                continue
+            if ci.team_id is not None and ci.team_id != identity.team_id:
+                continue
+            results.append(config)
+        return results
+
+    async def create_budget_config(self, config: TokenBudgetConfig) -> TokenBudgetConfig:
+        self._configs[config.id] = config
+        return config
+
+    async def get_budget_state(self, config_id: UUID, window_start: datetime) -> TokenBudgetState | None:
+        return self._states.get((config_id, window_start))
+
+    async def increment_usage(
+        self,
+        config_id: UUID,
+        window_start: datetime,
+        window_end: datetime,
+        tokens: int,
+        cost_usd: Decimal,
+    ) -> TokenBudgetState:
+        key = (config_id, window_start)
+        config = self._configs.get(config_id)
+        if config is None:
+            raise ValueError(f"Config {config_id} not found")
+        existing = self._states.get(key)
+        if existing is not None:
+            new_tokens = existing.used_tokens + tokens
+            new_cost = existing.used_cost_usd + cost_usd
+            remaining_tokens = (config.max_tokens - new_tokens) if config.max_tokens is not None else None
+            remaining_cost = (config.max_cost_usd - new_cost) if config.max_cost_usd is not None else None
+            state = TokenBudgetState(
+                config_id=config_id,
+                identity=config.identity,
+                period=config.period,
+                window_start=window_start,
+                window_end=window_end,
+                used_tokens=new_tokens,
+                used_cost_usd=new_cost,
+                remaining_tokens=remaining_tokens,
+                remaining_cost_usd=remaining_cost,
+            )
+        else:
+            remaining_tokens = (config.max_tokens - tokens) if config.max_tokens is not None else None
+            remaining_cost = (config.max_cost_usd - cost_usd) if config.max_cost_usd is not None else None
+            state = TokenBudgetState(
+                config_id=config_id,
+                identity=config.identity,
+                period=config.period,
+                window_start=window_start,
+                window_end=window_end,
+                used_tokens=tokens,
+                used_cost_usd=cost_usd,
+                remaining_tokens=remaining_tokens,
+                remaining_cost_usd=remaining_cost,
+            )
+        self._states[key] = state
+        return state
+
+    async def record_usage(self, session_id: UUID, usage: TokenUsage, identity: IdentityContext) -> None:
+        self._usage_records.append(
+            {
+                "session_id": session_id,
+                "usage": usage,
+                "identity": identity,
+                "created_at": datetime.now(UTC),
+            }
+        )
+
+    async def get_usage_summary(
+        self, identity: IdentityContext, period: BudgetPeriod, window_start: datetime
+    ) -> TokenUsageSummary | None:
+        matching = [r for r in self._usage_records if r["identity"] == identity and r["created_at"] >= window_start]
+        if not matching:
+            return None
+        total_input = sum(r["usage"].input_tokens for r in matching)
+        total_output = sum(r["usage"].output_tokens for r in matching)
+        total = sum(r["usage"].total_tokens for r in matching)
+        total_cost = sum((r["usage"].estimated_cost_usd for r in matching), Decimal("0"))
+        model_breakdown: dict[str, int] = {}
+        for r in matching:
+            mid = str(r["usage"].model_id)
+            model_breakdown[mid] = model_breakdown.get(mid, 0) + r["usage"].total_tokens
+        return TokenUsageSummary(
+            identity=identity,
+            period=period,
+            window_start=window_start,
+            window_end=datetime.now(UTC),
+            total_input_tokens=total_input,
+            total_output_tokens=total_output,
+            total_tokens=total,
+            total_cost_usd=total_cost,
+            model_breakdown=model_breakdown,
+            action_count=len(matching),
+        )

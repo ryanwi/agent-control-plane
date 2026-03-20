@@ -13,12 +13,19 @@ from uuid import UUID
 
 from agent_control_plane.types.agents import AgentMetadata, DelegationProposal
 from agent_control_plane.types.approvals import ApprovalTicket
-from agent_control_plane.types.enums import ApprovalStatus, EventKind, ProposalStatus, SessionStatus
+from agent_control_plane.types.enums import ApprovalStatus, BudgetPeriod, EventKind, ProposalStatus, SessionStatus
 from agent_control_plane.types.frames import EventFrame
 from agent_control_plane.types.ids import AgentId, IdempotencyKey, ResourceId
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import CommandResult
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
+from agent_control_plane.types.token_governance import (
+    IdentityContext,
+    TokenBudgetConfig,
+    TokenBudgetState,
+    TokenUsage,
+    TokenUsageSummary,
+)
 
 # ---------------------------------------------------------------------------
 # Session repositories
@@ -223,7 +230,41 @@ class AsyncCommandRepository(Protocol):
     ) -> None: ...
 
 
-...
+# ---------------------------------------------------------------------------
+# Token budget repositories
+# ---------------------------------------------------------------------------
+
+
+@runtime_checkable
+class TokenBudgetRepository(Protocol):
+    def get_budget_config(self, config_id: UUID) -> TokenBudgetConfig | None: ...
+    def list_budget_configs(self, identity: IdentityContext) -> list[TokenBudgetConfig]: ...
+    def create_budget_config(self, config: TokenBudgetConfig) -> TokenBudgetConfig: ...
+    def get_budget_state(self, config_id: UUID, window_start: datetime) -> TokenBudgetState | None: ...
+    def increment_usage(
+        self, config_id: UUID, window_start: datetime, window_end: datetime, tokens: int, cost_usd: Decimal
+    ) -> TokenBudgetState: ...
+    def record_usage(self, session_id: UUID, usage: TokenUsage, identity: IdentityContext) -> None: ...
+    def get_usage_summary(
+        self, identity: IdentityContext, period: BudgetPeriod, window_start: datetime
+    ) -> TokenUsageSummary | None: ...
+
+
+@runtime_checkable
+class AsyncTokenBudgetRepository(Protocol):
+    async def get_budget_config(self, config_id: UUID) -> TokenBudgetConfig | None: ...
+    async def list_budget_configs(self, identity: IdentityContext) -> list[TokenBudgetConfig]: ...
+    async def create_budget_config(self, config: TokenBudgetConfig) -> TokenBudgetConfig: ...
+    async def get_budget_state(self, config_id: UUID, window_start: datetime) -> TokenBudgetState | None: ...
+    async def increment_usage(
+        self, config_id: UUID, window_start: datetime, window_end: datetime, tokens: int, cost_usd: Decimal
+    ) -> TokenBudgetState: ...
+    async def record_usage(self, session_id: UUID, usage: TokenUsage, identity: IdentityContext) -> None: ...
+    async def get_usage_summary(
+        self, identity: IdentityContext, period: BudgetPeriod, window_start: datetime
+    ) -> TokenUsageSummary | None: ...
+
+
 # ---------------------------------------------------------------------------
 # Agent repositories
 # ---------------------------------------------------------------------------

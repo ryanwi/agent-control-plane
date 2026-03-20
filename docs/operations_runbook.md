@@ -22,6 +22,7 @@ Provide an actionable baseline for operating `agent-control-plane` reliably in p
 - Review active sessions and stuck-cycle indicators.
 - Review pending approvals and timeout aging.
 - Review budget denials and budget exhaustion events.
+- Review token budget denials and model access denials per identity.
 - Confirm kill switch is not unintentionally active.
 - Review command-idempotency behavior for repeated operator actions.
 
@@ -29,6 +30,7 @@ Provide an actionable baseline for operating `agent-control-plane` reliably in p
 
 - Validate approval scope constraints (resource, count, expiry).
 - Validate budget thresholds against observed usage.
+- Validate token budget configs per identity/org/team against observed token consumption.
 - Validate kill-switch procedures via tabletop or dry-run.
 - Review repeated denial reasons for policy tuning.
 - Verify backups and restore drills for control-plane tables.
@@ -40,6 +42,8 @@ Minimum signals to monitor:
 - session counts by status (`created`, `active`, `paused`, `aborted`, `completed`)
 - pending approvals and age percentiles
 - budget denials/exhaustions per time window
+- token budget denials per identity/org/team
+- model access denials by model tier
 - kill-switch triggers by scope
 - stuck-cycle recovery counts
 - event append failures segmented by `state_bearing`

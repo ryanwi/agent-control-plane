@@ -11,6 +11,9 @@ from agent_control_plane.models.reference import (
     DelegationRecord,
     PolicySnapshotRow,
     SessionSeqCounter,
+    TokenBudgetConfigRow,
+    TokenBudgetStateRow,
+    TokenUsageLedgerRow,
     create_tables,
     register_models,
 )
@@ -26,6 +29,9 @@ __all__ = [
     "DelegationRecord",
     "PolicySnapshotRow",
     "SessionSeqCounter",
+    "TokenBudgetConfigRow",
+    "TokenBudgetStateRow",
+    "TokenUsageLedgerRow",
     "create_tables",
     "register_models",
 ]

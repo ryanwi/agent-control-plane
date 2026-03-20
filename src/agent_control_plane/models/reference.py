@@ -26,6 +26,9 @@ from agent_control_plane.models.mixins import (
     DelegationMixin,
     PolicySnapshotMixin,
     SessionSeqCounterMixin,
+    TokenBudgetConfigMixin,
+    TokenBudgetStateMixin,
+    TokenUsageLedgerMixin,
 )
 from agent_control_plane.models.registry import DEFAULT_MODEL_REGISTRY, RegistryProtocol
 
@@ -99,6 +102,26 @@ class CommandLedger(Base, CommandLedgerMixin):
     )
 
 
+class TokenBudgetConfigRow(Base, TokenBudgetConfigMixin):
+    __tablename__ = "token_budget_configs"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+
+
+class TokenUsageLedgerRow(Base, TokenUsageLedgerMixin):
+    __tablename__ = "token_usage_ledger"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
+
+
+class TokenBudgetStateRow(Base, TokenBudgetStateMixin):
+    __tablename__ = "token_budget_states"
+    __table_args__ = (UniqueConstraint("config_id", "window_start", name="uq_budget_state_window"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+
+
 def register_models(registry: RegistryProtocol = DEFAULT_MODEL_REGISTRY) -> None:
     """Register all reference models with the ModelRegistry."""
     registry.register("PolicySnapshot", PolicySnapshotRow)
@@ -110,6 +133,9 @@ def register_models(registry: RegistryProtocol = DEFAULT_MODEL_REGISTRY) -> None
     registry.register("AgentRecord", AgentRecord)
     registry.register("DelegationRecord", DelegationRecord)
     registry.register("CommandLedger", CommandLedger)
+    registry.register("TokenBudgetConfig", TokenBudgetConfigRow)
+    registry.register("TokenUsageLedger", TokenUsageLedgerRow)
+    registry.register("TokenBudgetState", TokenBudgetStateRow)
 
 
 def create_tables(engine: Any) -> None:

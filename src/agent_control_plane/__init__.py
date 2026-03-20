@@ -29,6 +29,7 @@ from agent_control_plane.engine.concurrency import (
 )
 from agent_control_plane.engine.event_store import EventStore
 from agent_control_plane.engine.kill_switch import KillSwitch
+from agent_control_plane.engine.model_governor import ModelAccessDeniedError, ModelGovernor
 from agent_control_plane.engine.policy_engine import (
     AssetClassifier,
     DefaultAssetClassifier,
@@ -39,6 +40,7 @@ from agent_control_plane.engine.policy_engine import (
 from agent_control_plane.engine.router import ProposalRouter, RoutingDecision
 from agent_control_plane.engine.session_manager import SessionManager
 from agent_control_plane.engine.session_risk_accumulator import SessionRiskAccumulator
+from agent_control_plane.engine.token_budget_tracker import TokenBudgetExhaustedError, TokenBudgetTracker
 from agent_control_plane.idempotency import proposal_command_id
 from agent_control_plane.mcp import (
     ApprovalRequiredError,
@@ -65,6 +67,9 @@ from agent_control_plane.models import (
     DelegationRecord,
     PolicySnapshotRow,
     SessionSeqCounter,
+    TokenBudgetConfigRow,
+    TokenBudgetStateRow,
+    TokenUsageLedgerRow,
     create_tables,
     register_models,
 )
@@ -106,6 +111,7 @@ from agent_control_plane.storage import (
     SyncSqlAlchemyUnitOfWork,
     SyncUnitOfWork,
 )
+from agent_control_plane.storage.protocols import AsyncTokenBudgetRepository, TokenBudgetRepository
 from agent_control_plane.sync import (
     AppEventMapper,
     ControlPlaneFacade,
@@ -162,12 +168,14 @@ from agent_control_plane.types.enums import (
     ApprovalStatus,
     AssetMatch,
     AssetScope,
+    BudgetPeriod,
     EvaluationDecision,
     EventKind,
     ExecutionIntentStatus,
     ExecutionMode,
     KillSwitchScope,
     McpEventName,
+    ModelTier,
     PlanStepStatus,
     ProposalStatus,
     RiskLevel,
@@ -185,7 +193,7 @@ from agent_control_plane.types.extensions import (
     register_risk_limits_extension_schema,
 )
 from agent_control_plane.types.frames import EventFrame, RequestFrame, ResponseFrame
-from agent_control_plane.types.ids import AgentId, IdempotencyKey, ResourceId
+from agent_control_plane.types.ids import AgentId, IdempotencyKey, ModelId, OrgId, ResourceId, TeamId, UserId
 from agent_control_plane.types.policies import (
     ActionTiers,
     AutoApproveConditions,
@@ -207,6 +215,16 @@ from agent_control_plane.types.query import (
 )
 from agent_control_plane.types.risk import RiskPattern, SessionRiskEscalation, SessionRiskState
 from agent_control_plane.types.sessions import BudgetInfo, KillSwitchResult, SessionCreate, SessionState, SessionSummary
+from agent_control_plane.types.token_governance import (
+    IdentityContext,
+    ModelAccessResult,
+    ModelGovernancePolicy,
+    TokenBudgetCheckResult,
+    TokenBudgetConfig,
+    TokenBudgetState,
+    TokenUsage,
+    TokenUsageSummary,
+)
 
 try:
     __version__ = version("agent-control-plane")
@@ -273,6 +291,7 @@ __all__ = [
     "BudgetDeniedError",
     "BudgetExhaustedError",
     "BudgetInfo",
+    "BudgetPeriod",
     "BudgetTracker",
     "CommandLedger",
     "CommandRepository",
@@ -315,6 +334,7 @@ __all__ = [
     "hash_config",
     "apply_inbound_aliases",
     "apply_outbound_aliases",
+    "IdentityContext",
     "IdempotencyKey",
     "KillResult",
     "KillSwitch",
@@ -332,8 +352,14 @@ __all__ = [
     "clear_registered_action_names",
     "clear_risk_limits_extension_schema",
     "is_registered_action_name",
+    "ModelAccessDeniedError",
+    "ModelAccessResult",
+    "ModelGovernancePolicy",
+    "ModelGovernor",
+    "ModelId",
     # Models
     "ModelRegistry",
+    "ModelTier",
     "PolicyDeniedError",
     "PolicyEngine",
     "PolicySnapshotRow",
@@ -388,7 +414,20 @@ __all__ = [
     "SyncUnitOfWork",
     "StateChange",
     "StateChangePage",
+    "TeamId",
     "TimeoutEscalation",
+    "TokenBudgetCheckResult",
+    "TokenBudgetConfig",
+    "TokenBudgetConfigRow",
+    "TokenBudgetExhaustedError",
+    "TokenBudgetRepository",
+    "AsyncTokenBudgetRepository",
+    "TokenBudgetState",
+    "TokenBudgetStateRow",
+    "TokenBudgetTracker",
+    "TokenUsage",
+    "TokenUsageLedgerRow",
+    "TokenUsageSummary",
     "ThresholdEvaluatorPolicy",
     "TracerLike",
     "ToolCallContext",
@@ -396,6 +435,8 @@ __all__ = [
     "ToolExecutionError",
     "ToolExecutor",
     "ToolPolicyMap",
+    "UserId",
+    "OrgId",
     "UnknownAppEventError",
     "UnknownAppEventPolicy",
     "build_kill_switch_stack",

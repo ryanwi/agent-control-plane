@@ -2,6 +2,47 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-03-19
+
+### Added
+
+- **Token governance engines** for identity-scoped, time-windowed token budget enforcement and model access policy:
+  - `TokenBudgetTracker` engine (`engine/token_budget_tracker.py`): async engine that enforces per-identity (user/org/team) token and cost budgets across daily, weekly, and monthly windows. Checks budget limits, records usage with automatic window computation, and emits `TOKEN_USAGE_RECORDED` events.
+  - `ModelGovernor` engine (`engine/model_governor.py`): sync engine for model tier classification (`STANDARD`, `PREMIUM`, `RESTRICTED`) and access policy enforcement. Supports tier-based restrictions per action tier and per-user identity overrides.
+- **New DTOs** (`types/token_governance.py`):
+  - `IdentityContext` — user/org/team identity for token attribution
+  - `TokenUsage` — per-interaction token counts and cost
+  - `TokenBudgetConfig` — budget limits per identity and time period
+  - `TokenBudgetState` — current accumulated usage against a budget
+  - `TokenBudgetCheckResult` / `ModelAccessResult` — governance check results
+  - `TokenUsageSummary` — aggregated usage for reporting
+  - `ModelGovernancePolicy` — model tier assignments and access rules
+- **New enums**: `BudgetPeriod` (daily/weekly/monthly/unlimited), `ModelTier` (standard/premium/restricted)
+- **New `EventKind` members**: `TOKEN_BUDGET_EXHAUSTED`, `MODEL_ACCESS_DENIED`, `TOKEN_USAGE_RECORDED`
+- **New ID types**: `UserId`, `OrgId`, `TeamId`, `ModelId` NewType aliases
+- **Storage protocols**: `TokenBudgetRepository` / `AsyncTokenBudgetRepository` protocol pair for token budget persistence
+- **Model mixins**: `TokenBudgetConfigMixin`, `TokenUsageLedgerMixin`, `TokenBudgetStateMixin` for host-app ORM composition
+- **Reference models**: `TokenBudgetConfigRow`, `TokenUsageLedgerRow`, `TokenBudgetStateRow` registered in `register_models()`
+- **MCP gateway fields**: optional `model_id` and identity fields on `ToolCallContext`, token tracking fields on `ToolCallResult` (backwards-compatible)
+- **Test infrastructure**: `InMemoryTokenBudgetRepository` fake for testing
+- New test suites: `tests/test_model_governor.py` (15 tests), `tests/test_token_budget_tracker.py` (19 tests)
+
+### Integration pattern
+
+The new engines are **optional composable steps** in the proposal lifecycle, not wired into `ProposalRouter` internals — matching the `SessionRiskAccumulator` pattern:
+
+```
+1. PolicyEngine.classify()              — existing
+2. ModelGovernor.check_access()          — NEW (sync, before route)
+3. ProposalRouter.route()                — existing
+4. ApprovalGate                          — existing
+5. TokenBudgetTracker.check_budget()     — NEW (async, before execution)
+6. BudgetTracker                         — existing (session-level)
+7. Execution                             — existing
+8. TokenBudgetTracker.record_usage()     — NEW (after execution)
+9. EventStore.append()                   — existing
+```
+
 ## [0.10.0] - 2026-03-18
 
 ### Added

@@ -149,6 +149,26 @@ class EventKind(StrEnum):
     HANDOFF_REJECTED = "handoff_rejected"
     LEASE_EXPIRED = "lease_expired"
     SESSION_RISK_ESCALATED = "session_risk_escalated"
+    TOKEN_BUDGET_EXHAUSTED = "token_budget_exhausted"
+    MODEL_ACCESS_DENIED = "model_access_denied"
+    TOKEN_USAGE_RECORDED = "token_usage_recorded"
+
+
+class BudgetPeriod(StrEnum):
+    """Time window for token budget enforcement."""
+
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    UNLIMITED = "unlimited"
+
+
+class ModelTier(StrEnum):
+    """Classification tier for AI models."""
+
+    STANDARD = "standard"
+    PREMIUM = "premium"
+    RESTRICTED = "restricted"
 
 
 class ProposalStatus(StrEnum):

@@ -7,12 +7,14 @@ from agent_control_plane.storage.protocols import (
     AsyncEventRepository,
     AsyncProposalRepository,
     AsyncSessionRepository,
+    AsyncTokenBudgetRepository,
     AsyncUnitOfWork,
     CommandRepository,
     EventRepository,
     ProposalRepository,
     SessionRepository,
     SyncUnitOfWork,
+    TokenBudgetRepository,
 )
 from agent_control_plane.storage.sqlalchemy_async import (
     AsyncSqlAlchemyApprovalRepo,
@@ -44,6 +46,7 @@ __all__ = [
     "AsyncSqlAlchemyProposalRepo",
     "AsyncSqlAlchemySessionRepo",
     "AsyncSqlAlchemyUnitOfWork",
+    "AsyncTokenBudgetRepository",
     "AsyncUnitOfWork",
     "CommandRepository",
     "EventRepository",
@@ -56,4 +59,5 @@ __all__ = [
     "SyncSqlAlchemySessionRepo",
     "SyncSqlAlchemyUnitOfWork",
     "SyncUnitOfWork",
+    "TokenBudgetRepository",
 ]

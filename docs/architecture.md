@@ -50,6 +50,8 @@ The package is organized around explicit layers:
   - `kill_switch` — emergency stop semantics by scope
   - `event_store` — monotonic event persistence and buffering
   - `session_risk_accumulator` — cross-action risk accumulation and pattern detection per session
+  - `token_budget_tracker` — identity-scoped, time-windowed token budget enforcement
+  - `model_governor` — model tier classification and access policy
 - `recovery/`
   - `crash_recovery` — resume control state after process interruption
   - `timeout_escalation` — escalate stuck active cycles
