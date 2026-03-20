@@ -10,6 +10,10 @@ See ADR-0009 for design rationale.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from agent_control_plane.async_resilient import AsyncResilientControlPlane
 
 from agent_control_plane.resilient import ResilientControlPlane
 from agent_control_plane.sync import (
@@ -116,6 +120,44 @@ class ControlPlaneSetup:
 
         # Wrap with resilience
         return ResilientControlPlane(
+            facade,
+            mode=self._resilience_mode,
+            logger=self._logger,
+            category_overrides=self._category_overrides,
+        )
+
+    def build_async(self) -> AsyncResilientControlPlane:
+        """Async equivalent of build().
+
+        Registers aliases and action names, returns a resilient async wrapper.
+        Table creation is handled automatically by AsyncControlPlaneFacade on
+        first use (via _ensure_schema).
+        """
+        from agent_control_plane.async_facade import AsyncControlPlaneFacade
+        from agent_control_plane.async_resilient import AsyncResilientControlPlane
+
+        # Register alias profile
+        if self._alias_profile is not None:
+            AliasRegistry.register_profile(self._alias_profile)
+
+        # Register action names
+        if self._action_names:
+            register_action_names(self._action_names)
+
+        # Build event mapper
+        resolved_mapper = self._mapper
+        if resolved_mapper is None and self._event_map is not None:
+            resolved_mapper = DictEventMapper(self._event_map)
+
+        # Create async facade
+        facade = AsyncControlPlaneFacade.from_database_url(
+            self._database_url,
+            mapper=resolved_mapper,
+            unknown_policy=self._unknown_event_policy,
+        )
+
+        # Wrap with resilience
+        return AsyncResilientControlPlane(
             facade,
             mode=self._resilience_mode,
             logger=self._logger,

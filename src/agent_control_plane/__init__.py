@@ -5,6 +5,7 @@
 from importlib.metadata import PackageNotFoundError, version
 
 from agent_control_plane.async_facade import AsyncControlPlaneFacade
+from agent_control_plane.async_resilient import AsyncResilientControlPlane
 from agent_control_plane.benchmark import (
     FitnessEvaluator,
     ScenarioRunner,
@@ -250,6 +251,7 @@ __all__ = [
     # ── Start here ────────────────────────────────
     "ControlPlaneSetup",
     "ResilientControlPlane",
+    "AsyncResilientControlPlane",
     "ResilienceMode",
     "OperationCategory",
     # ── Core facades (if you need more control) ───

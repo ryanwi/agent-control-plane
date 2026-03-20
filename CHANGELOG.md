@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-03-20
+
+### Added
+
+- **`AsyncResilientControlPlane`** (`async_resilient.py`): async mirror of `ResilientControlPlane`, wrapping `AsyncControlPlaneFacade` with the same `ResilienceMode` / `OperationCategory` semantics. Covers all async facade methods including `activate_session`, `pause_session`, `resume_session`, `acquire_cycle`, `release_cycle`, `recover_stuck_sessions`, and `check_stuck_cycles`.
+- **`ControlPlaneSetup.build_async()`**: async builder variant that returns `AsyncResilientControlPlane`. Table creation is handled automatically by the async facade on first use.
+- New test suite: `tests/test_async_resilient.py`
+
 ## [0.12.0] - 2026-03-19
 
 ### Added
