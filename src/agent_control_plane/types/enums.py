@@ -340,3 +340,20 @@ class GuardrailPhase(StrEnum):
     INPUT = "input"
     TOOL = "tool"
     OUTPUT = "output"
+
+
+class ResilienceMode(StrEnum):
+    """How the resilient facade handles errors."""
+
+    FAIL_OPEN = "fail_open"
+    FAIL_CLOSED = "fail_closed"
+    MIXED = "mixed"
+
+
+class OperationCategory(StrEnum):
+    """Classification of control-plane operations for resilience routing."""
+
+    STATE_BEARING = "state_bearing"
+    TELEMETRY = "telemetry"
+    QUERY = "query"
+    BUDGET = "budget"

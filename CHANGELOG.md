@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-03-19
+
+### Added
+
+- **`ResilientControlPlane`** (`resilient.py`): wrapper around `ControlPlaneFacade` with built-in fail-open/fail-closed error handling. Three resilience modes:
+  - `FAIL_OPEN` — all operations return safe defaults on error
+  - `FAIL_CLOSED` — all operations raise on error
+  - `MIXED` (default) — state-bearing operations fail-closed, telemetry/query/budget-checks fail-open
+  - Per-category overrides via `category_overrides` parameter
+- **`ControlPlaneSetup`** (`setup.py`): one-stop configuration builder that replaces multi-step bootstrap ceremony. Handles alias profile registration, action name registration, event mapper configuration, table creation, and resilient facade wrapping in a single `.build()` call
+- **New enums**: `ResilienceMode` (fail_open/fail_closed/mixed), `OperationCategory` (state_bearing/telemetry/query/budget)
+- **Onboarding tiers**: `__init__.py` exports annotated with tier comments (start here → core facades → composable engines)
+- **ADR-0009**: documents the wrapper facade anti-pattern observed in two independent consumers, and why `ResilientControlPlane` and `ControlPlaneSetup` belong in the library
+- New test suites: `tests/test_resilient.py` (18 tests), `tests/test_setup.py` (15 tests)
+- New example: `examples/resilient_facade_demo.py`
+
+### Integration pattern
+
+Replaces ~200–400 lines of wrapper code in each consumer with ~10 lines:
+
+```python
+cp = ControlPlaneSetup(
+    database_url="sqlite:///./cp.db",
+    event_map={"job_started": EventKind.CYCLE_STARTED},
+    action_names=["place_order", "cancel_order"],
+    resilience_mode=ResilienceMode.MIXED,
+).build()
+# cp is a ResilientControlPlane — no try/except needed
+```
+
 ## [0.11.0] - 2026-03-19
 
 ### Added

@@ -85,6 +85,8 @@ from agent_control_plane.policies import (
 )
 from agent_control_plane.recovery.crash_recovery import CrashRecovery
 from agent_control_plane.recovery.timeout_escalation import TimeoutEscalation
+from agent_control_plane.resilient import ResilientControlPlane
+from agent_control_plane.setup import ControlPlaneSetup
 from agent_control_plane.storage import (
     ApprovalRepository,
     AsyncApprovalRepository,
@@ -180,8 +182,10 @@ from agent_control_plane.types.enums import (
     KillSwitchScope,
     McpEventName,
     ModelTier,
+    OperationCategory,
     PlanStepStatus,
     ProposalStatus,
+    ResilienceMode,
     RiskLevel,
     RoutingResolutionStep,
     SessionStatus,
@@ -243,6 +247,20 @@ def get_version() -> str:
 
 __all__ = [
     "__version__",
+    # ── Start here ────────────────────────────────
+    "ControlPlaneSetup",
+    "ResilientControlPlane",
+    "ResilienceMode",
+    "OperationCategory",
+    # ── Core facades (if you need more control) ───
+    "ControlPlaneFacade",
+    "AsyncControlPlaneFacade",
+    "SyncControlPlane",
+    # ── Composable engines (opt-in per ADR-0008) ──
+    "TokenBudgetTracker",
+    "ModelGovernor",
+    "SessionRiskAccumulator",
+    # ── Everything else ───────────────────────────
     # Enums
     "AbortReason",
     "ActionName",
