@@ -78,10 +78,14 @@ make demo-asciicast-agent
 ## Core Capabilities
 
 - Policy and routing: `PolicyEngine`, `ProposalRouter`
+- Steering: `ActionTier.STEER` with corrective `SteeringContext` guidance and suggested alternatives
 - Human approvals: `ApprovalGate`, scoped ticket decisions
 - Budget enforcement: `BudgetTracker`
 - Token governance: `TokenBudgetTracker` (identity-scoped token/cost budgets), `ModelGovernor` (model tier access policy)
 - Concurrency and kill switches: `ConcurrencyGuard`, `KillSwitch`
+- Condition trees: `ConditionEvaluator` with recursive `and`/`or`/`not` rules for policy composition
+- Pluggable evaluators: `EvaluatorRegistry` with entry-point discovery, built-in `RegexEvaluator` and `ListEvaluator`
+- Parallel evaluation: `ParallelPolicyEvaluator` with cancel-on-deny semantics
 - Durable events and replay: `EventStore`
 - Session lifecycle and recovery: `SessionManager`, `CrashRecovery`, `TimeoutEscalation`
 - Host wrappers: `ControlPlaneFacade` (sync), `AsyncControlPlaneFacade` (async)
@@ -118,6 +122,8 @@ make demo-asciicast-agent
 - Audit replay: [examples/audit_viewer.py](examples/audit_viewer.py)
 - Token governance demo: [examples/token_governance_demo.py](examples/token_governance_demo.py)
 - MCP gateway demo: [examples/mcp_tool_gateway.py](examples/mcp_tool_gateway.py)
+- Steering demo: [examples/steering_demo.py](examples/steering_demo.py)
+- Condition trees and evaluator plugins: [examples/condition_tree_evaluator_demo.py](examples/condition_tree_evaluator_demo.py)
 - Companion REST/dashboard starter: [examples/companion_gateway](examples/companion_gateway)
 
 ## License

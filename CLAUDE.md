@@ -19,12 +19,13 @@ Embeddable, self-hosted governance framework for autonomous agent runtimes. Sepa
 
 ### Source layout: `src/agent_control_plane/`
 
-- **`engine/`** — Core engines (policy, routing, approvals, budgets, concurrency, kill switch, events, sessions, agent registry, action policy). Each is a standalone class; caller manages DB transactions.
+- **`engine/`** — Core engines (policy, routing, approvals, budgets, concurrency, kill switch, events, sessions, agent registry, action policy, condition evaluator, parallel evaluator). Each is a standalone class; caller manages DB transactions.
+- **`evaluators/`** — Pluggable evaluator framework: `Evaluator` protocol, `EvaluatorRegistry` (manual + entry-point discovery), built-in `RegexEvaluator` and `ListEvaluator`.
 - **`storage/`** — Repository protocol interfaces (`protocols.py`) + SQLAlchemy backends (async & sync). Decouples engines from any specific DB.
 - **`mcp/`** — `McpGateway` for governing MCP tool calls through the control plane.
 - **`sync.py`** — `SyncControlPlane` / `ControlPlaneFacade` — synchronous high-level API wrapping the async engines.
 - **`recovery/`** — Crash recovery (stale cycle release) and timeout escalation.
-- **`types/`** — Pydantic v2 DTOs and enums: `enums`, `policies`, `proposals`, `approvals`, `agents`, `frames`, `sessions`.
+- **`types/`** — Pydantic v2 DTOs and enums: `enums`, `policies`, `proposals`, `approvals`, `agents`, `frames`, `sessions`, `steering`, `conditions`.
 - **`models/`** — `ModelRegistry` for lazy ORM resolution, SQLAlchemy mixins, and ready-to-use reference models (`reference.py`).
 
 ### Key patterns
@@ -36,14 +37,16 @@ Embeddable, self-hosted governance framework for autonomous agent runtimes. Sepa
 
 ### Control-plane flow (proposal lifecycle)
 
-1. `PolicyEngine.classify()` → risk level + action tier
-2. `ProposalRouter.route()` → routing decision
-3. `ApprovalGate` → session-scope check or ticket creation
-4. `BudgetTracker` → budget check + increment
-5. `ConcurrencyGuard` → resource lock
-6. `KillSwitch` → emergency stop check
-7. Execution (caller's data plane)
-8. `EventStore.append()` → audit event
+1. `PolicyEngine.classify()` → risk level + action tier (incl. `STEER`)
+2. `ConditionEvaluator.evaluate()` → optional tree-based auto-approve rules
+3. `ProposalRouter.route()` → routing decision (with `SteeringContext` if steered)
+4. `ParallelPolicyEvaluator.evaluate_all()` → optional concurrent evaluator checks
+5. `ApprovalGate` → session-scope check or ticket creation
+6. `BudgetTracker` → budget check + increment
+7. `ConcurrencyGuard` → resource lock
+8. `KillSwitch` → emergency stop check
+9. Execution (caller's data plane)
+10. `EventStore.append()` → audit event
 
 Higher-level entry points: `McpGateway` (MCP tool calls) and `SyncControlPlane` (synchronous facade) orchestrate this flow automatically.
 
