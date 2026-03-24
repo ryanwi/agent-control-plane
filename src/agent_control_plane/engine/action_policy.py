@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from agent_control_plane.types.enums import ActionName, ActionTier, ActionValue, RiskLevel, RoutingResolutionStep
 from agent_control_plane.types.policies import PolicySnapshot
 from agent_control_plane.types.proposals import ActionProposal
+
+if TYPE_CHECKING:
+    from agent_control_plane.types.steering import SteeringContext
 
 
 class ActionPolicyHandler(ABC):
@@ -115,6 +119,50 @@ class AutoApproveActionHandler(ActionPolicyHandler):
         )
 
 
+class SteeringActionHandler(ActionPolicyHandler):
+    """Steers the agent toward alternative actions instead of blocking."""
+
+    def classify_tier(
+        self,
+        proposal: ActionProposal,
+        risk_level: RiskLevel,
+        policy: PolicySnapshot,
+        can_auto_approve: bool,
+    ) -> ActionTier:
+        return ActionTier.STEER
+
+    def build_routing_reason(
+        self,
+        proposal: ActionProposal,
+        risk_level: RiskLevel,
+        tier: ActionTier,
+    ) -> tuple[str, RoutingResolutionStep]:
+        return (
+            f"Action steered by policy (resource={proposal.resource_id})",
+            RoutingResolutionStep.POLICY_LIST_MATCH,
+        )
+
+    def build_steering_context(
+        self,
+        proposal: ActionProposal,
+        risk_level: RiskLevel,
+        policy: PolicySnapshot,
+    ) -> SteeringContext:
+        from agent_control_plane.types.steering import SteeringContext
+
+        suggested = list(policy.action_tiers.auto_approve) + list(policy.action_tiers.unrestricted)
+        action_label = proposal.decision.value if isinstance(proposal.decision, ActionName) else proposal.decision
+        if suggested:
+            alternatives = ", ".join(str(a) for a in suggested)
+            guidance = f"Action '{action_label}' requires steering. Consider alternatives: {alternatives}"
+        else:
+            guidance = f"Action '{action_label}' requires steering. No pre-approved alternatives available."
+        return SteeringContext(
+            guidance=guidance,
+            suggested_actions=suggested,
+        )
+
+
 class DefaultRiskBasedHandler(ActionPolicyHandler):
     def classify_tier(
         self,
@@ -156,6 +204,8 @@ class ActionPolicyRegistry:
             self._handlers_by_action[action] = AutoApproveActionHandler()
         for action in policy.action_tiers.always_approve:
             self._handlers_by_action[action] = AlwaysApproveActionHandler()
+        for action in policy.action_tiers.steer:
+            self._handlers_by_action[action] = SteeringActionHandler()
         for action in policy.action_tiers.blocked:
             self._handlers_by_action[action] = BlockedActionHandler()
 

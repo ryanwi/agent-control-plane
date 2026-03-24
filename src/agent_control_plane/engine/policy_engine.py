@@ -1,8 +1,10 @@
 """Action classification, risk tiering, and asset scope enforcement."""
 
+from __future__ import annotations
+
 import logging
 from decimal import Decimal
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from agent_control_plane.engine.action_policy import ActionPolicyHandler, ActionPolicyRegistry
 from agent_control_plane.types.enums import (
@@ -16,6 +18,9 @@ from agent_control_plane.types.enums import (
 )
 from agent_control_plane.types.policies import PolicySnapshot
 from agent_control_plane.types.proposals import ActionProposal
+
+if TYPE_CHECKING:
+    from agent_control_plane.engine.condition_evaluator import ConditionEvaluator
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +93,13 @@ class PolicyEngine:
         policy: PolicySnapshot,
         asset_classifier: AssetClassifier | None = None,
         risk_classifier: RiskClassifier | None = None,
+        condition_evaluator: ConditionEvaluator | None = None,
     ) -> None:
         self.policy = policy
         self._asset_classifier = asset_classifier
         self._risk_classifier = risk_classifier or DefaultRiskClassifier(asset_classifier)
         self._action_registry = ActionPolicyRegistry(policy)
+        self._condition_evaluator = condition_evaluator
 
     def classify_risk_level(self, proposal: ActionProposal) -> RiskLevel:
         """Classify a proposal's risk level using the configured risk classifier."""
@@ -157,6 +164,13 @@ class PolicyEngine:
             )
         handler = self.get_action_handler(proposal)
         return handler.build_routing_reason(proposal, risk_level, tier)
+
+    async def can_auto_approve_with_tree(self, proposal: ActionProposal, risk_level: RiskLevel) -> bool:
+        """Evaluate the condition tree if present, falling back to flat checks."""
+        tree = self.policy.auto_approve_conditions.condition_tree
+        if tree is not None and self._condition_evaluator is not None:
+            return await self._condition_evaluator.evaluate(tree, proposal, risk_level, self.policy)
+        return self._can_auto_approve(risk_level)
 
     def _is_blocked(self, proposal: ActionProposal) -> bool:
         """Check if the proposal's action is in the blocked list."""

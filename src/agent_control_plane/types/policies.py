@@ -1,7 +1,10 @@
 """Policy-related DTOs."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
@@ -38,6 +41,7 @@ class AutoApproveConditions(AliasProfiledModel):
     dry_run_only: bool = True
     max_weight: Decimal = Decimal("2.5")
     min_score: Decimal = Decimal("0.7")
+    condition_tree: Any | None = None
 
     @field_validator("max_risk_tier", mode="before")
     @classmethod
@@ -53,9 +57,10 @@ class ActionTiers(AliasProfiledModel):
     blocked: list[ActionValue] = Field(default_factory=list)
     always_approve: list[ActionValue] = Field(default_factory=list)
     auto_approve: list[ActionValue] = Field(default_factory=list)
+    steer: list[ActionValue] = Field(default_factory=list)
     unrestricted: list[ActionValue] = Field(default_factory=list)
 
-    @field_validator("blocked", "always_approve", "auto_approve", "unrestricted", mode="before")
+    @field_validator("blocked", "always_approve", "auto_approve", "steer", "unrestricted", mode="before")
     @classmethod
     def _parse_actions(cls, value: list[ActionValue]) -> list[ActionValue]:
         return [parse_action_name(item) for item in value]

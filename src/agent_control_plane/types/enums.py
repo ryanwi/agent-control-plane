@@ -10,6 +10,7 @@ class ActionTier(StrEnum):
     BLOCKED = "blocked"
     ALWAYS_APPROVE = "always_approve"
     AUTO_APPROVE = "auto_approve"
+    STEER = "steer"
     UNRESTRICTED = "unrestricted"
 
 
@@ -311,6 +312,7 @@ class McpEventName(StrEnum):
     TOOL_CALL_APPROVAL_REQUIRED = "tool_call_approval_required"
     TOOL_CALL_EXECUTED = "tool_call_executed"
     TOOL_CALL_FAILED = "tool_call_failed"
+    TOOL_CALL_STEERED = "tool_call_steered"
 
 
 class GoalStatus(StrEnum):

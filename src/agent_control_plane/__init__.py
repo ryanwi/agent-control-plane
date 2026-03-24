@@ -28,9 +28,11 @@ from agent_control_plane.engine.concurrency import (
     CycleAlreadyActiveError,
     ResourceLockedError,
 )
+from agent_control_plane.engine.condition_evaluator import ConditionEvaluator
 from agent_control_plane.engine.event_store import EventStore
 from agent_control_plane.engine.kill_switch import KillSwitch
 from agent_control_plane.engine.model_governor import ModelAccessDeniedError, ModelGovernor
+from agent_control_plane.engine.parallel_evaluator import ParallelEvaluationResult, ParallelPolicyEvaluator
 from agent_control_plane.engine.policy_engine import (
     AssetClassifier,
     DefaultAssetClassifier,
@@ -42,6 +44,15 @@ from agent_control_plane.engine.router import ProposalRouter, RoutingDecision
 from agent_control_plane.engine.session_manager import SessionManager
 from agent_control_plane.engine.session_risk_accumulator import SessionRiskAccumulator
 from agent_control_plane.engine.token_budget_tracker import TokenBudgetExhaustedError, TokenBudgetTracker
+from agent_control_plane.evaluators import (
+    Evaluator,
+    EvaluatorRegistry,
+    EvaluatorResult,
+    ListEvaluator,
+    ListEvaluatorConfig,
+    RegexEvaluator,
+    RegexEvaluatorConfig,
+)
 from agent_control_plane.idempotency import proposal_command_id
 from agent_control_plane.mcp import (
     ApprovalRequiredError,
@@ -52,6 +63,7 @@ from agent_control_plane.mcp import (
     McpGatewayConfig,
     McpGovernanceError,
     PolicyDeniedError,
+    SteeringRequiredError,
     ToolCallContext,
     ToolCallResult,
     ToolExecutionError,
@@ -163,6 +175,18 @@ from agent_control_plane.types.benchmark import (
     BenchmarkScenarioSpec,
     FitnessWeights,
 )
+from agent_control_plane.types.conditions import (
+    ActionCondition,
+    AndCondition,
+    AssetCondition,
+    ConditionNode,
+    EvaluatorCondition,
+    NotCondition,
+    OrCondition,
+    RiskLevelCondition,
+    ScoreCondition,
+    WeightCondition,
+)
 from agent_control_plane.types.enums import (
     AbortReason,
     ActionName,
@@ -224,6 +248,7 @@ from agent_control_plane.types.query import (
 )
 from agent_control_plane.types.risk import RiskPattern, SessionRiskEscalation, SessionRiskState
 from agent_control_plane.types.sessions import BudgetInfo, KillSwitchResult, SessionCreate, SessionState, SessionSummary
+from agent_control_plane.types.steering import SteeringContext
 from agent_control_plane.types.token_governance import (
     IdentityContext,
     ModelAccessResult,
@@ -290,7 +315,9 @@ __all__ = [
     "ApprovalScope",
     "ApprovalStatus",
     "ApprovalTicket",
+    "AndCondition",
     "AssetClassifier",
+    "AssetCondition",
     "AssetMatch",
     "AssetScope",
     "AliasProfile",
@@ -321,6 +348,8 @@ __all__ = [
     "CommandLedger",
     "CommandRepository",
     "CommandResult",
+    "ConditionEvaluator",
+    "ConditionNode",
     "ControlPlaneScorecard",
     "ConcurrencyGuard",
     "ControlEvent",
@@ -385,10 +414,15 @@ __all__ = [
     # Models
     "ModelRegistry",
     "ModelTier",
+    "ParallelEvaluationResult",
+    "ParallelPolicyEvaluator",
     "PolicyDeniedError",
+    "SteeringRequiredError",
+    "SteeringContext",
     "PolicyEngine",
     "PolicySnapshotRow",
     "PolicySnapshot",
+    "ActionCondition",
     "ActionProposalRow",
     "ApprovalTicketRow",
     "Plan",
@@ -467,6 +501,10 @@ __all__ = [
     "UnknownAppEventPolicy",
     "build_kill_switch_stack",
     "build_session_event_budget",
+    "Evaluator",
+    "EvaluatorCondition",
+    "EvaluatorRegistry",
+    "EvaluatorResult",
     "EvaluatorPolicy",
     "GuardrailPolicy",
     "PassThroughGuardrailPolicy",
@@ -479,6 +517,15 @@ __all__ = [
     "register_metadata_schema",
     "register_risk_limits_extension_schema",
     "register_models",
+    "NotCondition",
+    "OrCondition",
+    "ListEvaluator",
+    "ListEvaluatorConfig",
     "MeterLike",
+    "RiskLevelCondition",
+    "ScoreCondition",
+    "WeightCondition",
+    "RegexEvaluator",
+    "RegexEvaluatorConfig",
     "WeightedFitnessEvaluator",
 ]

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from agent_control_plane.engine.policy_engine import PolicyEngine
 from agent_control_plane.types.enums import ActionTier, RiskLevel, RoutingResolutionStep
 from agent_control_plane.types.proposals import ActionProposal
+from agent_control_plane.types.steering import SteeringContext
 
 if TYPE_CHECKING:
     from agent_control_plane.engine.agent_registry import AgentRegistry
@@ -24,6 +25,7 @@ class RoutingDecision:
     risk_level: RiskLevel
     reason: str
     resolution_step: RoutingResolutionStep
+    steering: SteeringContext | None = field(default=None)
 
 
 class ProposalRouter:
@@ -55,11 +57,20 @@ class ProposalRouter:
 
         reason, resolution = self.policy_engine.build_routing_reason(proposal, risk_level, tier)
 
+        steering = None
+        if tier == ActionTier.STEER:
+            from agent_control_plane.engine.action_policy import SteeringActionHandler
+
+            handler = self.policy_engine.get_action_handler(proposal)
+            if isinstance(handler, SteeringActionHandler):
+                steering = handler.build_steering_context(proposal, risk_level, self.policy_engine.policy)
+
         decision = RoutingDecision(
             tier=tier,
             risk_level=risk_level,
             reason=reason,
             resolution_step=resolution,
+            steering=steering,
         )
 
         logger.info(

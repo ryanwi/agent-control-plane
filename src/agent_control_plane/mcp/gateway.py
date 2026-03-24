@@ -6,7 +6,11 @@ import logging
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from agent_control_plane.types.enums import RiskLevel
+    from agent_control_plane.types.steering import SteeringContext
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -57,6 +61,15 @@ class BudgetDeniedError(McpGovernanceError):
 
 class KillSwitchActiveError(McpGovernanceError):
     """Raised when a session is not in an executable state."""
+
+
+class SteeringRequiredError(McpGovernanceError):
+    """Raised when a tool call is steered toward alternatives."""
+
+    def __init__(self, message: str, *, steering: SteeringContext, reason: str) -> None:
+        super().__init__(message)
+        self.steering = steering
+        self.reason = reason
 
 
 class ToolExecutionError(McpGovernanceError):
@@ -130,6 +143,7 @@ class McpEventMapper:
                 McpEventName.TOOL_CALL_APPROVAL_REQUIRED.value: EventKind.APPROVAL_REQUESTED,
                 McpEventName.TOOL_CALL_EXECUTED.value: EventKind.EXECUTION_COMPLETED,
                 McpEventName.TOOL_CALL_FAILED.value: EventKind.EXECUTION_COMPLETED,
+                McpEventName.TOOL_CALL_STEERED.value: EventKind.RISK_ASSESSED,
             }
         )
 
@@ -218,6 +232,22 @@ class McpGateway:
                 idempotency_key=context.idempotency_key,
             )
             raise ApprovalRequiredError("Manual approval required", ticket_id=ticket_id)
+
+        if tier == ActionTier.STEER:
+            steering_ctx = self._build_steering_context(proposal, risk_level)
+            self._emit(
+                session_id,
+                McpEventName.TOOL_CALL_STEERED,
+                {
+                    "tool_name": context.tool_name,
+                    "reason": reason,
+                    "guidance": steering_ctx.guidance,
+                    "suggested_actions": [str(a) for a in steering_ctx.suggested_actions],
+                },
+                correlation_id=context.correlation_id,
+                idempotency_key=context.idempotency_key,
+            )
+            raise SteeringRequiredError("Action requires steering", steering=steering_ctx, reason=reason)
 
         if not self._cp.check_budget(session_id, cost=context.estimated_cost, action_count=1):
             self._emit(
@@ -374,6 +404,15 @@ class McpGateway:
         db.add(row)
         db.flush()
         return proposal.id
+
+    def _build_steering_context(self, proposal: ActionProposal, risk_level: RiskLevel) -> SteeringContext:
+        from agent_control_plane.engine.action_policy import SteeringActionHandler
+        from agent_control_plane.types.steering import SteeringContext
+
+        handler = self._policy_engine.get_action_handler(proposal)
+        if isinstance(handler, SteeringActionHandler):
+            return handler.build_steering_context(proposal, risk_level, self._policy_engine.policy)
+        return SteeringContext(guidance="Action requires steering", suggested_actions=[])
 
     def _emit(
         self,

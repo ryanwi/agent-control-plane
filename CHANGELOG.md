@@ -2,6 +2,52 @@
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-03-24
+
+### Added
+
+- **Steering action tier** — new `ActionTier.STEER` classification that returns corrective guidance instead of blocking or requiring approval:
+  - `SteeringContext` DTO with `guidance`, `suggested_actions`, `max_retries`, and `metadata` fields
+  - `SteeringActionHandler` polymorphic handler builds context from policy's auto_approve/unrestricted alternatives
+  - `RoutingDecision.steering` field populated automatically by `ProposalRouter` for steered proposals
+  - `SteeringRequiredError` raised by `McpGateway` with full `SteeringContext` for MCP tool calls
+  - `McpEventName.TOOL_CALL_STEERED` event for audit trail
+  - `ActionTiers.steer` list in `PolicySnapshot` for configuring which actions get steered
+- **Pluggable evaluator framework** — new `evaluators/` subpackage for extensible policy evaluation:
+  - `Evaluator` protocol with `name`, `config_schema`, and async `evaluate()` method
+  - `EvaluatorResult` DTO (`allow`, `reason`, `metadata`)
+  - `EvaluatorRegistry` with manual registration and automatic entry-point discovery (`agent_control_plane.evaluators` group)
+  - Built-in `RegexEvaluator` (pattern matching on proposal fields with deny/allow-on-match modes)
+  - Built-in `ListEvaluator` (allowlist/blocklist evaluation with blocklist priority)
+- **Composite condition trees** — recursive boolean condition trees for policy rule composition:
+  - Leaf conditions: `RiskLevelCondition`, `WeightCondition`, `ScoreCondition`, `ActionCondition`, `AssetCondition`, `EvaluatorCondition`
+  - Composite conditions: `AndCondition`, `OrCondition`, `NotCondition` with short-circuit evaluation
+  - `ConditionNode` discriminated union type with max depth 6 enforcement
+  - `ConditionEvaluator` engine for evaluating condition trees against proposals
+  - `AutoApproveConditions.condition_tree` optional field for tree-based auto-approve rules
+  - `PolicyEngine.can_auto_approve_with_tree()` async method for condition-tree evaluation
+- **Cancel-on-deny parallel evaluation** — concurrent evaluator execution with early cancellation:
+  - `ParallelPolicyEvaluator` with configurable `max_concurrent` semaphore (default 3)
+  - `ParallelEvaluationResult` with `overall_allow`, per-evaluator `results`, `cancelled_count`, and `elapsed_ms`
+  - Fail-closed semantics: evaluator exceptions treated as deny, remaining tasks cancelled on first deny
+- New test suites: `tests/test_steering.py`, `tests/test_evaluator_plugins.py`, `tests/test_condition_trees.py`, `tests/test_parallel_evaluator.py`
+
+### Integration pattern
+
+The four features compose into the existing proposal lifecycle as optional steps:
+
+```
+1. PolicyEngine.classify()              — existing (now supports STEER tier)
+2. ConditionEvaluator.evaluate()        — NEW (optional tree-based auto-approve)
+3. ProposalRouter.route()               — existing (now populates SteeringContext)
+4. ParallelPolicyEvaluator.evaluate_all — NEW (optional concurrent evaluators)
+5. ApprovalGate / BudgetTracker         — existing
+6. Execution                            — existing
+7. EventStore.append()                  — existing
+```
+
+Inspired by patterns from [agentcontrol/agent-control](https://github.com/agentcontrol/agent-control).
+
 ## [0.13.0] - 2026-03-20
 
 ### Added
