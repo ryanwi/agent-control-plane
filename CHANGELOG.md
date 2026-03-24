@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-03-24
+
+### Changed
+
+- `PolicyEngine.classify_action_tier()` now accepts an optional `can_auto_approve` keyword argument. When provided, skips the internal sync `_can_auto_approve()` check. This allows async callers (like `ProposalRouter`) to pass the result of `can_auto_approve_with_tree()` so condition trees are evaluated during routing.
+- `ProposalRouter.route()` now calls `can_auto_approve_with_tree()` before `classify_action_tier()`, making condition trees on `AutoApproveConditions.condition_tree` effective end-to-end through the routing path. Previously, condition trees were only accessible via direct `can_auto_approve_with_tree()` calls.
+
 ## [0.14.0] - 2026-03-24
 
 ### Added

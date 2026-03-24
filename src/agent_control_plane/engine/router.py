@@ -53,7 +53,8 @@ class ProposalRouter:
                     )
 
         risk_level = self.policy_engine.classify_risk_level(proposal)
-        tier = self.policy_engine.classify_action_tier(proposal, risk_level)
+        can_auto = await self.policy_engine.can_auto_approve_with_tree(proposal, risk_level)
+        tier = self.policy_engine.classify_action_tier(proposal, risk_level, can_auto_approve=can_auto)
 
         reason, resolution = self.policy_engine.build_routing_reason(proposal, risk_level, tier)
 

@@ -270,6 +270,81 @@ class TestEvaluatorCondition:
             await ev.evaluate(node, _proposal(), RiskLevel.LOW, _policy())
 
 
+class TestConditionTreeRouting:
+    @pytest.mark.asyncio
+    async def test_router_uses_condition_tree_for_auto_approve(self):
+        """Condition tree overrides flat auto-approve checks in the router."""
+        from agent_control_plane.engine.policy_engine import PolicyEngine
+        from agent_control_plane.engine.router import ProposalRouter
+        from agent_control_plane.types.enums import ActionTier
+
+        # Tree: allow auto-approve for MEDIUM risk (flat checks would deny MEDIUM)
+        tree = RiskLevelCondition(level=RiskLevel.MEDIUM, operator="le")
+        policy = PolicySnapshot(
+            action_tiers={
+                "blocked": [],
+                "always_approve": [],
+                "auto_approve": [ActionName.STATUS],
+                "unrestricted": [],
+            },
+            execution_mode=ExecutionMode.DRY_RUN,
+            auto_approve_conditions={
+                "max_risk_tier": "low",
+                "dry_run_only": True,
+                "max_weight": "2.5",
+                "min_score": "0.7",
+                "condition_tree": tree,
+            },
+        )
+        ce = ConditionEvaluator()
+        engine = PolicyEngine(policy, condition_evaluator=ce)
+        router = ProposalRouter(engine)
+
+        # MEDIUM risk: flat checks would deny (max_risk_tier=LOW), tree allows (<=MEDIUM)
+        proposal = _proposal(
+            decision=ActionName.STATUS,
+            weight=Decimal("3.0"),
+            score=Decimal("0.8"),
+        )
+        decision = await router.route(proposal)
+        assert decision.tier == ActionTier.AUTO_APPROVE
+
+    @pytest.mark.asyncio
+    async def test_router_falls_back_to_flat_checks_without_tree(self):
+        """Without a condition tree, router uses flat auto-approve checks."""
+        from agent_control_plane.engine.policy_engine import PolicyEngine
+        from agent_control_plane.engine.router import ProposalRouter
+        from agent_control_plane.types.enums import ActionTier
+
+        policy = PolicySnapshot(
+            action_tiers={
+                "blocked": [],
+                "always_approve": [],
+                "auto_approve": [ActionName.STATUS],
+                "unrestricted": [],
+            },
+            execution_mode=ExecutionMode.DRY_RUN,
+            auto_approve_conditions={
+                "max_risk_tier": "low",
+                "dry_run_only": True,
+                "max_weight": "2.5",
+                "min_score": "0.7",
+            },
+        )
+        ce = ConditionEvaluator()
+        engine = PolicyEngine(policy, condition_evaluator=ce)
+        router = ProposalRouter(engine)
+
+        # MEDIUM risk: flat checks deny (max_risk_tier=LOW), no tree to override
+        proposal = _proposal(
+            decision=ActionName.STATUS,
+            weight=Decimal("3.0"),
+            score=Decimal("0.8"),
+        )
+        decision = await router.route(proposal)
+        assert decision.tier == ActionTier.ALWAYS_APPROVE
+
+
 class TestConditionTreeOnPolicy:
     @pytest.mark.asyncio
     async def test_policy_engine_with_condition_tree(self):

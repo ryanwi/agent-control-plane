@@ -109,8 +109,16 @@ class PolicyEngine:
         self,
         proposal: ActionProposal,
         risk_level: RiskLevel,
+        *,
+        can_auto_approve: bool | None = None,
     ) -> ActionTier:
         """Determine the action tier for a proposal.
+
+        Args:
+            can_auto_approve: Pre-resolved auto-approve decision. When provided,
+                skips the internal ``_can_auto_approve()`` check. The async
+                ``ProposalRouter`` uses this to pass the result of
+                ``can_auto_approve_with_tree()`` so condition trees are evaluated.
 
         Resolution order (deterministic, logged):
         1. explicit_assignment - blocked actions check
@@ -138,12 +146,13 @@ class PolicyEngine:
             )
             return ActionTier.BLOCKED
 
+        resolved = can_auto_approve if can_auto_approve is not None else self._can_auto_approve(risk_level)
         handler = self.get_action_handler(proposal)
         return handler.classify_tier(
             proposal=proposal,
             risk_level=risk_level,
             policy=self.policy,
-            can_auto_approve=self._can_auto_approve(risk_level),
+            can_auto_approve=resolved,
         )
 
     def get_action_handler(self, proposal: ActionProposal) -> ActionPolicyHandler:
