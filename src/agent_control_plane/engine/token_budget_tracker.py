@@ -92,7 +92,13 @@ class TokenBudgetTracker:
         identity: IdentityContext,
         usage: TokenUsage,
     ) -> None:
-        """Check budget, record usage, and emit event. Raises on exhaustion.
+        """Record usage and emit event, then raise if the budget is exhausted.
+
+        The ledger is written before the exhaustion check so it reflects actual
+        spend — including over-budget attempts that already cost money at the
+        LLM provider. Callers that catch ``TokenBudgetExhaustedError`` cannot
+        assume "raised ⇒ nothing written"; the row and event have already
+        landed when the exception fires.
 
         ``session_id`` may be ``None`` for consumers that track budgets outside
         of a control-plane session (e.g. per-tenant LLM cost ceilings). When
@@ -102,9 +108,11 @@ class TokenBudgetTracker:
         """
         configs = await self._repo.list_budget_configs(identity)
         result = await self._check_budget_with_configs(configs, identity, usage)
-        if not result.allowed:
-            raise TokenBudgetExhaustedError("; ".join(result.denial_reasons))
 
+        # Record first so the ledger reflects actual spend, including over-budget
+        # attempts. Post-call enforcement (the practical path for SDKs without an
+        # in-process tokenizer) would otherwise leave the ledger silently
+        # underreporting blocked calls that already incurred provider cost.
         for config in configs:
             window_start, window_end = _compute_window(config.period)
             await self._repo.increment_usage(
@@ -125,6 +133,9 @@ class TokenBudgetTracker:
                     "org_id": str(identity.org_id) if identity.org_id else None,
                 },
             )
+
+        if not result.allowed:
+            raise TokenBudgetExhaustedError("; ".join(result.denial_reasons))
 
     async def _check_budget_with_configs(
         self,

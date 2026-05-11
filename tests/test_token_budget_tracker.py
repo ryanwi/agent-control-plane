@@ -200,6 +200,48 @@ class TestRecordUsage:
         with pytest.raises(TokenBudgetExhaustedError):
             await tracker.record_usage(session_id, identity, _make_usage(total_tokens=100))
 
+    async def test_record_exceeds_budget_still_writes_ledger(
+        self, tracker: TokenBudgetTracker, repo: InMemoryTokenBudgetRepository
+    ) -> None:
+        """Over-budget attempts must still land in the ledger so it matches actual LLM spend."""
+        identity = _make_identity()
+        config = TokenBudgetConfig(
+            identity=identity,
+            period=BudgetPeriod.DAILY,
+            max_tokens=50,
+        )
+        await repo.create_budget_config(config)
+        session_id = uuid4()
+        with pytest.raises(TokenBudgetExhaustedError):
+            await tracker.record_usage(session_id, identity, _make_usage(total_tokens=100))
+
+        assert len(repo._usage_records) == 1
+        states = await tracker.get_budget_states(identity)
+        assert states[0].used_tokens == 100
+
+    async def test_record_exceeds_budget_emits_event(
+        self, repo: InMemoryTokenBudgetRepository, event_repo: InMemoryEventRepository
+    ) -> None:
+        from agent_control_plane.engine.event_store import EventStore
+
+        event_store = EventStore(event_repo)
+        tracker = TokenBudgetTracker(repo, event_store=event_store)
+
+        identity = _make_identity()
+        config = TokenBudgetConfig(
+            identity=identity,
+            period=BudgetPeriod.DAILY,
+            max_tokens=50,
+        )
+        await repo.create_budget_config(config)
+        session_id = uuid4()
+        with pytest.raises(TokenBudgetExhaustedError):
+            await tracker.record_usage(session_id, identity, _make_usage(total_tokens=100))
+
+        events = await event_repo.replay(session_id)
+        assert len(events) == 1
+        assert events[0].event_kind == EventKind.TOKEN_USAGE_RECORDED
+
     async def test_record_increments_state(
         self, tracker: TokenBudgetTracker, repo: InMemoryTokenBudgetRepository
     ) -> None:
