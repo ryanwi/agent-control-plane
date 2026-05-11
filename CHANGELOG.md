@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-05-11
+
+### Added
+
+- `AsyncResilientControlPlane.token_budget_tracker()` — async context manager that yields a `TokenBudgetTracker` bound to a fresh DB session, commits on clean exit, rolls back on exception. Removes per-call `AsyncSqlAlchemyTokenBudgetRepo(session)` ceremony for consumers integrating budget tracking from request handlers.
+
+### Changed
+
+- `TokenBudgetTracker.record_usage()` and the `TokenBudgetRepository` / `AsyncTokenBudgetRepository` protocols now accept `session_id: UUID | None`. When `None`, the ledger row is recorded without a session FK and the `TOKEN_USAGE_RECORDED` event emission is skipped (event emission requires a session). Enables tracker use for tenant-scoped LLM cost ceilings that exist outside a control-plane session.
+- Reference `TokenUsageLedgerRow.session_id` is now nullable to match. Consumers using the reference model will need a column-alter migration; custom models built on `TokenUsageLedgerMixin` are unaffected.
+
 ## [0.14.1] - 2026-03-24
 
 ### Changed

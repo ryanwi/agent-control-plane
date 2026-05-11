@@ -752,7 +752,7 @@ class AsyncSqlAlchemyTokenBudgetRepo:
             remaining_cost_usd=remaining_cost,
         )
 
-    async def record_usage(self, session_id: UUID, usage: TokenUsage, identity: IdentityContext) -> None:
+    async def record_usage(self, session_id: UUID | None, usage: TokenUsage, identity: IdentityContext) -> None:
         model = ModelRegistry.get("TokenUsageLedger")
         row = model(
             id=uuid4(),

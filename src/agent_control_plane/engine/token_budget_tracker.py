@@ -72,11 +72,18 @@ class TokenBudgetTracker:
 
     async def record_usage(
         self,
-        session_id: UUID,
+        session_id: UUID | None,
         identity: IdentityContext,
         usage: TokenUsage,
     ) -> None:
-        """Check budget, record usage, and emit event. Raises on exhaustion."""
+        """Check budget, record usage, and emit event. Raises on exhaustion.
+
+        ``session_id`` may be ``None`` for consumers that track budgets outside
+        of a control-plane session (e.g. per-tenant LLM cost ceilings). When
+        ``None``, the ledger row is recorded without a session FK and the
+        ``TOKEN_USAGE_RECORDED`` event is skipped (event emission requires a
+        session).
+        """
         configs = await self._repo.list_budget_configs(identity)
         result = await self._check_budget_with_configs(configs, identity, usage)
         if not result.allowed:
@@ -90,7 +97,7 @@ class TokenBudgetTracker:
 
         await self._repo.record_usage(session_id, usage, identity)
 
-        if self._event_store is not None:
+        if self._event_store is not None and session_id is not None:
             await self._event_store.append(
                 session_id=session_id,
                 event_kind=EventKind.TOKEN_USAGE_RECORDED,

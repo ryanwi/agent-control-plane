@@ -732,7 +732,7 @@ class SyncSqlAlchemyTokenBudgetRepo:
             remaining_cost_usd=remaining_cost,
         )
 
-    def record_usage(self, session_id: UUID, usage: TokenUsage, identity: IdentityContext) -> None:
+    def record_usage(self, session_id: UUID | None, usage: TokenUsage, identity: IdentityContext) -> None:
         model = ModelRegistry.get("TokenUsageLedger")
         row = model(
             id=uuid4(),

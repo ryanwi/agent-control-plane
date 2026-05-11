@@ -234,3 +234,41 @@ class TestBuildAsync:
         result = await cp.check_budget(UUID(int=999))
         assert result is True
         await cp.close()
+
+    async def test_token_budget_tracker_context_manager(self, db_url: str) -> None:
+        """token_budget_tracker() yields a tracker bound to a fresh session, commits on exit."""
+        from agent_control_plane.types.enums import BudgetPeriod
+        from agent_control_plane.types.ids import ModelId, OrgId
+        from agent_control_plane.types.token_governance import (
+            IdentityContext,
+            TokenBudgetConfig,
+            TokenUsage,
+        )
+
+        cp = ControlPlaneSetup(db_url).build_async()
+        identity = IdentityContext(org_id=OrgId("test-org"))
+
+        async with cp.token_budget_tracker() as tracker:
+            await tracker._repo.create_budget_config(
+                TokenBudgetConfig(identity=identity, period=BudgetPeriod.DAILY, max_tokens=1000)
+            )
+
+        async with cp.token_budget_tracker() as tracker:
+            await tracker.record_usage(
+                None,
+                identity,
+                TokenUsage(
+                    model_id=ModelId("test-model"),
+                    input_tokens=10,
+                    output_tokens=20,
+                    total_tokens=30,
+                    estimated_cost_usd=Decimal("0.01"),
+                ),
+            )
+
+        async with cp.token_budget_tracker() as tracker:
+            states = await tracker.get_budget_states(identity)
+            assert len(states) == 1
+            assert states[0].used_tokens == 30
+
+        await cp.close()

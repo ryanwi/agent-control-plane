@@ -112,7 +112,9 @@ class TokenUsageLedgerRow(Base, TokenUsageLedgerMixin):
     __tablename__ = "token_usage_ledger"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
+    session_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=True
+    )
 
 
 class TokenBudgetStateRow(Base, TokenBudgetStateMixin):

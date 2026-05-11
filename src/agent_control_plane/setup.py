@@ -176,7 +176,12 @@ class ControlPlaneSetup:
 
     @property
     def token_budget_configs(self) -> list[TokenBudgetConfig] | None:
-        """Token budget configs for TokenBudgetTracker (caller creates the engine)."""
+        """Token budget configs for TokenBudgetTracker.
+
+        After ``build_async()``, use ``cp.token_budget_tracker()`` (async
+        context manager) to obtain a session-bound tracker without manual
+        ``AsyncSqlAlchemyTokenBudgetRepo(session)`` construction.
+        """
         return self._token_budget_configs
 
     @property

@@ -114,6 +114,27 @@ class AsyncResilientControlPlane:
         async with self._facade.session_scope() as db:
             yield db
 
+    @asynccontextmanager
+    async def token_budget_tracker(self) -> AsyncIterator[Any]:
+        """Yield a TokenBudgetTracker bound to a fresh DB session.
+
+        Commits on clean exit, rolls back on exception. Removes the
+        per-call ``AsyncSqlAlchemyTokenBudgetRepo(session)`` ceremony
+        for consumers that just want to ``record_usage`` from a request
+        handler.
+        """
+        from agent_control_plane.engine.token_budget_tracker import TokenBudgetTracker
+        from agent_control_plane.storage.sqlalchemy_async import AsyncSqlAlchemyTokenBudgetRepo
+
+        async with self._facade.session_scope() as db:
+            tracker = TokenBudgetTracker(AsyncSqlAlchemyTokenBudgetRepo(db))
+            try:
+                yield tracker
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                raise
+
     # ── Session lifecycle (STATE_BEARING) ──────────────────────────
 
     async def open_session(
