@@ -272,3 +272,87 @@ class TestBuildAsync:
             assert states[0].used_tokens == 30
 
         await cp.close()
+
+    async def test_token_budget_tracker_commits_on_exhaustion(self, db_url: str) -> None:
+        """TokenBudgetExhaustedError must commit the ledger write before propagating.
+
+        record_usage now writes the ledger before raising so over-budget attempts
+        are visible to cost reporting. The context manager must not roll that
+        write back, or the fix is silently undone for the dominant integration
+        path.
+        """
+        from agent_control_plane.engine.token_budget_tracker import TokenBudgetExhaustedError
+        from agent_control_plane.types.enums import BudgetPeriod
+        from agent_control_plane.types.ids import ModelId, OrgId
+        from agent_control_plane.types.token_governance import (
+            IdentityContext,
+            TokenBudgetConfig,
+            TokenUsage,
+        )
+
+        cp = ControlPlaneSetup(db_url).build_async()
+        identity = IdentityContext(org_id=OrgId("exhaustion-org"))
+
+        async with cp.token_budget_tracker() as tracker:
+            await tracker._repo.create_budget_config(
+                TokenBudgetConfig(identity=identity, period=BudgetPeriod.DAILY, max_tokens=50)
+            )
+
+        with pytest.raises(TokenBudgetExhaustedError):
+            async with cp.token_budget_tracker() as tracker:
+                await tracker.record_usage(
+                    None,
+                    identity,
+                    TokenUsage(
+                        model_id=ModelId("test-model"),
+                        input_tokens=60,
+                        output_tokens=40,
+                        total_tokens=100,
+                        estimated_cost_usd=Decimal("0.05"),
+                    ),
+                )
+
+        async with cp.token_budget_tracker() as tracker:
+            states = await tracker.get_budget_states(identity)
+            assert states[0].used_tokens == 100, "over-budget attempt must persist in the ledger"
+
+        await cp.close()
+
+    async def test_token_budget_tracker_rolls_back_on_other_exception(self, db_url: str) -> None:
+        """Non-budget exceptions still roll the session back (unchanged behavior)."""
+        from agent_control_plane.types.enums import BudgetPeriod
+        from agent_control_plane.types.ids import ModelId, OrgId
+        from agent_control_plane.types.token_governance import (
+            IdentityContext,
+            TokenBudgetConfig,
+            TokenUsage,
+        )
+
+        cp = ControlPlaneSetup(db_url).build_async()
+        identity = IdentityContext(org_id=OrgId("rollback-org"))
+
+        async with cp.token_budget_tracker() as tracker:
+            await tracker._repo.create_budget_config(
+                TokenBudgetConfig(identity=identity, period=BudgetPeriod.DAILY, max_tokens=1000)
+            )
+
+        with pytest.raises(RuntimeError, match="caller blew up"):
+            async with cp.token_budget_tracker() as tracker:
+                await tracker.record_usage(
+                    None,
+                    identity,
+                    TokenUsage(
+                        model_id=ModelId("test-model"),
+                        input_tokens=10,
+                        output_tokens=20,
+                        total_tokens=30,
+                        estimated_cost_usd=Decimal("0.01"),
+                    ),
+                )
+                raise RuntimeError("caller blew up")
+
+        async with cp.token_budget_tracker() as tracker:
+            states = await tracker.get_budget_states(identity)
+            assert states[0].used_tokens == 0, "unrelated exception should still roll back the write"
+
+        await cp.close()

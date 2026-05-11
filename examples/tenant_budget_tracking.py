@@ -15,8 +15,11 @@ Shows:
 5. Float cost coercion — passes a float, validator routes through
    Decimal(str(...)) to preserve precision.
 6. Identity by string slug — OrgId is a str, not a UUID.
-7. Budget exhaustion path — TokenBudgetExhaustedError raised.
-8. Persistence — second run picks up where the first left off.
+7. Budget exhaustion path — TokenBudgetExhaustedError raised *and*
+   the over-budget attempt lands in the ledger so reporting matches
+   the actual LLM bill.
+8. Persistence — second run picks up where the first left off,
+   including the recorded-but-blocked attempt.
 
 Run:
     uv run python examples/tenant_budget_tracking.py
@@ -105,6 +108,8 @@ async def main() -> None:
         await simulate_llm_call(cp, "tenant-acme", cost_usd=0.05)  # 0.07 + 0.05 = 0.12 > 0.10
     except TokenBudgetExhaustedError as e:
         print(f"  blocked: {e}")
+    print("  ledger after blocked call (over-budget attempt is recorded):")
+    await show_budget_state(cp, "tenant-acme")
 
     print("\n=== Restart simulation ===")
     await cp.close()

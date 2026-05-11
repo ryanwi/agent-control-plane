@@ -5,6 +5,7 @@
 ### Changed
 
 - **Behavior change:** `TokenBudgetTracker.record_usage()` now writes the ledger row, increments per-config state, and emits the `TOKEN_USAGE_RECORDED` event *before* raising `TokenBudgetExhaustedError` on over-budget calls. Previously the exception fired before any write, leaving the ledger silently underreporting blocked attempts — a real problem for post-call enforcement (the practical pattern for SDKs without an in-process tokenizer, which the README recommends). Callers that catch the exception can no longer assume "raised ⇒ nothing written"; the row and event have already landed. Exception name and message are unchanged.
+- `AsyncResilientControlPlane.token_budget_tracker()` context manager now commits the session on `TokenBudgetExhaustedError` (instead of rolling back) so the ledger row that `record_usage` writes pre-raise actually persists for consumers using the documented async-session-per-call pattern. Other exceptions still roll back as before.
 
 ## [0.14.3] - 2026-05-11
 

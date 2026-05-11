@@ -124,6 +124,7 @@ Notes:
 - `session_id=None` records usage without a control-plane session FK. Use a real session UUID if you want the `TOKEN_USAGE_RECORDED` event to land in the event log.
 - The context manager opens a fresh DB session and commits on clean exit. For shared-transaction recording, use `TokenBudgetTracker.from_session(your_session)` instead.
 - **Pre-call enforcement caveat:** `tracker.check_budget(...)` exists as a pre-call hook, but using it requires you to know the prompt token count in advance. OpenAI-compatible SDKs don't expose this without a separate tokenizer (e.g. `tiktoken`). For OpenAI-compatible consumers, the practical pattern is post-call `record_usage` with a local soft-ceiling as defense-in-depth.
+- **Ledger reflects actual spend, including blocked attempts.** `record_usage` writes the ledger row *before* raising `TokenBudgetExhaustedError`, so over-budget calls that already incurred provider cost are still recorded. Callers catching the exception cannot assume "raised ⇒ nothing written" — the row and the `TOKEN_USAGE_RECORDED` event have already landed. This keeps the ledger accurate as a cost-reporting source under post-call enforcement.
 
 ## Runtime Notes
 

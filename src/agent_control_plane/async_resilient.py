@@ -118,12 +118,20 @@ class AsyncResilientControlPlane:
     async def token_budget_tracker(self) -> AsyncIterator[Any]:
         """Yield a TokenBudgetTracker bound to a fresh DB session.
 
-        Commits on clean exit, rolls back on exception. Removes the
-        per-call ``AsyncSqlAlchemyTokenBudgetRepo(session)`` ceremony
-        for consumers that just want to ``record_usage`` from a request
-        handler.
+        Commits on clean exit. Also commits on ``TokenBudgetExhaustedError``
+        so the ledger row that ``record_usage`` writes before raising
+        actually persists — without this, the rollback would silently
+        undo the ledger entry for the over-budget attempt. Other
+        exceptions still trigger rollback.
+
+        Removes the per-call ``AsyncSqlAlchemyTokenBudgetRepo(session)``
+        ceremony for consumers that just want to ``record_usage`` from a
+        request handler.
         """
-        from agent_control_plane.engine.token_budget_tracker import TokenBudgetTracker
+        from agent_control_plane.engine.token_budget_tracker import (
+            TokenBudgetExhaustedError,
+            TokenBudgetTracker,
+        )
         from agent_control_plane.storage.sqlalchemy_async import AsyncSqlAlchemyTokenBudgetRepo
 
         async with self._facade.session_scope() as db:
@@ -131,6 +139,9 @@ class AsyncResilientControlPlane:
             try:
                 yield tracker
                 await db.commit()
+            except TokenBudgetExhaustedError:
+                await db.commit()
+                raise
             except Exception:
                 await db.rollback()
                 raise
