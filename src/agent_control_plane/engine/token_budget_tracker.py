@@ -72,6 +72,12 @@ class TokenBudgetTracker:
         For consumers in an async-session-per-request architecture who want
         to record budget usage in the *same* transaction as other ORM work.
         Caller owns the session's commit/rollback lifecycle.
+
+        Note: ``record_usage`` writes the ledger row before raising
+        ``TokenBudgetExhaustedError``. Callers catching the exception should
+        commit the session (not roll back) if they want the over-budget
+        attempt to land in the ledger — otherwise the engine-level write is
+        undone alongside other work in the same transaction.
         """
         from agent_control_plane.storage.sqlalchemy_async import AsyncSqlAlchemyTokenBudgetRepo
 
