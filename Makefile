@@ -5,7 +5,7 @@ MYPY ?= uv run mypy
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync demo-asciinema demo-asciicast-agent docs-drift openapi-check test lint format typecheck check release-tag
+.PHONY: help sync demo-asciinema demo-asciicast-agent docs-drift openapi-check test lint format typecheck examples check release-tag
 
 help:
 	@printf "Targets:\n"
@@ -48,7 +48,10 @@ format:
 typecheck:
 	$(MYPY) src
 
-check: docs-drift openapi-check lint typecheck test
+examples:
+	uv run python examples/tenant_budget_tracking.py >/dev/null
+
+check: docs-drift openapi-check lint typecheck test examples
 
 release-tag:
 	@if [ -z "$(VERSION)" ]; then \
