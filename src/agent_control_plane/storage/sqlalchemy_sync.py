@@ -41,6 +41,19 @@ from agent_control_plane.types.token_governance import (
 )
 
 
+def _ensure_reference_models_registered() -> None:
+    """Lazy-register reference models if no models are registered yet.
+
+    Removes the silent "RuntimeError: Model 'X' not registered" footgun for
+    consumers using a repo directly without first building the facade.
+    """
+    if ModelRegistry._models:
+        return
+    from agent_control_plane.models.reference import register_models
+
+    register_models()
+
+
 class SyncSqlAlchemySessionRepo:
     """Sync SQLAlchemy implementation of SessionRepository."""
 
@@ -616,6 +629,7 @@ class SyncSqlAlchemyTokenBudgetRepo:
 
     def __init__(self, session: Session) -> None:
         self._session = session
+        _ensure_reference_models_registered()
 
     def get_budget_config(self, config_id: UUID) -> TokenBudgetConfig | None:
         model = ModelRegistry.get("TokenBudgetConfig")

@@ -240,6 +240,30 @@ class TestRecordUsage:
         assert len(events) == 1
         assert events[0].event_kind == EventKind.TOKEN_USAGE_RECORDED
 
+    async def test_float_cost_coerces_to_decimal(self) -> None:
+        """TokenUsage.estimated_cost_usd accepts float without precision loss."""
+        from agent_control_plane.types.ids import ModelId
+
+        usage = TokenUsage(
+            model_id=ModelId("test"),
+            input_tokens=1,
+            output_tokens=1,
+            total_tokens=2,
+            estimated_cost_usd=0.0030,  # type: ignore[arg-type]
+        )
+        assert usage.estimated_cost_usd == Decimal("0.0030")
+        # Validator routed through str(), so we don't carry float imprecision.
+        assert "9999" not in str(usage.estimated_cost_usd)
+
+    async def test_tracker_from_session_classmethod(self) -> None:
+        """TokenBudgetTracker.from_session builds tracker bound to caller's session."""
+        from unittest.mock import MagicMock
+
+        session = MagicMock()
+        tracker = TokenBudgetTracker.from_session(session)
+        assert isinstance(tracker, TokenBudgetTracker)
+        assert tracker._repo._session is session  # type: ignore[attr-defined]
+
     async def test_record_without_session_id(
         self, repo: InMemoryTokenBudgetRepository, event_repo: InMemoryEventRepository
     ) -> None:

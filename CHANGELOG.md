@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-05-11
+
+Addresses three friction points reported via GitHub issues #2, #3, #4 from the v0.14.2 dogfooding integration.
+
+### Added
+
+- `TokenBudgetTracker.from_session(session, event_store=None)` — classmethod factory for consumers in async-session-per-request architectures who want to record budget usage in the *same* transaction as other ORM work. Caller owns the session lifecycle. Closes #3.
+- `TokenUsage.estimated_cost_usd` and `TokenBudgetConfig.max_cost_usd` now accept `float` input and coerce via `Decimal(str(v))` to preserve precision. Removes the `Decimal(0.0030) == Decimal("0.00299999…")` footgun for consumers with float-based pricing tables. Closes #4.
+
+### Changed
+
+- `AsyncSqlAlchemyTokenBudgetRepo.__init__` and `SyncSqlAlchemyTokenBudgetRepo.__init__` now lazy-call `register_models()` if the `ModelRegistry` is empty. Eliminates the silent `RuntimeError: Model 'TokenBudgetConfig' not registered` trap for consumers using the repos directly (CLI tools, admin scripts, migration helpers) without first building the facade. No-op when consumers have registered their own custom models. Closes #2.
+
 ## [0.14.2] - 2026-05-11
 
 ### Added

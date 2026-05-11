@@ -4,10 +4,23 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .enums import BudgetPeriod, ModelTier
 from .ids import ModelId, OrgId, TeamId, UserId
+
+
+def _coerce_decimal(v: object) -> object:
+    """Convert float to Decimal via str() to preserve precision.
+
+    ``Decimal(0.0030)`` yields ``Decimal('0.00299999...')``; the canonical
+    ``Decimal(str(0.0030))`` yields ``Decimal('0.0030')``. Accepting floats
+    here removes the conversion footgun for consumers whose pricing tables
+    are float-based (e.g. ``rate_per_million_tokens``).
+    """
+    if isinstance(v, float):
+        return Decimal(str(v))
+    return v
 
 
 class IdentityContext(BaseModel):
@@ -27,6 +40,8 @@ class TokenUsage(BaseModel):
     total_tokens: int
     estimated_cost_usd: Decimal
 
+    _coerce_cost = field_validator("estimated_cost_usd", mode="before")(_coerce_decimal)
+
 
 class TokenBudgetConfig(BaseModel):
     """Budget limits for an identity within a time period."""
@@ -37,6 +52,8 @@ class TokenBudgetConfig(BaseModel):
     max_tokens: int | None = None
     max_cost_usd: Decimal | None = None
     allowed_models: list[ModelId] | None = None
+
+    _coerce_cost = field_validator("max_cost_usd", mode="before")(_coerce_decimal)
 
 
 class TokenBudgetState(BaseModel):

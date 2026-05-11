@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agent_control_plane.types.enums import BudgetPeriod, EventKind
@@ -60,6 +60,22 @@ class TokenBudgetTracker:
     ) -> None:
         self._repo = token_budget_repo
         self._event_store = event_store
+
+    @classmethod
+    def from_session(
+        cls,
+        session: Any,
+        event_store: EventStore | None = None,
+    ) -> TokenBudgetTracker:
+        """Construct a tracker bound to an existing ``AsyncSession``.
+
+        For consumers in an async-session-per-request architecture who want
+        to record budget usage in the *same* transaction as other ORM work.
+        Caller owns the session's commit/rollback lifecycle.
+        """
+        from agent_control_plane.storage.sqlalchemy_async import AsyncSqlAlchemyTokenBudgetRepo
+
+        return cls(AsyncSqlAlchemyTokenBudgetRepo(session), event_store=event_store)
 
     async def check_budget(
         self,
