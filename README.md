@@ -113,6 +113,12 @@ async with cp.token_budget_tracker() as tracker:
     await tracker.record_usage(None, identity, usage)  # session_id is optional
 ```
 
+Runnable end-to-end example covering seeding, tenant scoping, exhaustion, and cross-process persistence:
+
+```bash
+uv run python examples/tenant_budget_tracking.py
+```
+
 Notes:
 
 - `session_id=None` records usage without a control-plane session FK. Use a real session UUID if you want the `TOKEN_USAGE_RECORDED` event to land in the event log.
