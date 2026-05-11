@@ -90,6 +90,35 @@ make demo-asciicast-agent
 - Session lifecycle and recovery: `SessionManager`, `CrashRecovery`, `TimeoutEscalation`
 - Host wrappers: `ControlPlaneFacade` (sync), `AsyncControlPlaneFacade` (async)
 
+## Token Budget Tracking
+
+Identity-scoped, persistent token/cost budgets — useful as a first integration point for consumers (much smaller surface than the full proposal lifecycle).
+
+```python
+from agent_control_plane import (
+    ControlPlaneSetup, IdentityContext, OrgId, ModelId, TokenUsage,
+)
+
+cp = ControlPlaneSetup(database_url, token_budget_configs=[...]).build_async()
+
+async with cp.token_budget_tracker() as tracker:
+    identity = IdentityContext(org_id=OrgId("tenant-acme"))
+    usage = TokenUsage(
+        model_id=ModelId("claude-haiku-4-5"),
+        input_tokens=1234,
+        output_tokens=567,
+        total_tokens=1801,
+        estimated_cost_usd=0.0042,  # float accepted, coerced via Decimal(str(...))
+    )
+    await tracker.record_usage(None, identity, usage)  # session_id is optional
+```
+
+Notes:
+
+- `session_id=None` records usage without a control-plane session FK. Use a real session UUID if you want the `TOKEN_USAGE_RECORDED` event to land in the event log.
+- The context manager opens a fresh DB session and commits on clean exit. For shared-transaction recording, use `TokenBudgetTracker.from_session(your_session)` instead.
+- **Pre-call enforcement caveat:** `tracker.check_budget(...)` exists as a pre-call hook, but using it requires you to know the prompt token count in advance. OpenAI-compatible SDKs don't expose this without a separate tokenizer (e.g. `tiktoken`). For OpenAI-compatible consumers, the practical pattern is post-call `record_usage` with a local soft-ceiling as defense-in-depth.
+
 ## Runtime Notes
 
 - Treat `state_bearing=True` events as fail-closed.

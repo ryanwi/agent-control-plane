@@ -96,7 +96,7 @@ class _InMemoryTokenBudgetRepo:
         self._states[key] = state
         return state
 
-    async def record_usage(self, session_id: UUID, usage: TokenUsage, identity: IdentityContext) -> None:
+    async def record_usage(self, session_id: UUID | None, usage: TokenUsage, identity: IdentityContext) -> None:
         self._usage_records.append({"session_id": session_id, "usage": usage, "identity": identity})
 
     async def get_usage_summary(
