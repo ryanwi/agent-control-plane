@@ -74,7 +74,7 @@ async def main() -> None:
             id=uuid4(),
             session_id=session_id,
             cycle_event_seq=None,
-            resource_id="lotwatch-asset-1",
+            resource_id="demo-asset-1",
             resource_type="asset",
             decision=ActionName.STATUS,
             reasoning="manual review needed",
