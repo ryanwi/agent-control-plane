@@ -65,6 +65,12 @@ class TestEgressEvaluator:
         assert result.allow
 
     @pytest.mark.asyncio
+    async def test_protocol_relative_url_host_is_extracted(self):
+        # A protocol-relative URL (//host/path) is a valid URL form and must resolve its host.
+        result = await _evaluator().evaluate(_proposal(resource_id="//api.anthropic.com/v1/messages"), _policy())
+        assert result.allow
+
+    @pytest.mark.asyncio
     async def test_url_path_does_not_widen_capability(self):
         # A files upload URL on an allowlisted host is still denied when the capability isn't granted.
         result = await _evaluator().evaluate(

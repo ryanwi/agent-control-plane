@@ -165,9 +165,11 @@ class RegexResponseEvaluator:
 def _extract_host(value: str) -> str:
     """Extract a bare hostname from a destination that may be a URL, host:port, or host/path."""
     v = value.strip()
-    # Prepend // when no scheme so urlsplit always has a netloc to parse.
-    parsed = urlsplit(v if "://" in v else f"//{v}")
-    return (parsed.hostname or "").lower()
+    # Prepend // only when the value has neither a scheme nor a protocol-relative prefix, so
+    # urlsplit always has a netloc to parse (and a leading // is not doubled into ////).
+    if "://" not in v and not v.startswith("//"):
+        v = f"//{v}"
+    return (urlsplit(v).hostname or "").lower()
 
 
 class EgressGrant(BaseModel):
