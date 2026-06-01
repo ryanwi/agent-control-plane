@@ -164,28 +164,31 @@ class McpGatewayConfig(BaseModel):
     unknown_event_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.RAISE
 
 
-class McpEventMapper:
-    """Maps MCP app-events to control-plane EventKind values, including state_bearing flags."""
+@dataclass(frozen=True)
+class _EventSpec:
+    event_kind: EventKind
+    state_bearing: bool = False
 
-    # (event_kind, state_bearing) — state_bearing=True means the event is part of the
-    # durable audit trail and must not be silently dropped on failure.
-    _MAPPING: ClassVar[dict[str, tuple[EventKind, bool]]] = {
-        McpEventName.TOOL_CALL_RECEIVED.value: (EventKind.CYCLE_STARTED, False),
-        McpEventName.TOOL_CALL_ALLOWED.value: (EventKind.RISK_ASSESSED, False),
-        McpEventName.TOOL_CALL_BLOCKED.value: (EventKind.APPROVAL_DENIED, False),
-        McpEventName.TOOL_CALL_APPROVAL_REQUIRED.value: (EventKind.APPROVAL_REQUESTED, False),
-        McpEventName.TOOL_CALL_EXECUTED.value: (EventKind.EXECUTION_COMPLETED, False),
-        McpEventName.TOOL_CALL_FAILED.value: (EventKind.EXECUTION_COMPLETED, False),
-        McpEventName.TOOL_CALL_STEERED.value: (EventKind.RISK_ASSESSED, False),
-        McpEventName.TOOL_RESULT_REJECTED.value: (EventKind.APPROVAL_DENIED, True),
+
+class McpEventMapper:
+    """Maps MCP app-events to control-plane EventKind values."""
+
+    _MAPPING: ClassVar[dict[str, _EventSpec]] = {
+        McpEventName.TOOL_CALL_RECEIVED.value: _EventSpec(EventKind.CYCLE_STARTED),
+        McpEventName.TOOL_CALL_ALLOWED.value: _EventSpec(EventKind.RISK_ASSESSED),
+        McpEventName.TOOL_CALL_BLOCKED.value: _EventSpec(EventKind.APPROVAL_DENIED),
+        McpEventName.TOOL_CALL_APPROVAL_REQUIRED.value: _EventSpec(EventKind.APPROVAL_REQUESTED),
+        McpEventName.TOOL_CALL_EXECUTED.value: _EventSpec(EventKind.EXECUTION_COMPLETED),
+        McpEventName.TOOL_CALL_FAILED.value: _EventSpec(EventKind.EXECUTION_COMPLETED),
+        McpEventName.TOOL_CALL_STEERED.value: _EventSpec(EventKind.RISK_ASSESSED),
+        McpEventName.TOOL_RESULT_REJECTED.value: _EventSpec(EventKind.APPROVAL_DENIED, state_bearing=True),
     }
 
     def map_event(self, event_name: str, payload: Mapping[str, Any]) -> MappedEvent | None:
-        entry = self._MAPPING.get(event_name.strip().lower())
-        if entry is None:
+        spec = self._MAPPING.get(event_name.strip().lower())
+        if spec is None:
             return None
-        event_kind, state_bearing = entry
-        return MappedEvent(event_kind=event_kind, payload=dict(payload), state_bearing=state_bearing)
+        return MappedEvent(event_kind=spec.event_kind, payload=dict(payload), state_bearing=spec.state_bearing)
 
 
 class McpGateway:
