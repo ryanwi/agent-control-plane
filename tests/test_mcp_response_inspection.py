@@ -154,6 +154,24 @@ def test_non_allowlisted_url_in_key_is_rejected(tmp_path: Path):
     cp.close()
 
 
+def test_allowlisted_url_with_query_or_fragment_is_allowed(tmp_path: Path):
+    cp = _new_cp(tmp_path, "resp_url_query")
+    sid = cp.create_session("resp-url-query", max_cost=Decimal("5"), max_action_count=5)
+    evaluator = RegexResponseEvaluator(RegexResponseEvaluatorConfig(url_allowlist=["api.anthropic.com"]))
+    output = {
+        "query": "https://api.anthropic.com?version=2023-06-01",
+        "fragment": "https://api.anthropic.com#models",
+    }
+    gateway = _auto_approve_gateway(cp, _Executor(output), [evaluator])
+
+    result = gateway.handle_tool_call(
+        ToolCallContext(tool_name="status", session_id=sid, estimated_cost=Decimal("0.10"))
+    )
+
+    assert result.output == output
+    cp.close()
+
+
 def test_non_allowlisted_url_in_output_is_rejected(tmp_path: Path):
     cp = _new_cp(tmp_path, "resp_url")
     sid = cp.create_session("resp-url", max_cost=Decimal("5"), max_action_count=5)

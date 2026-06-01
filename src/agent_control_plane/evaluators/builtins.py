@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator, Mapping
 from typing import Any
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, Field
 
@@ -147,7 +148,8 @@ class RegexResponseEvaluator:
                     return EvaluatorResult(allow=False, reason=f"Output matched screening pattern: {pattern.pattern}")
             if self._allowed_hosts:
                 for match in _URL_RE.finditer(value):
-                    host = match.group(1).split(":", 1)[0].lower()
+                    parsed = urlsplit(match.group(0))
+                    host = (parsed.hostname or "").lower()
                     if not self._host_allowed(host):
                         return EvaluatorResult(allow=False, reason=f"Output references non-allowlisted host: {host}")
         return EvaluatorResult(allow=True, reason="Response screening passed")
