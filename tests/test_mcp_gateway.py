@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -89,4 +89,24 @@ def test_auto_approved_tool_executes_and_consumes_budget(tmp_path: Path):
     assert budget["used_cost"] == Decimal("1.25")
     events = cp.replay_events(sid)
     assert EventKind.EXECUTION_COMPLETED in [e.event_kind for e in events]
+    cp.close()
+
+
+def test_correlation_id_is_propagated_to_emitted_events(tmp_path: Path):
+    cp = _new_cp(tmp_path, "mcp_corr")
+    sid = cp.create_session("mcp-corr")
+
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    gateway = McpGateway(
+        cp,
+        _OkExecutor(),
+        ToolPolicyMap({"status": ActionName.STATUS}),
+        config=McpGatewayConfig(policy_snapshot=policy),
+    )
+
+    corr = uuid4()
+    gateway.handle_tool_call(ToolCallContext(tool_name="status", session_id=sid, correlation_id=corr))
+
+    events = cp.replay_events(sid)
+    assert any(e.correlation_id == corr for e in events), "correlation_id must reach emitted events"
     cp.close()
