@@ -86,10 +86,6 @@ class ListEvaluator:
 _URL_RE = re.compile(r"https?://([^/\s\"'<>]+)", re.IGNORECASE)
 
 
-def _host_matches(host: str, allowed: str) -> bool:
-    return host == allowed or host.endswith(f".{allowed}")
-
-
 def _iter_strings(value: object) -> Iterator[str]:
     """Yield every string leaf in a nested mapping/sequence structure.
 
