@@ -28,6 +28,7 @@ from agent_control_plane.types.enums import (
     ActionTier,
     ActionValue,
     EventKind,
+    GovernanceOutcome,
     McpEventName,
     ProposalStatus,
     SessionStatus,
@@ -324,7 +325,7 @@ class McpGateway:
             self._emit(
                 session_id,
                 McpEventName.TOOL_CALL_FAILED,
-                {"tool_name": context.tool_name, "error": str(exc)},
+                {"tool_name": context.tool_name, "error": str(exc), "outcome": GovernanceOutcome.FAILED.value},
                 correlation_id=context.correlation_id,
                 idempotency_key=context.idempotency_key,
             )
@@ -334,7 +335,7 @@ class McpGateway:
             self._emit(
                 session_id,
                 McpEventName.TOOL_CALL_FAILED,
-                {"tool_name": context.tool_name, "error": result.error},
+                {"tool_name": context.tool_name, "error": result.error, "outcome": GovernanceOutcome.FAILED.value},
                 correlation_id=context.correlation_id,
                 idempotency_key=context.idempotency_key,
             )

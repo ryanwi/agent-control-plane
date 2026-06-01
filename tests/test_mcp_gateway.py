@@ -15,16 +15,31 @@ from agent_control_plane.mcp import (
     PolicyDeniedError,
     ToolCallContext,
     ToolCallResult,
+    ToolExecutionError,
     ToolPolicyMap,
 )
 from agent_control_plane.sync import SyncControlPlane
-from agent_control_plane.types.enums import ActionName, EventKind
+from agent_control_plane.telemetry import export_event
+from agent_control_plane.types.enums import ActionName, EventKind, GovernanceOutcome
 from agent_control_plane.types.policies import ActionTiers, PolicySnapshot
 
 
 class _OkExecutor:
     def execute(self, context: ToolCallContext) -> ToolCallResult:
         return ToolCallResult(ok=True, output={"tool": context.tool_name}, cost=Decimal("1.25"))
+
+
+class _FailingExecutor:
+    def execute(self, context: ToolCallContext) -> ToolCallResult:
+        return ToolCallResult(ok=False, output={}, error="boom")
+
+
+class _Tracer:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, dict[str, object]]] = []
+
+    def add_event(self, name: str, attributes: dict[str, object]) -> None:
+        self.events.append((name, attributes))
 
 
 def _new_cp(tmp_path: Path, suffix: str) -> SyncControlPlane:
@@ -109,4 +124,31 @@ def test_correlation_id_is_propagated_to_emitted_events(tmp_path: Path):
 
     events = cp.replay_events(sid)
     assert any(e.correlation_id == corr for e in events), "correlation_id must reach emitted events"
+    cp.close()
+
+
+def test_failed_tool_call_does_not_export_as_applied(tmp_path: Path):
+    cp = _new_cp(tmp_path, "mcp_fail_outcome")
+    sid = cp.create_session("mcp-fail-outcome")
+
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    gateway = McpGateway(
+        cp,
+        _FailingExecutor(),
+        ToolPolicyMap({"status": ActionName.STATUS}),
+        config=McpGatewayConfig(policy_snapshot=policy),
+    )
+
+    with pytest.raises(ToolExecutionError):
+        gateway.handle_tool_call(ToolCallContext(tool_name="status", session_id=sid))
+
+    failed = [e for e in cp.replay_events(sid) if e.payload.get("error") is not None]
+    assert failed, "expected a TOOL_CALL_FAILED event"
+
+    tracer = _Tracer()
+    export_event(failed[-1], tracer=tracer)
+    _, attrs = tracer.events[0]
+    # A tool failure must not be exported as a successful application.
+    assert attrs.get("cp.outcome") == GovernanceOutcome.FAILED.value
+    assert attrs.get("cp.outcome") != GovernanceOutcome.APPLIED.value
     cp.close()

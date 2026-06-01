@@ -350,6 +350,7 @@ class GovernanceOutcome(StrEnum):
 
     ACCEPTED = "accepted"
     APPLIED = "applied"
+    FAILED = "failed"
     DENIED = "denied"
     TIMEOUT = "timeout"
     STALE_TARGET = "stale-target"
