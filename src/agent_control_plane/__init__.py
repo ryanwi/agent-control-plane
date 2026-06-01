@@ -45,6 +45,9 @@ from agent_control_plane.engine.session_manager import SessionManager
 from agent_control_plane.engine.session_risk_accumulator import SessionRiskAccumulator
 from agent_control_plane.engine.token_budget_tracker import TokenBudgetExhaustedError, TokenBudgetTracker
 from agent_control_plane.evaluators import (
+    EgressEvaluator,
+    EgressEvaluatorConfig,
+    EgressGrant,
     Evaluator,
     EvaluatorRegistry,
     EvaluatorResult,
@@ -506,6 +509,9 @@ __all__ = [
     "UnknownAppEventPolicy",
     "build_kill_switch_stack",
     "build_session_event_budget",
+    "EgressEvaluator",
+    "EgressEvaluatorConfig",
+    "EgressGrant",
     "Evaluator",
     "EvaluatorCondition",
     "EvaluatorRegistry",

@@ -50,6 +50,17 @@ This document defines the security posture of `agent-control-plane` as an embedd
   `RegexResponseEvaluator` screens for injection/exfil markers and non-allowlisted outbound
   URLs; hosts can plug a small, fast LLM-backed classifier behind the same protocol.
 
+12. Over-broad egress allowlist (capability vs destination)
+- Threat: an allowlist entry is treated as "this destination is safe," so every operation
+  reachable at an allowlisted destination becomes permitted. Allowing an API host for one
+  operation implicitly allows every other operation reachable there — e.g. permitting a host
+  for messages also permits file uploads to that host under an attacker-supplied account.
+- Control: model egress as a *capability grant*, not a destination filter. `EgressEvaluator`
+  maps each destination to the specific capabilities granted there and fails closed on both
+  an unknown destination and a granted destination invoked with an ungranted capability.
+  Note that `DefaultAssetClassifier` is only a coarse destination filter (substring match on
+  the resource id); it answers "is this asset in scope," not "which operation is permitted."
+
 ## Zero Trust integration guidance
 
 - Authenticate every caller at the app edge (OIDC/JWT/service credentials).

@@ -42,7 +42,14 @@ class RiskClassifier(Protocol):
 
 
 class DefaultAssetClassifier:
-    """Default implementation using pattern matching."""
+    """Default implementation using substring pattern matching on the resource id.
+
+    This is a coarse *destination filter* (does the resource id contain a known pattern),
+    not a *capability grant*. It answers "is this asset in scope" but says nothing about
+    which operations are permitted against it. For egress where reaching an allowlisted
+    destination must not implicitly permit every operation there, use ``EgressEvaluator``,
+    which grants specific capabilities per destination.
+    """
 
     def __init__(self, patterns: frozenset[str] | None = None) -> None:
         self._patterns = patterns or frozenset()

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Egress capability-grant evaluator** — built-in `EgressEvaluator` (+ `EgressEvaluatorConfig`, `EgressGrant`) models egress as a *capability grant* rather than a destination filter. Reaching an allowlisted destination is necessary but not sufficient: the specific capability exercised at that destination must also be granted, so allowing a host for one operation does not implicitly permit every other operation reachable there. Each `EgressGrant` maps a destination (host or URL; subdomain matching configurable) to the capabilities permitted there; the evaluator fails closed on an unknown destination and on a granted destination invoked with an ungranted capability. `destination_field`/`capability_field` select which proposal attributes carry the destination and capability (defaults `resource_id`/`decision`). Plugs into the existing async `Evaluator` framework (registry, condition trees, parallel evaluation).
+- Documented (security_model.md) that `DefaultAssetClassifier` is a coarse destination filter (substring match on the resource id), not a capability grant; use `EgressEvaluator` where reaching a destination must not implicitly permit every operation there.
+
 ## [0.16.0] - 2026-06-01
 
 ### Added

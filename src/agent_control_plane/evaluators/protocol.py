@@ -46,6 +46,9 @@ class ResponseEvaluator(Protocol):
     @property
     def name(self) -> str: ...
 
+    @property
+    def config_schema(self) -> type[BaseModel] | None: ...
+
     def evaluate_response(
         self, proposal: ActionProposal, output: Mapping[str, Any], policy: PolicySnapshot
     ) -> EvaluatorResult: ...
