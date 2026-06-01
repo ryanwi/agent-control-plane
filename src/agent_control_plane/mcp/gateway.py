@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from agent_control_plane.evaluators.protocol import ResponseEvaluator
@@ -21,7 +22,7 @@ from agent_control_plane.engine.budget_tracker import BudgetExhaustedError
 from agent_control_plane.engine.policy_engine import PolicyEngine
 from agent_control_plane.models.registry import ModelRegistry
 from agent_control_plane.storage.sqlalchemy_sync import SyncSqlAlchemyUnitOfWork
-from agent_control_plane.sync import DictEventMapper, MappedEvent, SyncControlPlane
+from agent_control_plane.sync import MappedEvent, SyncControlPlane
 from agent_control_plane.types.enums import (
     ActionName,
     ActionTier,
@@ -39,9 +40,24 @@ from agent_control_plane.types.proposals import ActionProposal
 
 logger = logging.getLogger(__name__)
 
-# Sanitized category persisted in TOOL_RESULT_REJECTED events in place of the evaluator's
-# free-text reason, which may echo screened tool output.
-_REJECTION_CATEGORY = "response_evaluator_denied"
+
+class ToolResultRejectedPayload(BaseModel):
+    """Typed payload for TOOL_RESULT_REJECTED events.
+
+    ``reason`` is a fixed literal rather than a free-text string: the evaluator's
+    free-text reason may echo screened tool output, so only a sanitized category is
+    persisted. See docs/security_model.md threat scenario 11.
+    """
+
+    tool_name: str
+    evaluator: str
+    reason: Literal["response_evaluator_denied"] = "response_evaluator_denied"
+
+
+@dataclass
+class _RejectionContext:
+    evaluator: str
+    reason: str
 
 
 class McpGovernanceError(RuntimeError):
@@ -149,24 +165,27 @@ class McpGatewayConfig(BaseModel):
 
 
 class McpEventMapper:
-    """Maps MCP app-events to control-plane EventKind values."""
+    """Maps MCP app-events to control-plane EventKind values, including state_bearing flags."""
 
-    def __init__(self) -> None:
-        self._mapper = DictEventMapper(
-            {
-                McpEventName.TOOL_CALL_RECEIVED.value: EventKind.CYCLE_STARTED,
-                McpEventName.TOOL_CALL_ALLOWED.value: EventKind.RISK_ASSESSED,
-                McpEventName.TOOL_CALL_BLOCKED.value: EventKind.APPROVAL_DENIED,
-                McpEventName.TOOL_CALL_APPROVAL_REQUIRED.value: EventKind.APPROVAL_REQUESTED,
-                McpEventName.TOOL_CALL_EXECUTED.value: EventKind.EXECUTION_COMPLETED,
-                McpEventName.TOOL_CALL_FAILED.value: EventKind.EXECUTION_COMPLETED,
-                McpEventName.TOOL_CALL_STEERED.value: EventKind.RISK_ASSESSED,
-                McpEventName.TOOL_RESULT_REJECTED.value: EventKind.APPROVAL_DENIED,
-            }
-        )
+    # (event_kind, state_bearing) — state_bearing=True means the event is part of the
+    # durable audit trail and must not be silently dropped on failure.
+    _MAPPING: ClassVar[dict[str, tuple[EventKind, bool]]] = {
+        McpEventName.TOOL_CALL_RECEIVED.value: (EventKind.CYCLE_STARTED, False),
+        McpEventName.TOOL_CALL_ALLOWED.value: (EventKind.RISK_ASSESSED, False),
+        McpEventName.TOOL_CALL_BLOCKED.value: (EventKind.APPROVAL_DENIED, False),
+        McpEventName.TOOL_CALL_APPROVAL_REQUIRED.value: (EventKind.APPROVAL_REQUESTED, False),
+        McpEventName.TOOL_CALL_EXECUTED.value: (EventKind.EXECUTION_COMPLETED, False),
+        McpEventName.TOOL_CALL_FAILED.value: (EventKind.EXECUTION_COMPLETED, False),
+        McpEventName.TOOL_CALL_STEERED.value: (EventKind.RISK_ASSESSED, False),
+        McpEventName.TOOL_RESULT_REJECTED.value: (EventKind.APPROVAL_DENIED, True),
+    }
 
     def map_event(self, event_name: str, payload: Mapping[str, Any]) -> MappedEvent | None:
-        return self._mapper.map_event(event_name, payload)
+        entry = self._MAPPING.get(event_name.strip().lower())
+        if entry is None:
+            return None
+        event_kind, state_bearing = entry
+        return MappedEvent(event_kind=event_kind, payload=dict(payload), state_bearing=state_bearing)
 
 
 class McpGateway:
@@ -336,27 +355,23 @@ class McpGateway:
 
         rejection = self._inspect_response(proposal, result)
         if rejection is not None:
-            evaluator_name, reason = rejection
             # The evaluator's free-text reason may be derived from the screened output, so it
-            # is kept out of the persisted (state-bearing) event and the caller-facing error.
-            # It is logged locally for operators; the event records only the evaluator name and
-            # a sanitized category. See docs/security_model.md threat scenario 11.
-            logger.warning("Tool output rejected by response evaluator %r: %s", evaluator_name, reason)
+            # is kept out of the persisted event and the caller-facing error; only the evaluator
+            # name and a sanitized category are recorded. See docs/security_model.md threat 11.
+            logger.warning("Tool output rejected by response evaluator %r: %s", rejection.evaluator, rejection.reason)
             self._emit(
                 session_id,
                 McpEventName.TOOL_RESULT_REJECTED,
-                {
-                    "tool_name": context.tool_name,
-                    "evaluator": evaluator_name,
-                    "reason": _REJECTION_CATEGORY,
-                },
+                ToolResultRejectedPayload(
+                    tool_name=context.tool_name,
+                    evaluator=rejection.evaluator,
+                ).model_dump(),
                 correlation_id=context.correlation_id,
                 idempotency_key=context.idempotency_key,
-                state_bearing=True,
             )
             raise ToolResultRejectedError(
-                f"Tool output rejected by response evaluator: {evaluator_name}",
-                evaluator=evaluator_name,
+                f"Tool output rejected by response evaluator: {rejection.evaluator}",
+                evaluator=rejection.evaluator,
             )
 
         self._emit(
@@ -372,8 +387,8 @@ class McpGateway:
         )
         return result
 
-    def _inspect_response(self, proposal: ActionProposal, result: ToolCallResult) -> tuple[str, str] | None:
-        """Screen tool output through response evaluators. Returns (evaluator, reason) on deny.
+    def _inspect_response(self, proposal: ActionProposal, result: ToolCallResult) -> _RejectionContext | None:
+        """Screen tool output through response evaluators. Returns a denial context on deny.
 
         Fail-closed: an evaluator that raises is treated as a denial. Cost is recorded by the
         caller regardless — the tool already ran — but the screened payload never reaches the
@@ -384,9 +399,9 @@ class McpGateway:
                 outcome = evaluator.evaluate_response(proposal, result.output, self._config.policy_snapshot)
             except Exception as exc:  # fail-closed on evaluator error
                 logger.warning("Response evaluator %r raised (fail-closed): %s", evaluator.name, exc)
-                return evaluator.name, f"Response evaluator error: {exc}"
+                return _RejectionContext(evaluator=evaluator.name, reason=f"Response evaluator error: {exc}")
             if not outcome.allow:
-                return evaluator.name, outcome.reason
+                return _RejectionContext(evaluator=evaluator.name, reason=outcome.reason)
         return None
 
     def _resolve_session_id(self, context: ToolCallContext) -> UUID:
