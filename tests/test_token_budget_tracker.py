@@ -69,40 +69,40 @@ class TestComputeWindow:
         from datetime import UTC, datetime
 
         now = datetime(2026, 3, 19, 14, 30, 0, tzinfo=UTC)
-        start, end = _compute_window(BudgetPeriod.DAILY, now)
-        assert start.hour == 0 and start.minute == 0
-        assert start.day == 19
-        assert end.day == 20
+        window = _compute_window(BudgetPeriod.DAILY, now)
+        assert window.start.hour == 0 and window.start.minute == 0
+        assert window.start.day == 19
+        assert window.end.day == 20
 
     def test_weekly_window_monday(self) -> None:
         from datetime import UTC, datetime
 
         # 2026-03-19 is a Thursday
         now = datetime(2026, 3, 19, 14, 30, 0, tzinfo=UTC)
-        start, _end = _compute_window(BudgetPeriod.WEEKLY, now)
-        assert start.weekday() == 0  # Monday
-        assert start.day == 16
+        window = _compute_window(BudgetPeriod.WEEKLY, now)
+        assert window.start.weekday() == 0  # Monday
+        assert window.start.day == 16
 
     def test_monthly_window(self) -> None:
         from datetime import UTC, datetime
 
         now = datetime(2026, 3, 19, 14, 30, 0, tzinfo=UTC)
-        start, end = _compute_window(BudgetPeriod.MONTHLY, now)
-        assert start.day == 1
-        assert end.month == 4
+        window = _compute_window(BudgetPeriod.MONTHLY, now)
+        assert window.start.day == 1
+        assert window.end.month == 4
 
     def test_monthly_december(self) -> None:
         from datetime import UTC, datetime
 
         now = datetime(2026, 12, 15, 0, 0, 0, tzinfo=UTC)
-        _start, end = _compute_window(BudgetPeriod.MONTHLY, now)
-        assert end.year == 2027
-        assert end.month == 1
+        window = _compute_window(BudgetPeriod.MONTHLY, now)
+        assert window.end.year == 2027
+        assert window.end.month == 1
 
     def test_unlimited_window(self) -> None:
-        start, end = _compute_window(BudgetPeriod.UNLIMITED)
-        assert start.year == 2000
-        assert end.year == 9999
+        window = _compute_window(BudgetPeriod.UNLIMITED)
+        assert window.start.year == 2000
+        assert window.end.year == 9999
 
 
 class TestCheckBudget:

@@ -245,7 +245,7 @@ class McpGateway:
         proposal = self._build_proposal(context, session_id, action)
         risk_level = self._policy_engine.classify_risk_level(proposal)
         tier = self._policy_engine.classify_action_tier(proposal, risk_level)
-        reason, resolution = self._policy_engine.build_routing_reason(proposal, risk_level, tier)
+        routing = self._policy_engine.build_routing_reason(proposal, risk_level, tier)
 
         if tier == ActionTier.BLOCKED:
             self._emit(
@@ -253,13 +253,13 @@ class McpGateway:
                 McpEventName.TOOL_CALL_BLOCKED,
                 {
                     "tool_name": context.tool_name,
-                    "reason": reason,
-                    "resolution_step": resolution.value,
+                    "reason": routing.reason,
+                    "resolution_step": routing.resolution_step.value,
                 },
                 correlation_id=context.correlation_id,
                 idempotency_key=context.idempotency_key,
             )
-            raise PolicyDeniedError(reason)
+            raise PolicyDeniedError(routing.reason)
 
         if tier == ActionTier.ALWAYS_APPROVE:
             ticket_id = self._create_approval_request(session_id, proposal)
@@ -269,7 +269,7 @@ class McpGateway:
                 {
                     "tool_name": context.tool_name,
                     "ticket_id": str(ticket_id),
-                    "reason": reason,
+                    "reason": routing.reason,
                 },
                 correlation_id=context.correlation_id,
                 idempotency_key=context.idempotency_key,
@@ -283,14 +283,14 @@ class McpGateway:
                 McpEventName.TOOL_CALL_STEERED,
                 {
                     "tool_name": context.tool_name,
-                    "reason": reason,
+                    "reason": routing.reason,
                     "guidance": steering_ctx.guidance,
                     "suggested_actions": [str(a) for a in steering_ctx.suggested_actions],
                 },
                 correlation_id=context.correlation_id,
                 idempotency_key=context.idempotency_key,
             )
-            raise SteeringRequiredError("Action requires steering", steering=steering_ctx, reason=reason)
+            raise SteeringRequiredError("Action requires steering", steering=steering_ctx, reason=routing.reason)
 
         if not self._cp.check_budget(session_id, cost=context.estimated_cost, action_count=1):
             self._emit(
@@ -313,7 +313,7 @@ class McpGateway:
                 "tool_name": context.tool_name,
                 "tier": tier.value,
                 "risk_level": risk_level.value,
-                "resolution_step": resolution.value,
+                "resolution_step": routing.resolution_step.value,
             },
             correlation_id=context.correlation_id,
             idempotency_key=context.idempotency_key,

@@ -58,6 +58,7 @@ Higher-level entry points: `McpGateway` (MCP tool calls) and `SyncControlPlane` 
 - Don't bypass control engines for state transitions — always go through the engine API
 - Ruff and mypy config lives in `pyproject.toml` — run `make check` to verify
 - Tests use `pytest-asyncio` with `asyncio_mode = "auto"`
+- Prefer frozen dataclasses over anonymous tuples wherever fields have distinct semantic meaning — return types, mapping values, collection elements, etc. (no linter enforces this — enforce in review)
 
 ## Further docs
 

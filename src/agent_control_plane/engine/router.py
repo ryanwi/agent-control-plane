@@ -56,7 +56,7 @@ class ProposalRouter:
         can_auto = await self.policy_engine.can_auto_approve_with_tree(proposal, risk_level)
         tier = self.policy_engine.classify_action_tier(proposal, risk_level, can_auto_approve=can_auto)
 
-        reason, resolution = self.policy_engine.build_routing_reason(proposal, risk_level, tier)
+        routing = self.policy_engine.build_routing_reason(proposal, risk_level, tier)
 
         steering = None
         if tier == ActionTier.STEER:
@@ -69,8 +69,8 @@ class ProposalRouter:
         decision = RoutingDecision(
             tier=tier,
             risk_level=risk_level,
-            reason=reason,
-            resolution_step=resolution,
+            reason=routing.reason,
+            resolution_step=routing.resolution_step,
             steering=steering,
         )
 
@@ -79,6 +79,6 @@ class ProposalRouter:
             proposal.id,
             tier.value,
             risk_level.value,
-            resolution,
+            routing.resolution_step,
         )
         return decision

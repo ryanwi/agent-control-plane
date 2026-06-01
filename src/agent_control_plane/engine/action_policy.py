@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from agent_control_plane.types.enums import ActionName, ActionTier, ActionValue, RiskLevel, RoutingResolutionStep
@@ -11,6 +12,14 @@ from agent_control_plane.types.proposals import ActionProposal
 
 if TYPE_CHECKING:
     from agent_control_plane.types.steering import SteeringContext
+
+
+@dataclass(frozen=True)
+class RoutingReason:
+    """The human-readable rationale and classification step for a routing decision."""
+
+    reason: str
+    resolution_step: RoutingResolutionStep
 
 
 class ActionPolicyHandler(ABC):
@@ -31,7 +40,7 @@ class ActionPolicyHandler(ABC):
         proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, RoutingResolutionStep]: ...
+    ) -> RoutingReason: ...
 
 
 class BlockedActionHandler(ActionPolicyHandler):
@@ -49,10 +58,10 @@ class BlockedActionHandler(ActionPolicyHandler):
         proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, RoutingResolutionStep]:
-        return (
-            f"Action blocked by policy (resource={proposal.resource_id})",
-            RoutingResolutionStep.EXPLICIT_ASSIGNMENT,
+    ) -> RoutingReason:
+        return RoutingReason(
+            reason=f"Action blocked by policy (resource={proposal.resource_id})",
+            resolution_step=RoutingResolutionStep.EXPLICIT_ASSIGNMENT,
         )
 
 
@@ -62,11 +71,11 @@ class UnknownActionHandler(BlockedActionHandler):
         proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, RoutingResolutionStep]:
+    ) -> RoutingReason:
         action_value = proposal.decision.value if isinstance(proposal.decision, ActionName) else proposal.decision
-        return (
-            f"Unknown action blocked by policy (action={action_value})",
-            RoutingResolutionStep.EXPLICIT_ASSIGNMENT,
+        return RoutingReason(
+            reason=f"Unknown action blocked by policy (action={action_value})",
+            resolution_step=RoutingResolutionStep.EXPLICIT_ASSIGNMENT,
         )
 
 
@@ -85,10 +94,10 @@ class AlwaysApproveActionHandler(ActionPolicyHandler):
         proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, RoutingResolutionStep]:
-        return (
-            f"{risk_level.value.upper()} risk requires human approval",
-            RoutingResolutionStep.POLICY_LIST_MATCH,
+    ) -> RoutingReason:
+        return RoutingReason(
+            reason=f"{risk_level.value.upper()} risk requires human approval",
+            resolution_step=RoutingResolutionStep.POLICY_LIST_MATCH,
         )
 
 
@@ -107,15 +116,15 @@ class AutoApproveActionHandler(ActionPolicyHandler):
         proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, RoutingResolutionStep]:
+    ) -> RoutingReason:
         if tier == ActionTier.AUTO_APPROVE:
-            return (
-                f"Policy list auto-approve (score={proposal.score}, weight={proposal.weight})",
-                RoutingResolutionStep.POLICY_LIST_MATCH,
+            return RoutingReason(
+                reason=f"Policy list auto-approve (score={proposal.score}, weight={proposal.weight})",
+                resolution_step=RoutingResolutionStep.POLICY_LIST_MATCH,
             )
-        return (
-            "Auto-approve disabled by policy constraints; requires human approval",
-            RoutingResolutionStep.POLICY_LIST_MATCH,
+        return RoutingReason(
+            reason="Auto-approve disabled by policy constraints; requires human approval",
+            resolution_step=RoutingResolutionStep.POLICY_LIST_MATCH,
         )
 
 
@@ -136,10 +145,10 @@ class SteeringActionHandler(ActionPolicyHandler):
         proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, RoutingResolutionStep]:
-        return (
-            f"Action steered by policy (resource={proposal.resource_id})",
-            RoutingResolutionStep.POLICY_LIST_MATCH,
+    ) -> RoutingReason:
+        return RoutingReason(
+            reason=f"Action steered by policy (resource={proposal.resource_id})",
+            resolution_step=RoutingResolutionStep.POLICY_LIST_MATCH,
         )
 
     def build_steering_context(
@@ -180,15 +189,15 @@ class DefaultRiskBasedHandler(ActionPolicyHandler):
         proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, RoutingResolutionStep]:
+    ) -> RoutingReason:
         if tier == ActionTier.AUTO_APPROVE:
-            return (
-                f"LOW risk auto-approve (score={proposal.score}, weight={proposal.weight})",
-                RoutingResolutionStep.RISK_TIER_MATCH,
+            return RoutingReason(
+                reason=f"LOW risk auto-approve (score={proposal.score}, weight={proposal.weight})",
+                resolution_step=RoutingResolutionStep.RISK_TIER_MATCH,
             )
-        return (
-            f"{risk_level.value.upper()} risk requires human approval",
-            RoutingResolutionStep.RISK_TIER_MATCH,
+        return RoutingReason(
+            reason=f"{risk_level.value.upper()} risk requires human approval",
+            resolution_step=RoutingResolutionStep.RISK_TIER_MATCH,
         )
 
 

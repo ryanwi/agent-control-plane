@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -15,6 +16,20 @@ if TYPE_CHECKING:
     from agent_control_plane.types.proposals import ActionProposal
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _ScoreEscalation:
+    risk: RiskLevel
+    reasons: list[str] = field(default_factory=list)
+
+
+@dataclass
+class _PatternEscalation:
+    risk: RiskLevel | None
+    reasons: list[str] = field(default_factory=list)
+    matched_names: list[str] = field(default_factory=list)
+
 
 _SCORE_WEIGHTS: dict[RiskLevel, Decimal] = {
     RiskLevel.LOW: Decimal("1.0"),
@@ -70,23 +85,23 @@ class SessionRiskAccumulator:
         new_count = state.action_count + 1
 
         # Check score-based escalation
-        score_risk, score_reasons = self._check_score_escalation(new_score, action_risk_level)
+        score = self._check_score_escalation(new_score, action_risk_level)
 
         # Check pattern-based escalation against updated window
-        pattern_risk, pattern_reasons, matched_pattern_names = self._check_pattern_escalation(new_recent)
+        pattern = self._check_pattern_escalation(new_recent)
 
         # Determine final escalated risk (max of all sources)
-        candidates = [action_risk_level, score_risk]
-        if pattern_risk is not None:
-            candidates.append(pattern_risk)
+        candidates = [action_risk_level, score.risk]
+        if pattern.risk is not None:
+            candidates.append(pattern.risk)
         escalated_risk = max(candidates, key=lambda r: r.rank)
 
-        all_reasons = score_reasons + pattern_reasons
+        all_reasons = score.reasons + pattern.reasons
         was_escalated = escalated_risk.rank > action_risk_level.rank
 
         # Update detected_patterns list using matches from the pattern check
         new_detected = list(state.detected_patterns)
-        for name in matched_pattern_names:
+        for name in pattern.matched_names:
             if name not in new_detected:
                 new_detected.append(name)
 
@@ -136,33 +151,33 @@ class SessionRiskAccumulator:
     def _score_contribution(self, risk_level: RiskLevel) -> Decimal:
         return _SCORE_WEIGHTS[risk_level]
 
-    def _check_score_escalation(
-        self, accumulated: Decimal, current_action_risk: RiskLevel
-    ) -> tuple[RiskLevel, list[str]]:
-        """Return the risk level implied by the accumulated score and any reasons."""
+    def _check_score_escalation(self, accumulated: Decimal, current_action_risk: RiskLevel) -> _ScoreEscalation:
         if accumulated >= self._score_threshold_high:
             level = RiskLevel.HIGH
             if level.rank > current_action_risk.rank:
-                return level, [f"Accumulated score {accumulated} >= high threshold {self._score_threshold_high}"]
+                return _ScoreEscalation(
+                    risk=level,
+                    reasons=[f"Accumulated score {accumulated} >= high threshold {self._score_threshold_high}"],
+                )
         elif accumulated >= self._score_threshold_medium:
             level = RiskLevel.MEDIUM
             if level.rank > current_action_risk.rank:
-                return level, [f"Accumulated score {accumulated} >= medium threshold {self._score_threshold_medium}"]
-        return current_action_risk, []
+                return _ScoreEscalation(
+                    risk=level,
+                    reasons=[f"Accumulated score {accumulated} >= medium threshold {self._score_threshold_medium}"],
+                )
+        return _ScoreEscalation(risk=current_action_risk)
 
-    def _check_pattern_escalation(self, recent_actions: list[str]) -> tuple[RiskLevel | None, list[str], list[str]]:
-        """Return the highest escalation level, reasons, and matched pattern names."""
-        matched_level: RiskLevel | None = None
-        reasons: list[str] = []
-        matched_names: list[str] = []
+    def _check_pattern_escalation(self, recent_actions: list[str]) -> _PatternEscalation:
+        result = _PatternEscalation(risk=None)
         for p in self._patterns:
             window = recent_actions[-p.window_size :] if p.window_size > 0 else recent_actions
             if _is_contiguous_subsequence(p.action_sequence, window):
-                reasons.append(f"Pattern matched: {p.name}")
-                matched_names.append(p.name)
-                if matched_level is None or p.escalate_to.rank > matched_level.rank:
-                    matched_level = p.escalate_to
-        return matched_level, reasons, matched_names
+                result.reasons.append(f"Pattern matched: {p.name}")
+                result.matched_names.append(p.name)
+                if result.risk is None or p.escalate_to.rank > result.risk.rank:
+                    result.risk = p.escalate_to
+        return result
 
     def _get_or_create_state(self, session_id: UUID) -> SessionRiskState:
         if session_id not in self._states:

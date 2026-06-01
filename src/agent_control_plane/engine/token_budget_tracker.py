@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
@@ -28,8 +29,13 @@ class TokenBudgetExhaustedError(Exception):
     """Raised when an identity's token budget is exhausted."""
 
 
-def _compute_window(period: BudgetPeriod, now: datetime | None = None) -> tuple[datetime, datetime]:
-    """Compute window_start and window_end for the given period."""
+@dataclass(frozen=True)
+class _BudgetWindow:
+    start: datetime
+    end: datetime
+
+
+def _compute_window(period: BudgetPeriod, now: datetime | None = None) -> _BudgetWindow:
     now = now or datetime.now(UTC)
     if period == BudgetPeriod.DAILY:
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -47,7 +53,7 @@ def _compute_window(period: BudgetPeriod, now: datetime | None = None) -> tuple[
         # UNLIMITED — use a very wide window
         start = datetime(2000, 1, 1, tzinfo=UTC)
         end = datetime(9999, 12, 31, tzinfo=UTC)
-    return start, end
+    return _BudgetWindow(start=start, end=end)
 
 
 class TokenBudgetTracker:
@@ -120,9 +126,9 @@ class TokenBudgetTracker:
         # in-process tokenizer) would otherwise leave the ledger silently
         # underreporting blocked calls that already incurred provider cost.
         for config in configs:
-            window_start, window_end = _compute_window(config.period)
+            window = _compute_window(config.period)
             await self._repo.increment_usage(
-                config.id, window_start, window_end, usage.total_tokens, usage.estimated_cost_usd
+                config.id, window.start, window.end, usage.total_tokens, usage.estimated_cost_usd
             )
 
         await self._repo.record_usage(session_id, usage, identity)
@@ -157,8 +163,8 @@ class TokenBudgetTracker:
         budget_states: list[TokenBudgetState] = []
 
         for config in configs:
-            window_start, window_end = _compute_window(config.period)
-            state = await self._repo.get_budget_state(config.id, window_start)
+            window = _compute_window(config.period)
+            state = await self._repo.get_budget_state(config.id, window.start)
 
             used_tokens = state.used_tokens if state else 0
             used_cost = state.used_cost_usd if state else Decimal("0")
@@ -192,8 +198,8 @@ class TokenBudgetTracker:
                     config_id=config.id,
                     identity=identity,
                     period=config.period,
-                    window_start=window_start,
-                    window_end=window_end,
+                    window_start=window.start,
+                    window_end=window.end,
                     used_tokens=used_tokens,
                     used_cost_usd=used_cost,
                     remaining_tokens=remaining_tokens,
@@ -212,8 +218,8 @@ class TokenBudgetTracker:
         configs = await self._repo.list_budget_configs(identity)
         states: list[TokenBudgetState] = []
         for config in configs:
-            window_start, window_end = _compute_window(config.period)
-            state = await self._repo.get_budget_state(config.id, window_start)
+            window = _compute_window(config.period)
+            state = await self._repo.get_budget_state(config.id, window.start)
             if state is not None:
                 states.append(state)
             else:
@@ -224,8 +230,8 @@ class TokenBudgetTracker:
                         config_id=config.id,
                         identity=identity,
                         period=config.period,
-                        window_start=window_start,
-                        window_end=window_end,
+                        window_start=window.start,
+                        window_end=window.end,
                         used_tokens=0,
                         used_cost_usd=Decimal("0"),
                         remaining_tokens=remaining_tokens,

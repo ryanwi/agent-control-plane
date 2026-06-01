@@ -84,9 +84,9 @@ class TestSteeringActionHandler:
     def test_build_routing_reason(self):
         handler = SteeringActionHandler()
         proposal = _proposal()
-        reason, step = handler.build_routing_reason(proposal, RiskLevel.LOW, ActionTier.STEER)
-        assert "steered" in reason.lower()
-        assert step == RoutingResolutionStep.POLICY_LIST_MATCH
+        routing = handler.build_routing_reason(proposal, RiskLevel.LOW, ActionTier.STEER)
+        assert "steered" in routing.reason.lower()
+        assert routing.resolution_step == RoutingResolutionStep.POLICY_LIST_MATCH
 
     def test_build_steering_context_includes_suggestions(self):
         handler = SteeringActionHandler()
@@ -123,9 +123,9 @@ class TestPolicyEngineSteer:
     def test_steer_routing_reason(self):
         engine = PolicyEngine(_policy())
         proposal = _proposal(decision=ActionName.CHANGE_ADDRESS)
-        reason, step = engine.build_routing_reason(proposal, RiskLevel.LOW, ActionTier.STEER)
-        assert "steered" in reason.lower()
-        assert step == RoutingResolutionStep.POLICY_LIST_MATCH
+        routing = engine.build_routing_reason(proposal, RiskLevel.LOW, ActionTier.STEER)
+        assert "steered" in routing.reason.lower()
+        assert routing.resolution_step == RoutingResolutionStep.POLICY_LIST_MATCH
 
     def test_blocked_takes_precedence_over_steer(self):
         """If an action is in both blocked and steer lists, blocked wins."""

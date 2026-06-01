@@ -6,7 +6,7 @@ import logging
 from decimal import Decimal
 from typing import TYPE_CHECKING, Protocol
 
-from agent_control_plane.engine.action_policy import ActionPolicyHandler, ActionPolicyRegistry
+from agent_control_plane.engine.action_policy import ActionPolicyHandler, ActionPolicyRegistry, RoutingReason
 from agent_control_plane.types.enums import (
     ActionName,
     ActionTier,
@@ -171,12 +171,15 @@ class PolicyEngine:
         proposal: ActionProposal,
         risk_level: RiskLevel,
         tier: ActionTier,
-    ) -> tuple[str, RoutingResolutionStep]:
+    ) -> RoutingReason:
         """Build routing reason + resolution step via polymorphic handlers."""
         if not self._passes_asset_scope(proposal):
-            return (
-                f"Action blocked by asset scope (resource={proposal.resource_id}, scope={self.policy.asset_scope})",
-                RoutingResolutionStep.CAPABILITY_MATCH,
+            return RoutingReason(
+                reason=(
+                    f"Action blocked by asset scope"
+                    f" (resource={proposal.resource_id}, scope={self.policy.asset_scope})"
+                ),
+                resolution_step=RoutingResolutionStep.CAPABILITY_MATCH,
             )
         handler = self.get_action_handler(proposal)
         return handler.build_routing_reason(proposal, risk_level, tier)
