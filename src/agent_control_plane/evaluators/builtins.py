@@ -83,7 +83,9 @@ class ListEvaluator:
         return EvaluatorResult(allow=True, reason="List check passed")
 
 
-_URL_RE = re.compile(r"https?://([^/\s\"'<>]+)", re.IGNORECASE)
+# Match absolute (http/https) and protocol-relative (//host) URLs so exfil destinations
+# cannot bypass output screening by dropping the scheme.
+_URL_RE = re.compile(r"(?:https?:)?//([^/\s\"'<>]+)", re.IGNORECASE)
 
 
 def _iter_strings(value: object) -> Iterator[str]:
