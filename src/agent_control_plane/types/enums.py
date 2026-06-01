@@ -313,6 +313,7 @@ class McpEventName(StrEnum):
     TOOL_CALL_EXECUTED = "tool_call_executed"
     TOOL_CALL_FAILED = "tool_call_failed"
     TOOL_CALL_STEERED = "tool_call_steered"
+    TOOL_RESULT_REJECTED = "tool_result_rejected"
 
 
 class GoalStatus(StrEnum):

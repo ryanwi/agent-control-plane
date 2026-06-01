@@ -35,6 +35,21 @@ This document defines the security posture of `agent-control-plane` as an embedd
 5. Lost auditability during failures
 - Control: state-bearing events fail closed; non-state-bearing telemetry may buffer.
 
+11. Malicious or poisoned tool output (prompt injection / exfiltration)
+- Threat: a trusted tool returns attacker-controlled content (e.g. a poisoned README, an
+  injected instruction, or an exfiltration URL) that would re-enter the agent's context.
+  Pre-execution policy cannot catch this — the request looked benign; the danger is in the
+  response.
+- Control: optional `ResponseEvaluator`s run on `McpGateway` *after* execution and *before*
+  output is returned. Any deny fails closed — `ToolResultRejectedError` is raised (carrying
+  only the evaluator name), the payload is withheld from the caller, and a state-bearing
+  `TOOL_RESULT_REJECTED` event records the evaluator name and a fixed sanitized category. The
+  evaluator's free-text reason may echo screened output, so it is never persisted to the
+  event store nor surfaced in the caller error; it is written only to the local operator log.
+  The tool's cost is still charged: the external call genuinely ran. The built-in
+  `RegexResponseEvaluator` screens for injection/exfil markers and non-allowlisted outbound
+  URLs; hosts can plug a small, fast LLM-backed classifier behind the same protocol.
+
 ## Zero Trust integration guidance
 
 - Authenticate every caller at the app edge (OIDC/JWT/service credentials).

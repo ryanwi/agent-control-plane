@@ -15,6 +15,7 @@ from .gateway import (
     ToolExecutionError,
     ToolExecutor,
     ToolPolicyMap,
+    ToolResultRejectedError,
 )
 
 __all__ = [
@@ -32,4 +33,5 @@ __all__ = [
     "ToolExecutionError",
     "ToolExecutor",
     "ToolPolicyMap",
+    "ToolResultRejectedError",
 ]

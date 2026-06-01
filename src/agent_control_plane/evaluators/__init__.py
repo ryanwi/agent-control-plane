@@ -1,7 +1,14 @@
 """Pluggable evaluator subpackage."""
 
-from .builtins import ListEvaluator, ListEvaluatorConfig, RegexEvaluator, RegexEvaluatorConfig
-from .protocol import Evaluator, EvaluatorResult
+from .builtins import (
+    ListEvaluator,
+    ListEvaluatorConfig,
+    RegexEvaluator,
+    RegexEvaluatorConfig,
+    RegexResponseEvaluator,
+    RegexResponseEvaluatorConfig,
+)
+from .protocol import Evaluator, EvaluatorResult, ResponseEvaluator
 from .registry import EvaluatorRegistry
 
 __all__ = [
@@ -12,4 +19,7 @@ __all__ = [
     "ListEvaluatorConfig",
     "RegexEvaluator",
     "RegexEvaluatorConfig",
+    "RegexResponseEvaluator",
+    "RegexResponseEvaluatorConfig",
+    "ResponseEvaluator",
 ]

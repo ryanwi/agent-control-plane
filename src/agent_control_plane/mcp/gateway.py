@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from agent_control_plane.evaluators.protocol import ResponseEvaluator
     from agent_control_plane.types.enums import RiskLevel
     from agent_control_plane.types.steering import SteeringContext
 from uuid import UUID
@@ -37,6 +38,10 @@ from agent_control_plane.types.policies import PolicySnapshot
 from agent_control_plane.types.proposals import ActionProposal
 
 logger = logging.getLogger(__name__)
+
+# Sanitized category persisted in TOOL_RESULT_REJECTED events in place of the evaluator's
+# free-text reason, which may echo screened tool output.
+_REJECTION_CATEGORY = "response_evaluator_denied"
 
 
 class McpGovernanceError(RuntimeError):
@@ -74,6 +79,18 @@ class SteeringRequiredError(McpGovernanceError):
 
 class ToolExecutionError(McpGovernanceError):
     """Raised when the underlying tool execution fails."""
+
+
+class ToolResultRejectedError(McpGovernanceError):
+    """Raised when a response evaluator rejects tool output before it re-enters context.
+
+    The tool ran and its cost is recorded, but the screened-out payload is withheld from
+    the caller (fail-closed). ``evaluator`` names the evaluator that denied.
+    """
+
+    def __init__(self, message: str, *, evaluator: str) -> None:
+        super().__init__(message)
+        self.evaluator = evaluator
 
 
 class ToolCallContext(BaseModel):
@@ -144,6 +161,7 @@ class McpEventMapper:
                 McpEventName.TOOL_CALL_EXECUTED.value: EventKind.EXECUTION_COMPLETED,
                 McpEventName.TOOL_CALL_FAILED.value: EventKind.EXECUTION_COMPLETED,
                 McpEventName.TOOL_CALL_STEERED.value: EventKind.RISK_ASSESSED,
+                McpEventName.TOOL_RESULT_REJECTED.value: EventKind.APPROVAL_DENIED,
             }
         )
 
@@ -162,6 +180,7 @@ class McpGateway:
         *,
         config: McpGatewayConfig | None = None,
         event_mapper: McpEventMapper | None = None,
+        response_evaluators: Sequence[ResponseEvaluator] | None = None,
     ) -> None:
         self._cp = control_plane
         self._executor = executor
@@ -169,6 +188,7 @@ class McpGateway:
         self._config = config or McpGatewayConfig()
         self._event_mapper = event_mapper or McpEventMapper()
         self._policy_engine = PolicyEngine(self._config.policy_snapshot)
+        self._response_evaluators: tuple[ResponseEvaluator, ...] = tuple(response_evaluators or ())
 
     def handle_tool_call(self, context: ToolCallContext) -> ToolCallResult:
         """Govern and execute an MCP tool call."""
@@ -314,6 +334,31 @@ class McpGateway:
             )
             raise BudgetDeniedError(str(exc)) from exc
 
+        rejection = self._inspect_response(proposal, result)
+        if rejection is not None:
+            evaluator_name, reason = rejection
+            # The evaluator's free-text reason may be derived from the screened output, so it
+            # is kept out of the persisted (state-bearing) event and the caller-facing error.
+            # It is logged locally for operators; the event records only the evaluator name and
+            # a sanitized category. See docs/security_model.md threat scenario 11.
+            logger.warning("Tool output rejected by response evaluator %r: %s", evaluator_name, reason)
+            self._emit(
+                session_id,
+                McpEventName.TOOL_RESULT_REJECTED,
+                {
+                    "tool_name": context.tool_name,
+                    "evaluator": evaluator_name,
+                    "reason": _REJECTION_CATEGORY,
+                },
+                correlation_id=context.correlation_id,
+                idempotency_key=context.idempotency_key,
+                state_bearing=True,
+            )
+            raise ToolResultRejectedError(
+                f"Tool output rejected by response evaluator: {evaluator_name}",
+                evaluator=evaluator_name,
+            )
+
         self._emit(
             session_id,
             McpEventName.TOOL_CALL_EXECUTED,
@@ -326,6 +371,23 @@ class McpGateway:
             idempotency_key=context.idempotency_key,
         )
         return result
+
+    def _inspect_response(self, proposal: ActionProposal, result: ToolCallResult) -> tuple[str, str] | None:
+        """Screen tool output through response evaluators. Returns (evaluator, reason) on deny.
+
+        Fail-closed: an evaluator that raises is treated as a denial. Cost is recorded by the
+        caller regardless — the tool already ran — but the screened payload never reaches the
+        caller when a denial is returned here.
+        """
+        for evaluator in self._response_evaluators:
+            try:
+                outcome = evaluator.evaluate_response(proposal, result.output, self._config.policy_snapshot)
+            except Exception as exc:  # fail-closed on evaluator error
+                logger.warning("Response evaluator %r raised (fail-closed): %s", evaluator.name, exc)
+                return evaluator.name, f"Response evaluator error: {exc}"
+            if not outcome.allow:
+                return evaluator.name, outcome.reason
+        return None
 
     def _resolve_session_id(self, context: ToolCallContext) -> UUID:
         if context.session_id is not None:
@@ -422,6 +484,7 @@ class McpGateway:
         *,
         correlation_id: UUID | None = None,
         idempotency_key: str | None = None,
+        state_bearing: bool | None = None,
     ) -> int | None:
         return self._cp.emit_app_event(
             session_id=session_id,
@@ -429,4 +492,5 @@ class McpGateway:
             payload=payload,
             mapper=self._event_mapper,
             unknown_policy=self._config.unknown_event_policy,
+            state_bearing=state_bearing,
         )

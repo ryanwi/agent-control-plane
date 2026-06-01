@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator, Mapping
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -78,3 +80,71 @@ class ListEvaluator:
             return EvaluatorResult(allow=False, reason=f"Value not in allowlist: {value}")
 
         return EvaluatorResult(allow=True, reason="List check passed")
+
+
+_URL_RE = re.compile(r"https?://([^/\s\"'<>]+)", re.IGNORECASE)
+
+
+def _iter_strings(value: object) -> Iterator[str]:
+    """Yield every string leaf in a nested mapping/sequence structure."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, Mapping):
+        for item in value.values():
+            yield from _iter_strings(item)
+    elif isinstance(value, list | tuple | set):
+        for item in value:
+            yield from _iter_strings(item)
+
+
+class RegexResponseEvaluatorConfig(BaseModel):
+    """Configuration for regex-based screening of tool output.
+
+    Screening is always deny-on-match: a matched pattern (or a non-allowlisted outbound
+    host) denies. There is no require-match mode — tool output is screened *for* danger,
+    not validated *against* a required shape.
+    """
+
+    patterns: list[str] = Field(default_factory=list)
+    url_allowlist: list[str] = Field(default_factory=list)
+
+
+class RegexResponseEvaluator:
+    """Screens tool *output* for injection/exfil markers and disallowed outbound URLs.
+
+    Walks the string leaves of the returned output mapping. Denies (fail-closed) when any
+    leaf matches a configured pattern (e.g. ``ignore (all )?previous instructions``,
+    credential shapes), or when ``url_allowlist`` is set and a leaf contains a URL whose
+    host is not allowlisted. The allowlist host check is the seam where first-class egress
+    capability-grant modeling can later plug in.
+    """
+
+    def __init__(self, config: RegexResponseEvaluatorConfig) -> None:
+        self._config = config
+        self._compiled = [re.compile(p, re.IGNORECASE) for p in config.patterns]
+        self._allowed_hosts = {h.strip().lower() for h in config.url_allowlist}
+
+    @property
+    def name(self) -> str:
+        return "regex_response"
+
+    @property
+    def config_schema(self) -> type[BaseModel] | None:
+        return RegexResponseEvaluatorConfig
+
+    def evaluate_response(
+        self, proposal: ActionProposal, output: Mapping[str, Any], policy: PolicySnapshot
+    ) -> EvaluatorResult:
+        for value in _iter_strings(output):
+            for pattern in self._compiled:
+                if pattern.search(value):
+                    return EvaluatorResult(allow=False, reason=f"Output matched screening pattern: {pattern.pattern}")
+            if self._allowed_hosts:
+                for match in _URL_RE.finditer(value):
+                    host = match.group(1).split(":", 1)[0].lower()
+                    if not self._host_allowed(host):
+                        return EvaluatorResult(allow=False, reason=f"Output references non-allowlisted host: {host}")
+        return EvaluatorResult(allow=True, reason="Response screening passed")
+
+    def _host_allowed(self, host: str) -> bool:
+        return any(host == allowed or host.endswith(f".{allowed}") for allowed in self._allowed_hosts)
