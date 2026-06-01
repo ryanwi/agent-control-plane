@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-06-01
+
 ### Added
 
 - **Tool-output inspection (response evaluators)** — `McpGateway` can now screen tool *return values* after execution and before they re-enter the agent's context, closing the gap where governance covered only the request. Tool output is an attack surface even when the tool is trusted (a poisoned README, an injected instruction, an exfiltration URL); pre-execution policy cannot catch it because the request looks benign.
