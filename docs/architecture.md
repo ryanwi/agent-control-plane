@@ -152,7 +152,7 @@ Current architecture (v0.6+):
 - **Model Registry**: Dynamic model resolution allows host applications to supply their own ORM classes while using standard mixins.
 - **Benchmark protocol hooks**: Deterministic benchmark types and runners support repeatable policy/config experiments.
 - **Policy interfaces**: `EvaluatorPolicy` and `GuardrailPolicy` protocols provide explicit extension seams for decision logic.
-- **Telemetry export helpers**: `export_event(...)` and `export_scorecard(...)` bridge control-plane records to tracing/metrics systems.
+- **Telemetry export helpers**: `export_event(...)` and `export_scorecard(...)` bridge control-plane records to tracing/metrics systems. `export_event` emits a `cp.`-namespaced attribute set (see below) that covers session identity, action identity, policy snapshot, and a `cp.outcome` derived from the event kind.
 
 Recommended backend posture:
 
@@ -164,6 +164,42 @@ Reliability contracts:
 - All control-plane mutations are expected to run in host-managed transactional boundaries.
 - `state_bearing=True` persistence failures are fail-closed and must block forward progress.
 - Non-state-bearing events can be buffered/observed as best effort and must not be treated as durable state commits.
+
+### Governance event attributes
+
+`export_event()` emits these attributes on every call (where present):
+
+| Attribute | Source | Notes |
+|---|---|---|
+| `cp.session_id` | `EventFrame.session_id` | Always present |
+| `cp.event_id` | `EventFrame.event_id` | Always present |
+| `cp.event_kind` | `EventFrame.event_kind` | Always present |
+| `cp.seq` | `EventFrame.seq` | Monotonic cursor within the session |
+| `cp.state_bearing` | `EventFrame.state_bearing` | Always present |
+| `cp.agent_id` | `EventFrame.agent_id` | When set |
+| `cp.correlation_id` | `EventFrame.correlation_id` | When set |
+| `cp.action_id` | `payload["action_id"]` or `payload["proposal_id"]` | When present |
+| `cp.policy_snapshot_id` | `payload["policy_snapshot_id"]` or `payload["policy_id"]` | When present |
+| `cp.runtime_kind` | `payload["runtime_kind"]` | When set by host app |
+| `cp.live_target_id` | `payload["live_target_id"]` | When set by host app |
+| `cp.cwd` | `payload["cwd"]` | When set by host app |
+| `cp.worktree` | `payload["worktree"]` | When set by host app |
+| `cp.project_id` | `payload["project_id"]` | When set by host app |
+| `cp.outcome` | Computed from `EventKind` + payload | See table below; omitted for informational events |
+
+**`cp.outcome` vocabulary** (`GovernanceOutcome` enum):
+
+| Outcome | EventKind(s) |
+|---|---|
+| `accepted` | `APPROVAL_GRANTED` |
+| `applied` | `EXECUTION_COMPLETED`, `PLAN_STEP_COMPLETED` |
+| `denied` | `APPROVAL_DENIED`, `EVALUATION_BLOCKED`, `GUARDRAIL_TOOL`, `GUARDRAIL_OUTPUT` |
+| `timeout` | `APPROVAL_TIMEOUT` |
+| `stale-target` | `LEASE_EXPIRED`; `HANDOFF_REJECTED` + `payload["stale_target"]` |
+| `wrong-session` | `HANDOFF_REJECTED` + `payload["wrong_session"]` |
+| `no-live-target` | `HANDOFF_REJECTED` + `payload["no_live_target"]` |
+
+For event kinds not listed, `cp.outcome` is omitted. Host apps can override by setting `payload["outcome"]` to any `GovernanceOutcome` value — useful for custom event kinds or execution-plane outcomes the library cannot infer.
 
 Future roadmap:
 

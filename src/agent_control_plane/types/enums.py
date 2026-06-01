@@ -345,6 +345,18 @@ class GuardrailPhase(StrEnum):
     OUTPUT = "output"
 
 
+class GovernanceOutcome(StrEnum):
+    """Outcome vocabulary for governance event telemetry export."""
+
+    ACCEPTED = "accepted"
+    APPLIED = "applied"
+    DENIED = "denied"
+    TIMEOUT = "timeout"
+    STALE_TARGET = "stale-target"
+    WRONG_SESSION = "wrong-session"
+    NO_LIVE_TARGET = "no-live-target"
+
+
 class ResilienceMode(StrEnum):
     """How the resilient facade handles errors."""
 
