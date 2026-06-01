@@ -86,11 +86,17 @@ _URL_RE = re.compile(r"https?://([^/\s\"'<>]+)", re.IGNORECASE)
 
 
 def _iter_strings(value: object) -> Iterator[str]:
-    """Yield every string leaf in a nested mapping/sequence structure."""
+    """Yield every string leaf in a nested mapping/sequence structure.
+
+    Mapping *keys* are screened as well as values: MCP tool output keys are strings that
+    re-enter the agent context (and surface in the ``output_keys`` success-audit payload),
+    so a malicious key must not bypass screening.
+    """
     if isinstance(value, str):
         yield value
     elif isinstance(value, Mapping):
-        for item in value.values():
+        for key, item in value.items():
+            yield from _iter_strings(key)
             yield from _iter_strings(item)
     elif isinstance(value, list | tuple | set):
         for item in value:
