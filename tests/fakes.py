@@ -140,6 +140,7 @@ class InMemoryEventRepository:
             agent_id=m.agent_id,
             correlation_id=m.correlation_id,
             payload=payload,
+            state_bearing=state_bearing,
             routing_decision=m.routing_decision,
             routing_reason=m.routing_reason,
         )
@@ -291,6 +292,7 @@ class InMemoryAgentRepository:
     def __init__(self) -> None:
         self._agents: dict[str, AgentMetadata] = {}
         self._delegations: list[DelegationProposal] = []
+        self._revocations: set[tuple[UUID, str]] = set()
 
     async def register_agent(self, agent: AgentMetadata) -> None:
         self._agents[agent.id] = agent
@@ -306,6 +308,15 @@ class InMemoryAgentRepository:
 
     async def record_delegation(self, delegation: DelegationProposal) -> None:
         self._delegations.append(delegation)
+
+    async def record_revocation(self, session_id: UUID, agent_id: str, reason: str) -> None:
+        self._revocations.add((session_id, agent_id))
+
+    async def clear_revocation(self, session_id: UUID, agent_id: str) -> None:
+        self._revocations.discard((session_id, agent_id))
+
+    async def is_agent_revoked(self, session_id: UUID, agent_id: str) -> bool:
+        return (session_id, agent_id) in self._revocations
 
 
 class InMemoryTokenBudgetRepository:

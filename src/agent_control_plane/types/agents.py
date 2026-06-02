@@ -12,6 +12,19 @@ from .enums import ActionValue, parse_action_name
 from .ids import AgentId
 
 
+class AgentSessionRevocation(BaseModel):
+    """A per-session revocation of an agent's authority.
+
+    Revokes one agent within one session without deregistering it globally or aborting the
+    whole session — the fine-grained alternative to deregister / kill switch.
+    """
+
+    session_id: UUID
+    agent_id: AgentId
+    reason: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class AgentCapability(BaseModel):
     """A specific action an agent is qualified to perform."""
 

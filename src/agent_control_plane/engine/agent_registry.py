@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from agent_control_plane.types.agents import AgentMetadata, DelegationProposal
+from agent_control_plane.types.enums import EventKind
 from agent_control_plane.types.ids import AgentId
 
 if TYPE_CHECKING:
+    from agent_control_plane.engine.event_store import EventStore
     from agent_control_plane.storage.protocols import AsyncAgentRepository
 
 logger = logging.getLogger(__name__)
@@ -32,6 +35,46 @@ class AgentRegistry:
     async def list_agents(self, tags: list[str] | None = None) -> list[AgentMetadata]:
         """List registered agents, optionally filtered by tags."""
         return await self._repo.list_agents(tags=tags)
+
+
+class AgentSessionGuard:
+    """Per-session revocation of an agent's authority.
+
+    Revokes one agent within one session — independently of its global registration and
+    without aborting the whole session — and reports that status for fail-closed enforcement
+    at authorization time. The fine-grained complement to deregister (global) and the kill
+    switch (whole-session). Each (de)revocation is recorded and emits a state-bearing event.
+    """
+
+    def __init__(self, repo: AsyncAgentRepository, event_store: EventStore) -> None:
+        self._repo = repo
+        self._event_store = event_store
+
+    async def revoke(self, session_id: UUID, agent_id: str, *, reason: str = "") -> None:
+        """Revoke an agent's authority for ``session_id`` (fail-closed at authorization)."""
+        await self._repo.record_revocation(session_id, agent_id, reason)
+        await self._event_store.append(
+            session_id=session_id,
+            event_kind=EventKind.AGENT_REVOKED,
+            payload={"agent_id": agent_id, "reason": reason},
+            state_bearing=True,
+        )
+        logger.info("Agent %s revoked for session %s: %s", agent_id, session_id, reason)
+
+    async def reinstate(self, session_id: UUID, agent_id: str) -> None:
+        """Clear a prior revocation, restoring the agent's authority for ``session_id``."""
+        await self._repo.clear_revocation(session_id, agent_id)
+        await self._event_store.append(
+            session_id=session_id,
+            event_kind=EventKind.AGENT_REINSTATED,
+            payload={"agent_id": agent_id},
+            state_bearing=True,
+        )
+        logger.info("Agent %s reinstated for session %s", agent_id, session_id)
+
+    async def is_revoked(self, session_id: UUID, agent_id: str) -> bool:
+        """Whether ``agent_id`` is currently revoked for ``session_id``."""
+        return await self._repo.is_agent_revoked(session_id, agent_id)
 
 
 class DelegationGuard:

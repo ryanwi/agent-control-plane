@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_control_plane.engine.budget_tracker import BudgetExhaustedError
@@ -638,6 +638,28 @@ class AsyncSqlAlchemyAgentRepo:
         )
         self._session.add(record)
         await self._session.flush()
+
+    async def record_revocation(self, session_id: UUID, agent_id: str, reason: str) -> None:
+        model = ModelRegistry.get("AgentSessionRevocation")
+        existing = await self._session.execute(
+            select(model).where(model.session_id == session_id, model.agent_id == agent_id)
+        )
+        if existing.scalar_one_or_none() is not None:
+            return
+        self._session.add(model(session_id=session_id, agent_id=agent_id, reason=reason))
+        await self._session.flush()
+
+    async def clear_revocation(self, session_id: UUID, agent_id: str) -> None:
+        model = ModelRegistry.get("AgentSessionRevocation")
+        await self._session.execute(delete(model).where(model.session_id == session_id, model.agent_id == agent_id))
+        await self._session.flush()
+
+    async def is_agent_revoked(self, session_id: UUID, agent_id: str) -> bool:
+        model = ModelRegistry.get("AgentSessionRevocation")
+        result = await self._session.execute(
+            select(model.id).where(model.session_id == session_id, model.agent_id == agent_id)
+        )
+        return result.first() is not None
 
 
 class AsyncSqlAlchemyTokenBudgetRepo:

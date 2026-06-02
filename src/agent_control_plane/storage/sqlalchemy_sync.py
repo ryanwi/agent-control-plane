@@ -12,7 +12,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from agent_control_plane.engine.budget_tracker import BudgetExhaustedError
@@ -620,6 +620,28 @@ class SyncSqlAlchemyAgentRepo:
         )
         self._session.add(record)
         self._session.flush()
+
+    def record_revocation(self, session_id: UUID, agent_id: str, reason: str) -> None:
+        model = ModelRegistry.get("AgentSessionRevocation")
+        existing = self._session.execute(
+            select(model).where(model.session_id == session_id, model.agent_id == agent_id)
+        )
+        if existing.scalar_one_or_none() is not None:
+            return
+        self._session.add(model(session_id=session_id, agent_id=agent_id, reason=reason))
+        self._session.flush()
+
+    def clear_revocation(self, session_id: UUID, agent_id: str) -> None:
+        model = ModelRegistry.get("AgentSessionRevocation")
+        self._session.execute(delete(model).where(model.session_id == session_id, model.agent_id == agent_id))
+        self._session.flush()
+
+    def is_agent_revoked(self, session_id: UUID, agent_id: str) -> bool:
+        model = ModelRegistry.get("AgentSessionRevocation")
+        result = self._session.execute(
+            select(model.id).where(model.session_id == session_id, model.agent_id == agent_id)
+        )
+        return result.first() is not None
 
 
 class SyncSqlAlchemyTokenBudgetRepo:

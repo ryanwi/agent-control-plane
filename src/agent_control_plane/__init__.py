@@ -36,7 +36,7 @@ from agent_control_plane.builders import (
     build_kill_switch_stack,
     build_session_event_budget,
 )
-from agent_control_plane.engine.agent_registry import AgentRegistry, DelegationGuard
+from agent_control_plane.engine.agent_registry import AgentRegistry, AgentSessionGuard, DelegationGuard
 from agent_control_plane.engine.approval_gate import ApprovalGate
 from agent_control_plane.engine.budget_tracker import BudgetExhaustedError, BudgetTracker
 from agent_control_plane.engine.concurrency import (
@@ -191,6 +191,7 @@ from agent_control_plane.types.agentic import (
 from agent_control_plane.types.agents import (
     AgentCapability,
     AgentMetadata,
+    AgentSessionRevocation,
     DelegationProposal,
 )
 from agent_control_plane.types.aliases import (
@@ -365,10 +366,12 @@ __all__ = [
     "ActionTiers",
     # Agent Registry
     "AgentCapability",
+    "AgentSessionRevocation",
     "AgentId",
     "AgentMetadata",
     "AgentRecord",
     "AgentRegistry",
+    "AgentSessionGuard",
     "AgentScope",
     "AppEventMapper",
     # Approval

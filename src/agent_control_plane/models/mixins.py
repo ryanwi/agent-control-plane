@@ -229,6 +229,19 @@ class AgentMixin:
     )
 
 
+class AgentSessionRevocationMixin:
+    """Mixin for per-session agent revocation records."""
+
+    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), nullable=False)
+    agent_id: Mapped[str] = mapped_column(VARCHAR(100), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        default=func.current_timestamp(),
+        server_default=func.current_timestamp(),
+    )
+
+
 class DelegationMixin:
     """Mixin for delegation record model."""
 

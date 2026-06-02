@@ -19,6 +19,7 @@ from sqlalchemy.sql.sqltypes import Uuid
 from agent_control_plane.models.mixins import (
     ActionProposalMixin,
     AgentMixin,
+    AgentSessionRevocationMixin,
     ApprovalTicketMixin,
     CommandLedgerMixin,
     ControlEventMixin,
@@ -90,6 +91,13 @@ class DelegationRecord(Base, DelegationMixin):
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
 
 
+class AgentSessionRevocationRow(Base, AgentSessionRevocationMixin):
+    __tablename__ = "agent_session_revocations"
+    __table_args__ = (UniqueConstraint("session_id", "agent_id", name="uq_revocation_session_agent"),)
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+
+
 class CommandLedger(Base, CommandLedgerMixin):
     __tablename__ = "command_ledger"
     __table_args__ = (UniqueConstraint("command_id", "operation", name="uq_command_ledger_command_operation"),)
@@ -134,6 +142,7 @@ def register_models(registry: RegistryProtocol = DEFAULT_MODEL_REGISTRY) -> None
     registry.register("ApprovalTicket", ApprovalTicketRow)
     registry.register("AgentRecord", AgentRecord)
     registry.register("DelegationRecord", DelegationRecord)
+    registry.register("AgentSessionRevocation", AgentSessionRevocationRow)
     registry.register("CommandLedger", CommandLedger)
     registry.register("TokenBudgetConfig", TokenBudgetConfigRow)
     registry.register("TokenUsageLedger", TokenUsageLedgerRow)
