@@ -70,6 +70,8 @@ class SessionManager:
         cs = await self._get_session_or_raise(session_id)
         if cs.status != SessionStatus.CREATED:
             raise ValueError(f"Cannot activate session in state {cs.status}")
+        if cs.killed_at is not None:
+            raise ValueError(f"Cannot activate a killed session (killed_at={cs.killed_at})")
         await self._assert_state_integrity(cs)
         await self._repo.update_session(session_id, status=SessionStatus.ACTIVE, updated_at=datetime.now(UTC))
         cs.status = SessionStatus.ACTIVE
@@ -89,9 +91,18 @@ class SessionManager:
         cs = await self._get_session_or_raise(session_id)
         if cs.status != SessionStatus.PAUSED:
             raise ValueError(f"Cannot resume session in state {cs.status}")
+        if cs.killed_at is not None:
+            raise ValueError(f"Cannot resume a killed session (killed_at={cs.killed_at}); call unkill_session first")
         await self._assert_state_integrity(cs)
         await self._repo.update_session(session_id, status=SessionStatus.ACTIVE, updated_at=datetime.now(UTC))
         cs.status = SessionStatus.ACTIVE
+        return cs
+
+    async def unkill_session(self, session_id: UUID) -> SessionState:
+        """Clear the killed_at flag, re-enabling resume/activate for an operator-reviewed session."""
+        cs = await self._get_session_or_raise(session_id)
+        await self._repo.update_session(session_id, killed_at=None, updated_at=datetime.now(UTC))
+        object.__setattr__(cs, "killed_at", None)
         return cs
 
     async def _assert_state_integrity(self, cs: SessionState) -> None:

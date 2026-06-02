@@ -129,6 +129,25 @@ class TestAgentAbort:
         assert all(e.state_bearing for e in kill_events), "agent abort events must be state_bearing"
 
     @pytest.mark.asyncio
+    async def test_agent_abort_sets_killed_at_on_affected_sessions(self):
+        """Sessions paused by AGENT_ABORT must have killed_at set so they cannot be resumed."""
+        ks, _sm, _es, session_repo, _event_repo, *_ = await _make_ks([{"status": SessionStatus.ACTIVE}])
+        await ks.trigger(KillSwitchScope.AGENT_ABORT, agent_id="agent-1", reason="stop")
+
+        for cs in session_repo._sessions.values():
+            assert cs.killed_at is not None, "killed_at must be set after agent abort"
+
+    @pytest.mark.asyncio
+    async def test_killed_session_cannot_be_resumed(self):
+        """resume_session must raise after AGENT_ABORT sets killed_at."""
+        ks, sm, _es, session_repo, _event_repo, *_ = await _make_ks([{"status": SessionStatus.ACTIVE}])
+        await ks.trigger(KillSwitchScope.AGENT_ABORT, agent_id="agent-1", reason="stop")
+
+        sid = next(iter(session_repo._sessions.keys()))
+        with pytest.raises(ValueError, match="killed"):
+            await sm.resume_session(sid)
+
+    @pytest.mark.asyncio
     async def test_does_not_pause_created_sessions(self):
         ks, _sm, _es, session_repo, _event_repo, *_ = await _make_ks([{"status": SessionStatus.CREATED}])
         result = await ks.trigger(KillSwitchScope.AGENT_ABORT, agent_id="agent-1", reason="stop")

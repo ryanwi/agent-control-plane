@@ -47,6 +47,9 @@ class SessionState(AliasProfiledModel):
     abort_reason: AbortReason | None = None
     abort_details: str | None = None
 
+    # Kill-switch flag — set by AGENT_ABORT; blocks resume/activate until cleared by unkill
+    killed_at: datetime | None = None
+
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime | None = None
 

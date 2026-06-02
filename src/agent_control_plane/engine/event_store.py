@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from agent_control_plane.engine.state_integrity import IntegrityViolation, SessionStateIntegrityError
 from agent_control_plane.types.enums import EventKind
 from agent_control_plane.types.frames import EventMetadata
 
@@ -73,8 +74,24 @@ class EventStore:
         after_seq: int = 0,
         limit: int = 100,
     ) -> list[Any]:
-        """Replay events for a session after a given sequence number."""
-        return await self._repo.replay(session_id, after_seq=after_seq, limit=limit)
+        """Replay events for a session after a given sequence number.
+
+        Raises SessionStateIntegrityError if the returned sequence contains
+        gaps or duplicates — a sign of tampering or a storage race.
+        """
+        events = await self._repo.replay(session_id, after_seq=after_seq, limit=limit)
+        for i in range(1, len(events)):
+            prev, curr = events[i - 1].seq, events[i].seq
+            if curr != prev + 1:
+                raise SessionStateIntegrityError(
+                    [
+                        IntegrityViolation(
+                            code="non_monotonic_seq",
+                            message=f"Event sequence non-monotonic: seq {prev} followed by seq {curr}",
+                        )
+                    ]
+                )
+        return events
 
     async def flush_buffer(self) -> int:
         """Flush buffered telemetry events to the repository.

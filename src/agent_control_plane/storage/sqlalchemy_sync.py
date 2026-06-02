@@ -186,6 +186,7 @@ class SyncSqlAlchemySessionRepo:
             dry_run_session_id=getattr(row, "dry_run_session_id", None),
             abort_reason=getattr(row, "abort_reason", None),
             abort_details=getattr(row, "abort_details", None),
+            killed_at=getattr(row, "killed_at", None),
             created_at=row.created_at,
             updated_at=getattr(row, "updated_at", None),
         )

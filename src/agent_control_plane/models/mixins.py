@@ -60,6 +60,9 @@ class ControlSessionMixin:
     abort_reason: Mapped[AbortReason | None] = mapped_column(VARCHAR(50), nullable=True)
     abort_details: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Kill-switch flag — set by AGENT_ABORT; blocks resume/activate until cleared
+    killed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         default=func.current_timestamp(),

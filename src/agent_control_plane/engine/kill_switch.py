@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -85,10 +86,12 @@ class KillSwitch:
         sessions = await self._session_repo.list_sessions(statuses=[SessionStatus.ACTIVE, SessionStatus.CREATED])
         denied = 0
         affected = 0
+        now = datetime.now(UTC)
         for cs in sessions:
             await self.session_manager.set_active_cycle(cs.id, None)
             if cs.status == SessionStatus.ACTIVE:
                 await self.session_manager.pause_session(cs.id)
+            await self._session_repo.update_session(cs.id, killed_at=now)
             denied += await self._approval_repo.deny_all_pending(cs.id)
             await self.event_store.append(
                 session_id=cs.id,
