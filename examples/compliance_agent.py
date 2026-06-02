@@ -86,7 +86,7 @@ async def main():
                 score=Decimal("0.9"),
                 reasoning="Patching",
             )
-            route = router.route(dto)
+            route = await router.route(dto)
 
             logger.info(f"  Result: {route.tier} (Risk assigned: {route.risk_level})")
             if "PUBLIC" in res and route.tier != ActionTier.AUTO_APPROVE:

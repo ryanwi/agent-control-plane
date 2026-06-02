@@ -84,7 +84,7 @@ async def main():
             weight=Decimal("50.0"),
             score=Decimal("0.5"),
         )
-        route = router.route(dto)
+        route = await router.route(dto)
 
         prop = ActionProposal(
             session_id=cs.id,
@@ -102,7 +102,7 @@ async def main():
         await uow._session.flush()
 
         # 2. Create ticket
-        ticket = await gate.approvals.create_ticket(cs.id, prop.id, timeout_seconds=2)
+        ticket = await gate.create_ticket(cs.id, prop.id, timeout_seconds=2)
         await uow.commit()
         logger.info(f"  Created ticket: {ticket.id}. Waiting for human...")
 
@@ -112,7 +112,7 @@ async def main():
 
         # 4. Trigger Escalation
         logger.info("\n[TIMEOUT CHECK] Running ApprovalGate timeout check...")
-        expired_count = await gate.approvals.expire_timed_out_tickets()
+        expired_count = await gate.expire_timed_out_tickets()
         await uow.commit()
         logger.info(f"  Expired {expired_count} ticket(s).")
 

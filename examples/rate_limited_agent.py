@@ -45,17 +45,17 @@ async def concurrent_task(task_id, session_maker, session_id, resource_id, resul
 
             # 2. Try to lock cycle
             cycle_id = uuid4()
-            await guard.lifecycle.acquire_cycle(session_id, cycle_id)
+            await guard.acquire_cycle(session_id, cycle_id)
 
             try:
                 # 3. Try to consume budget (Cost: 10 per action, Max budget: 30)
-                if await budget.budget.check_budget(session_id, cost=Decimal("10.0")):
+                if await budget.check_budget(session_id, cost=Decimal("10.0")):
                     await budget.increment(session_id, cost=Decimal("10.0"))
                     results.append(f"Task {task_id}: Executed successfully")
                 else:
                     results.append(f"Task {task_id}: Budget exhausted")
             finally:
-                await guard.lifecycle.release_cycle(session_id)
+                await guard.release_cycle(session_id)
 
             await uow.commit()
 

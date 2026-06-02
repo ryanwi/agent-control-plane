@@ -214,7 +214,7 @@ async def demo_token_budget() -> None:
         total_tokens=150,
         estimated_cost_usd=Decimal("0.002"),
     )
-    result = await tracker.budget.check_budget(identity, usage)
+    result = await tracker.check_budget(identity, usage)
     print(f"  Budget check (150 tokens, $0.002): allowed={result.allowed}")
     if result.budget_states:
         state = result.budget_states[0]
@@ -239,7 +239,7 @@ async def demo_token_budget() -> None:
         total_tokens=15,
         estimated_cost_usd=Decimal("0.001"),
     )
-    result = await tracker.budget.check_budget(identity, bad_usage)
+    result = await tracker.check_budget(identity, bad_usage)
     print(f"  Budget check (claude-opus, not in allowed_models): allowed={result.allowed}")
     for reason in result.denial_reasons:
         print(f"    reason: {reason}")
@@ -305,7 +305,7 @@ async def demo_event_emission() -> None:
     )
     await tracker.record_usage(session_id, identity, usage)
 
-    events = await event_repo.sessions.replay(session_id)
+    events = await event_repo.replay(session_id)
     token_events = [e for e in events if e.event_kind == EventKind.TOKEN_USAGE_RECORDED]
     print(f"  TOKEN_USAGE_RECORDED events emitted: {len(token_events)}")
     for e in token_events:

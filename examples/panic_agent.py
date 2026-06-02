@@ -75,7 +75,7 @@ async def main():
             )
             uow._session.add(prop)
             await uow._session.flush()
-            await gate.approvals.create_ticket(cs.id, prop.id)
+            await gate.create_ticket(cs.id, prop.id)
 
         await uow.commit()
         logger.info("\n[SETUP] 3 sessions created and waiting for approval.")
@@ -89,12 +89,12 @@ async def main():
         logger.info("\n[VERIFY] Checking session states...")
         all_aborted = True
         for sid in sids:
-            cs = await uow.session_repo.sessions.get_session(sid)
+            cs = await uow.session_repo.get_session(sid)
             if cs.status != SessionStatus.ABORTED:
                 all_aborted = False
                 logger.error(f"  Session {sid} is {cs.status} instead of ABORTED")
 
-            pending = await uow.approval_repo.approvals.get_pending_tickets(session_id=sid)
+            pending = await uow.approval_repo.get_pending_tickets(session_id=sid)
             if len(pending) > 0:
                 all_aborted = False
                 logger.error(f"  Session {sid} still has pending tickets!")

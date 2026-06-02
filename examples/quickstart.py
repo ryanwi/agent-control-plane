@@ -35,6 +35,7 @@ from agent_control_plane.types.enums import (
     ProposalStatus,
     RiskLevel,
 )
+from agent_control_plane.types.frames import EventMetadata
 from agent_control_plane.types.policies import PolicySnapshot
 
 DATABASE_URL = "sqlite+aiosqlite:///./agent_control_plane_example.db"
@@ -95,7 +96,7 @@ async def run_control_flow(uow: AsyncSqlAlchemyUnitOfWork) -> None:
         weight=Decimal("1.5"),
         score=Decimal("0.9"),
     )
-    route = router.route(proposal)
+    route = await router.route(proposal)
     if route.tier == ActionTier.BLOCKED:
         print("Blocked by policy:", route.reason)
         return
@@ -118,7 +119,7 @@ async def run_control_flow(uow: AsyncSqlAlchemyUnitOfWork) -> None:
     uow._session.add(action)
     await uow._session.flush()
 
-    ticket = await approval_gate.approvals.create_ticket(session.id, action.id)
+    ticket = await approval_gate.create_ticket(session.id, action.id)
     await approval_gate.approve(
         ticket.id,
         decision_type=ApprovalDecisionType.ALLOW_FOR_SESSION,
@@ -135,28 +136,30 @@ async def run_control_flow(uow: AsyncSqlAlchemyUnitOfWork) -> None:
         print("No matching session scope approval available.")
         return
 
-    if not await budget.budget.check_budget(session.id, cost=proposal.weight, action_count=1):
+    if not await budget.check_budget(session.id, cost=proposal.weight, action_count=1):
         print("Session budget exceeded.")
         return
     await budget.increment(session.id, cost=proposal.weight, action_count=1)
 
-    await guard.lifecycle.acquire_cycle(session.id, cycle_id=uuid4())
+    await guard.acquire_cycle(session.id, cycle_id=uuid4())
     try:
         await event_store.append(
             session_id=session.id,
             event_kind=EventKind.EXECUTION_COMPLETED,
             payload={"resource_id": proposal.resource_id},
             state_bearing=True,
-            agent_id="quickstart-agent",
-            correlation_id=uuid4(),
-            routing_decision={"tier": route.tier.value},
-            routing_reason=route.reason,
+            metadata=EventMetadata(
+                agent_id="quickstart-agent",
+                correlation_id=uuid4(),
+                routing_decision={"tier": route.tier.value},
+                routing_reason=route.reason,
+            ),
         )
         action.status = ProposalStatus.EXECUTED.value
         await uow._session.flush()
         print(f"Executed proposal {action.id} under session {session.id}")
     finally:
-        await guard.lifecycle.release_cycle(session.id)
+        await guard.release_cycle(session.id)
 
     await uow.commit()
     print("Buffered telemetry events:", event_store.buffer_size)

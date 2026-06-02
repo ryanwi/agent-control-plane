@@ -92,7 +92,7 @@ async def main():
                 score=Decimal(str(score)),
             )
 
-            route = router.route(dto)
+            route = await router.route(dto)
             prop = ActionProposal(
                 session_id=cs.id,
                 resource_id=res,
@@ -114,7 +114,7 @@ async def main():
                 prop.status = ProposalStatus.EXECUTED.value
             else:
                 logger.info("  Result: MANUAL GATE REQUIRED")
-                ticket = await gate.approvals.create_ticket(cs.id, prop.id)
+                ticket = await gate.create_ticket(cs.id, prop.id)
                 await gate.approve(ticket.id, decided_by="support-manager")
                 await budget.increment(cs.id, cost=dto.weight)
                 prop.status = ProposalStatus.EXECUTED.value
