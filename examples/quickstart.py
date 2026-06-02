@@ -23,7 +23,7 @@ from agent_control_plane.engine.event_store import EventStore
 from agent_control_plane.engine.policy_engine import PolicyEngine
 from agent_control_plane.engine.router import ProposalRouter
 from agent_control_plane.engine.session_manager import SessionManager
-from agent_control_plane.models.reference import ActionProposal, Base, register_models
+from agent_control_plane.models.reference import ActionProposalRow, Base, register_models
 from agent_control_plane.storage.sqlalchemy_async import AsyncSqlAlchemyUnitOfWork
 from agent_control_plane.types.approvals import ApprovalScope
 from agent_control_plane.types.enums import (
@@ -85,7 +85,7 @@ async def run_control_flow(uow: AsyncSqlAlchemyUnitOfWork) -> None:
         policy_id=policy_id,
     )
 
-    proposal = ActionProposal(
+    proposal = ActionProposalRow(
         session_id=session.id,
         resource_id="ticket-123",
         resource_type="support_ticket",
@@ -102,7 +102,7 @@ async def run_control_flow(uow: AsyncSqlAlchemyUnitOfWork) -> None:
 
     await guard.check_resource_lock(session.id, proposal.resource_id)
 
-    action = ActionProposal(
+    action = ActionProposalRow(
         session_id=proposal.session_id,
         resource_id=proposal.resource_id,
         resource_type=proposal.resource_type,
