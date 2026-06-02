@@ -175,6 +175,7 @@ class AsyncSqlAlchemySessionRepo:
             abort_details=getattr(row, "abort_details", None),
             killed_at=getattr(row, "killed_at", None),
             created_at=row.created_at,
+            started_at=getattr(row, "started_at", None),
             updated_at=getattr(row, "updated_at", None),
         )
 

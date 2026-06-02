@@ -51,6 +51,7 @@ class SessionState(AliasProfiledModel):
     killed_at: datetime | None = None
 
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    started_at: datetime | None = None
     updated_at: datetime | None = None
 
 
@@ -77,6 +78,7 @@ class SessionSummary(AliasProfiledModel):
     used_action_count: int = 0
     max_action_count: int
     created_at: datetime
+    started_at: datetime | None = None
 
 
 class KillSwitchResult(AliasProfiledModel):

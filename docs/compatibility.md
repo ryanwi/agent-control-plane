@@ -42,6 +42,28 @@ an `import agent_control_plane`.
 
 ## Breaking changes
 
+### 0.24.0 — ActionName enum stripped to UNKNOWN sentinel
+
+`ActionName` no longer contains domain-specific values. Replace any `ActionName.X`
+references with the equivalent string:
+
+```python
+# before
+decision=ActionName.WIRE_TRANSFER
+capabilities=[AgentCapability(action=ActionName.STATUS)]
+
+# after
+decision="wire_transfer"
+capabilities=[AgentCapability(action="status")]
+```
+
+`register_action_names()` is no longer required before using an action name.
+Unlisted actions now pass through to the `PolicyEngine` normally rather than being
+coerced to `UNKNOWN` and blocked — explicitly list actions you want blocked in
+`ActionTiers.blocked`.
+
+---
+
 ### 0.23.0 — ID aliases and experimental agentic types
 
 **ID type wrappers dropped.**

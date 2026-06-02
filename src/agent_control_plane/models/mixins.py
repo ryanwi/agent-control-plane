@@ -68,6 +68,7 @@ class ControlSessionMixin:
         default=func.current_timestamp(),
         server_default=func.current_timestamp(),
     )
+    started_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(
         TIMESTAMP(timezone=True), nullable=True, onupdate=func.current_timestamp()
     )

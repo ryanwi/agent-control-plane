@@ -33,6 +33,7 @@ from agent_control_plane.types.enums import (
     EventKind,
     ProposalStatus,
     RiskLevel,
+    SessionStatus,
     UnknownAppEventPolicy,
 )
 from agent_control_plane.types.frames import EmitMetadata, EventMetadata
@@ -370,3 +371,55 @@ def test_alias_helpers_in_projection_workflow():
     assert outbound == {"eventKind": "cycle_started", "stateBearing": True, "resourceId": "asset-9"}
 
     AliasRegistry.clear_profiles()
+
+
+def test_sync_session_started_at_set_on_activation(tmp_path: Path):
+    db_file = tmp_path / "started_at_sync.db"
+    facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_file}")
+    facade.setup()
+
+    sid = facade.sessions.open_session("started-at-sync")
+
+    session = facade.sessions.get_session(sid)
+    assert session is not None
+    assert session.started_at is None
+
+    t_before = datetime.now(UTC).replace(tzinfo=None)
+    facade._cp.activate_session(sid)
+    t_after = datetime.now(UTC).replace(tzinfo=None)
+
+    session = facade.sessions.get_session(sid)
+    assert session is not None
+    assert session.started_at is not None
+    started = session.started_at.replace(tzinfo=None) if session.started_at.tzinfo else session.started_at
+    assert t_before <= started <= t_after
+
+    facade.close()
+
+
+def test_sync_started_at_returned_in_lifecycle_result(tmp_path: Path):
+    db_file = tmp_path / "started_at_result_sync.db"
+    facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_file}")
+    facade.setup()
+
+    sid = facade.sessions.open_session("started-at-result-sync")
+    result = facade._cp.activate_session(sid)
+
+    assert result.session.started_at is not None
+
+    facade.close()
+
+
+def test_sync_list_sessions_includes_started_at(tmp_path: Path):
+    db_file = tmp_path / "list_started_at_sync.db"
+    facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_file}")
+    facade.setup()
+
+    sid = facade.sessions.open_session("list-started-at-sync")
+    facade._cp.activate_session(sid)
+
+    sessions = facade.observer.list_sessions(statuses=[SessionStatus.ACTIVE])
+    target = next(s for s in sessions if s.id == sid)
+    assert target.started_at is not None
+
+    facade.close()

@@ -73,8 +73,10 @@ class SessionManager:
         if cs.killed_at is not None:
             raise ValueError(f"Cannot activate a killed session (killed_at={cs.killed_at})")
         await self._assert_state_integrity(cs)
-        await self._repo.update_session(session_id, status=SessionStatus.ACTIVE, updated_at=datetime.now(UTC))
+        now = datetime.now(UTC)
+        await self._repo.update_session(session_id, status=SessionStatus.ACTIVE, started_at=now, updated_at=now)
         cs.status = SessionStatus.ACTIVE
+        object.__setattr__(cs, "started_at", now)
         return cs
 
     async def pause_session(self, session_id: UUID) -> SessionState:

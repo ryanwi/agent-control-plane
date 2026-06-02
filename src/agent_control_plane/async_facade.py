@@ -434,7 +434,10 @@ class AsyncLifecycleGateway(_AsyncGatewayBase):
                 )
                 await uow.commit()
                 raise SessionStateIntegrityError(violations)
-            await uow.session_repo.update_session(session_id, status=SessionStatus.ACTIVE, updated_at=datetime.now(UTC))
+            now = datetime.now(UTC)
+            await uow.session_repo.update_session(
+                session_id, status=SessionStatus.ACTIVE, started_at=now, updated_at=now
+            )
             await uow.commit()
             session = await uow.session_repo.get_session(session_id)
             if session is None:

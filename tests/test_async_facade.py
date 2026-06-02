@@ -550,3 +550,64 @@ async def test_async_facade_state_feed_projection_end_to_end(tmp_path: Path):
     assert projection_proposals[proposal_id] == ProposalStatus.APPROVED
 
     await facade.close()
+
+
+@pytest.mark.asyncio
+async def test_session_started_at_set_on_activation(tmp_path: Path):
+    db_file = tmp_path / "started_at.db"
+    facade = AsyncControlPlaneFacade.from_database_url(f"sqlite+aiosqlite:///{db_file}")
+
+    sid = await facade.sessions.open_session("started-at-test")
+
+    session = await facade.sessions.get_session(sid)
+    assert session is not None
+    assert session.started_at is None
+
+    t_before = datetime.now(UTC).replace(tzinfo=None)
+    await facade.lifecycle.activate_session(sid)
+    t_after = datetime.now(UTC).replace(tzinfo=None)
+
+    session = await facade.sessions.get_session(sid)
+    assert session is not None
+    assert session.started_at is not None
+    started = session.started_at.replace(tzinfo=None) if session.started_at.tzinfo else session.started_at
+    assert t_before <= started <= t_after
+
+    await facade.close()
+
+
+@pytest.mark.asyncio
+async def test_started_at_preserved_through_pause_resume(tmp_path: Path):
+    db_file = tmp_path / "started_at_resume.db"
+    facade = AsyncControlPlaneFacade.from_database_url(f"sqlite+aiosqlite:///{db_file}")
+
+    sid = await facade.sessions.open_session("started-at-resume")
+    await facade.lifecycle.activate_session(sid)
+
+    session = await facade.sessions.get_session(sid)
+    assert session is not None
+    original_started_at = session.started_at
+
+    await facade.lifecycle.pause_session(sid)
+    await facade.lifecycle.resume_session(sid)
+
+    session = await facade.sessions.get_session(sid)
+    assert session is not None
+    assert session.started_at == original_started_at
+
+    await facade.close()
+
+
+@pytest.mark.asyncio
+async def test_list_sessions_includes_started_at(tmp_path: Path):
+    db_file = tmp_path / "list_started_at.db"
+    facade = AsyncControlPlaneFacade.from_database_url(f"sqlite+aiosqlite:///{db_file}")
+
+    sid = await facade.sessions.open_session("list-started-at")
+    await facade.lifecycle.activate_session(sid)
+
+    sessions = await facade.observer.list_sessions(statuses=[SessionStatus.ACTIVE])
+    target = next(s for s in sessions if s.id == sid)
+    assert target.started_at is not None
+
+    await facade.close()

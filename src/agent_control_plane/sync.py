@@ -336,7 +336,8 @@ class SyncControlPlane:
     def activate_session(self, session_id: UUID) -> SessionLifecycleResult:
         with self.session_scope() as db:
             uow = self._uow_factory(db)
-            uow.session_repo.update_session(session_id, status=SessionStatus.ACTIVE, updated_at=datetime.now(UTC))
+            now = datetime.now(UTC)
+            uow.session_repo.update_session(session_id, status=SessionStatus.ACTIVE, started_at=now, updated_at=now)
             uow.commit()
             session = uow.session_repo.get_session(session_id)
             if session is None:
@@ -1093,6 +1094,9 @@ class AgenticGateway(_SyncGatewayBase):
 
 class ControlPlaneObserver(_SyncGatewayBase):
     """Read-only session queries, health checks, and operational metrics."""
+
+    def list_sessions(self, *, statuses: list[SessionStatus] | None = None, limit: int = 50) -> list[SessionState]:
+        return self._cp.list_sessions(statuses=statuses, limit=limit)
 
     def get_state_change_feed(
         self,

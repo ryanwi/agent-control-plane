@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-06-01
+
+### Changed (breaking)
+
+- **`ActionName` stripped to `UNKNOWN` sentinel only** — 35 hardcoded domain-specific
+  action names (`EXECUTE_TRADE`, `WIRE_TRANSFER`, `DELETE_CLUSTER`, `WIPE_DISK`,
+  `BAN_USER`, etc.) have been removed from the enum. These example domains had no place
+  in a general-purpose governance library.
+
+  `ActionValue = ActionName | str` is unchanged — plain strings are and have always been
+  valid everywhere an action name is accepted. No migration is required if you were
+  already passing string literals. If you were referencing `ActionName.STATUS` etc.,
+  replace with the equivalent string:
+
+  ```python
+  # before
+  decision=ActionName.WIRE_TRANSFER
+
+  # after
+  decision="wire_transfer"
+  ```
+
+- **`parse_action_name()` no longer coerces unrecognized strings to `UNKNOWN`** — any
+  non-empty, non-`"unknown"` string is now returned as-is. `ActionName.UNKNOWN` is
+  reserved for the literal sentinel value and for `ToolPolicyMap` misses in the MCP
+  gateway. Calling `register_action_names()` is no longer required before using a
+  domain action name.
+
+- **Unlisted actions now reach the engine's default tier** — previously, a string not
+  in the builtin enum was coerced to `UNKNOWN` and blocked. Now it passes through as a
+  plain string and is classified by the `PolicyEngine` against the configured
+  `ActionTiers` normally (defaulting to `AUTO_APPROVE` when no tier matches and
+  conditions pass). Explicitly block actions you do not want approved.
+
 ## [0.23.0] - 2026-06-01
 
 ### Changed (breaking)
