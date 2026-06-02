@@ -38,7 +38,6 @@ dev = [
     "mypy>=1.10",
     "pylint>=3.0",
     "pre-commit>=3.7",
-    "radon>=6.0",
     "fastapi>=0.111",
     "httpx>=0.27",
     "openapi-spec-validator>=0.7",
@@ -59,12 +58,14 @@ line-length = 120
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "C90", "N", "RUF"]
+select = ["E", "F", "I", "UP", "B", "SIM", "C90", "N", "RUF", "ASYNC"]
 
 [tool.ruff.lint.per-file-ignores]
 # __all__ in these files is organized by topic, not alphabetically
 "src/agent_control_plane/__init__.py" = ["RUF022"]
 "src/agent_control_plane/types/__init__.py" = ["RUF022"]
+# ASYNC240 targets trio/anyio users; this project uses plain asyncio + aioSQLite
+"examples/*.py" = ["ASYNC240"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
@@ -72,6 +73,7 @@ max-complexity = 10
 [tool.mypy]
 python_version = "3.11"
 strict = true
+warn_unreachable = true
 
 [tool.pylint.main]
 source-roots = ["src"]
@@ -97,7 +99,7 @@ disable = [
     "W0212",   # protected-access — intentional in facade/registry patterns
     "W0511",   # fixme — TODO comments are fine
     "W0603",   # global-statement — intentional in extension registry pattern
-    "W0718",   # broad-exception-caught — intentional fail-open/fail-closed throughout
+    "W0718",   # broad-exception-caught — intentional in resilience wrappers (resilient.py, async_resilient.py); non-resilience sites audited and each re-raises, fails-closed, or is an infrastructure path (transaction cleanup, plugin loading, audit logging)
 ]
 
 [tool.pytest.ini_options]

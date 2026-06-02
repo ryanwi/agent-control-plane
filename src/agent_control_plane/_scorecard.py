@@ -52,15 +52,12 @@ def _sc_rollback(event_at: datetime, _event: EventFrame, sc: ControlPlaneScoreca
 
 def _sc_eval_blocked(_at: datetime, event: EventFrame, sc: ControlPlaneScorecard, _acc: ScorecardAcc) -> None:
     sc.evaluations_blocked += 1
-    if isinstance(event.payload, dict):
-        for reason in event.payload.get("reasons", []):
-            key = str(reason)
-            sc.evaluation_block_reasons[key] = sc.evaluation_block_reasons.get(key, 0) + 1
+    for reason in event.payload.get("reasons", []):
+        key = str(reason)
+        sc.evaluation_block_reasons[key] = sc.evaluation_block_reasons.get(key, 0) + 1
 
 
 def _sc_guardrail(_at: datetime, event: EventFrame, sc: ControlPlaneScorecard, _acc: ScorecardAcc) -> None:
-    if not isinstance(event.payload, dict):
-        return
     code = str(event.payload.get("policy_code", "unknown"))
     sc.guardrail_policy_code_counts[code] = sc.guardrail_policy_code_counts.get(code, 0) + 1
     if event.payload.get("allow") is False:

@@ -10,6 +10,8 @@ Architecture Decision Records (ADRs) capture why important design choices were m
 - [0006: Projection Feed vs Canonical Reads](0006-projection-vs-canonical-reads.md): defines when projection is warranted.
 - [0007: Experimental Capability Contracts Are Informational Only](0007-experimental-capabilities-informational-only.md): defines non-enforcement intent for capability detection.
 - [0008: Token Governance Engines Are Optional Composable Steps](0008-token-governance-composable-engines.md): defines composable (not auto-wired) pattern for TokenBudgetTracker and ModelGovernor.
+- [0009: Integration Patterns — Resilient Facade and Configuration Builder](0009-integration-patterns.md): introduces `ResilientControlPlane` and `ControlPlaneSetup`; partially superseded by ADR 0010.
+- [0010: Gateway Decomposition — Focused Facades (v0.18)](0010-gateway-decomposition.md): decomposes `ControlPlaneFacade` into focused gateway objects (≤ 11 methods each); gateways become the recommended primary API.
 
 ## How to write/update ADRs
 

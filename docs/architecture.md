@@ -250,9 +250,17 @@ Exports are centralized through [agent_control_plane/__init__.py](../src/agent_c
 
 | Module | Public symbols | Stability contract |
 | --- | --- | --- |
-| `agent_control_plane` | `PolicyEngine`, `ProposalRouter`, `ApprovalGate`, `BudgetTracker`, `ConcurrencyGuard`, `KillSwitch`, `EventStore`, `SessionManager`, `AgentRegistry`, `DelegationGuard`, `CrashRecovery`, `TimeoutEscalation`, `ModelRegistry`, `RiskClassifier`, `DefaultRiskClassifier`, `ConditionEvaluator`, `ParallelPolicyEvaluator` | Core control-plane entry points for orchestration and recovery. |
+| `agent_control_plane` | `ControlPlaneSetup`, `GovernanceConfig`, `EventConfig`, `ResilienceConfig` | Recommended entry point. Builder that wires engines, storage, and policy into a ready-to-use gateway set. |
+| `agent_control_plane` | `SessionGateway`, `ApprovalGateway`, `BudgetGateway`, `AgenticGateway` | Focused sync gateway objects (≤ 11 public methods each) returned by `ControlPlaneSetup.build()`. |
+| `agent_control_plane` | `ResilientControlPlane`, `ResiliencePolicy`, `ResilienceMode` | Resilient wrapper around `ControlPlaneFacade`; configurable fail-open/fail-closed per operation category. |
+| `agent_control_plane` | `ResilientSessionGateway`, `ResilientApprovalGateway`, `ResilientBudgetGateway`, `ResilientAgenticGateway`, `ResilientObserverGateway` | Gateway-shaped views into `ResilientControlPlane`. |
+| `agent_control_plane` | `ControlPlaneFacade`, `SyncControlPlane` | Low-level sync facade (advanced use). |
+| `agent_control_plane` | `AsyncControlPlaneFacade`, `AsyncSessionGateway`, `AsyncApprovalGateway`, `AsyncBudgetGateway`, `AsyncAgenticGateway`, `AsyncLifecycleGateway`, `AsyncMaintenanceGateway` | Async gateway variants; use in async runtimes. |
+| `agent_control_plane` | `AsyncResilientControlPlane`, `AsyncResilientSessionGateway`, `AsyncResilientApprovalGateway`, `AsyncResilientBudgetGateway`, `AsyncResilientAgenticGateway`, `AsyncResilientObserverGateway`, `AsyncResilientLifecycleGateway`, `AsyncResilientMaintenanceGateway` | Resilient async gateway variants. |
+| `agent_control_plane` | `McpGateway`, `McpGatewayConfig` | Governs MCP tool calls through the control plane. |
+| `agent_control_plane` | `PolicyEngine`, `ProposalRouter`, `ApprovalGate`, `BudgetTracker`, `ConcurrencyGuard`, `KillSwitch`, `EventStore`, `SessionManager`, `AgentRegistry`, `DelegationGuard`, `CrashRecovery`, `TimeoutEscalation`, `ModelRegistry`, `RiskClassifier`, `DefaultRiskClassifier`, `ConditionEvaluator`, `ParallelPolicyEvaluator` | Individual engines for direct wiring (advanced). |
 | `agent_control_plane` | `ActionName`, `ActionTier`, `RiskLevel`, `ApprovalStatus`, `ApprovalDecisionType`, `ProposalStatus`, `SessionStatus`, `EventKind`, `ExecutionMode`, `AbortReason`, `KillSwitchScope`, `RoutingResolutionStep`, `AssetMatch`, `AgentScope`, `GovernanceOutcome` | Enumerations used by all engines; considered stable between minor releases. |
-| `agent_control_plane` | `ActionProposal`, `AgentMetadata`, `AgentCapability`, `DelegationProposal`, `SessionCreate`, `SessionSummary`, `PolicySnapshot`, `ApprovalScope`, `ApprovalTicket`, `RequestFrame`, `EventFrame`, `ResponseFrame`, `KillResult`, `SteeringContext`, `ConditionNode`, `EvaluatorResult`, `ParallelEvaluationResult`, `EmitMetadata`, `GovernanceConfig`, `EventConfig`, `ResilienceConfig` | Domain/contract types are semantically stable; add optional fields in minor releases only. |
+| `agent_control_plane` | `ActionProposal`, `AgentMetadata`, `AgentCapability`, `DelegationProposal`, `SessionCreate`, `SessionSummary`, `PolicySnapshot`, `ApprovalScope`, `ApprovalTicket`, `RequestFrame`, `EventFrame`, `ResponseFrame`, `KillResult`, `SteeringContext`, `ConditionNode`, `EvaluatorResult`, `ParallelEvaluationResult`, `EmitMetadata` | Domain/contract types are semantically stable; add optional fields in minor releases only. |
 | `agent_control_plane` | `EgressEvaluator`, `EgressEvaluatorConfig`, `EgressGrant` | Egress capability-grant evaluator; plugs into the async `Evaluator` framework. |
 | `agent_control_plane.evaluators` | `Evaluator`, `EvaluatorRegistry`, `EvaluatorResult`, `RegexEvaluator`, `ListEvaluator` | Pluggable evaluator protocol, registry, and built-in implementations. |
 | `agent_control_plane.models` | `ModelRegistry`, `ControlSessionMixin`, `ControlEventMixin`, `ApprovalTicketMixin`, `PolicySnapshotMixin`, `AgentMixin`, `DelegationMixin` | Intended for embedding into host SQLAlchemy models and runtime bootstrapping. |
@@ -297,6 +305,8 @@ Compatibility posture and migration guidance are documented in [compatibility.md
 ## 11) Design decisions
 
 - ADR index: [docs/adr/README.md](adr/README.md)
+- Gateway decomposition (v0.18): [0010](adr/0010-gateway-decomposition.md)
+- Integration patterns (resilient facade, setup builder): [0009](adr/0009-integration-patterns.md)
 - Capability detection non-enforcement: [0007](adr/0007-experimental-capabilities-informational-only.md)
 - Projection strategy: [0006](adr/0006-projection-vs-canonical-reads.md)
 - Idempotency model: [0004](adr/0004-idempotency-model.md)

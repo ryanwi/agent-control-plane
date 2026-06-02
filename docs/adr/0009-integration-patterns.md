@@ -14,7 +14,7 @@ None
 
 ## Superseded by
 
-None
+Partially by [ADR 0010](0010-gateway-decomposition.md) — the gateway decomposition (v0.18) replaced the flat `ControlPlaneFacade` as the primary consumer-facing API. `ControlPlaneFacade` and `SyncControlPlane` remain but are now lower-level entry points. `ResilientControlPlane` and `ControlPlaneSetup` are unchanged.
 
 ## Context
 
