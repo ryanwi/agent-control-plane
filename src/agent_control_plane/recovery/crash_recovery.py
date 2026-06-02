@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING
 
 from agent_control_plane.engine.event_store import EventStore
 from agent_control_plane.engine.session_manager import SessionManager
-from agent_control_plane.engine.state_integrity import SessionStateIntegrityError, validate_session_integrity
+from agent_control_plane.engine.state_integrity import (
+    IntegrityViolation,
+    SessionStateIntegrityError,
+    validate_session_integrity,
+)
 from agent_control_plane.types.enums import AbortReason, EventKind, SessionStatus
 from agent_control_plane.types.sessions import SessionState
 
@@ -33,14 +37,19 @@ class CrashRecovery:
         self._event_repo = event_repo
 
     async def recover_on_startup(self) -> dict[str, int]:
-        """Scan for sessions with active cycles and attempt recovery.
+        """Scan ACTIVE sessions on startup, recover stuck cycles, and validate persisted state.
 
-        Called once on application startup.
+        Stuck sessions (those still holding a cycle lock) are recovered; their state is also
+        validated. Every other ACTIVE session is reloaded and trusted on startup just the same,
+        so it is swept through the integrity check and aborted (fail closed) if its persisted
+        state violates an invariant.
 
         Returns summary of recovery actions taken.
         """
         sessions = await self._session_repo.list_sessions(statuses=[SessionStatus.ACTIVE])
+        # Partition up front: recovery mutates active_cycle_id, so classify before the loops run.
         stuck_sessions = [s for s in sessions if s.active_cycle_id is not None]
+        non_stuck_sessions = [s for s in sessions if s.active_cycle_id is None]
 
         recovered = 0
         aborted = 0
@@ -58,7 +67,19 @@ class CrashRecovery:
                 )
                 aborted += 1
 
-        if stuck_sessions:
+        for cs in non_stuck_sessions:
+            violations = validate_session_integrity(cs)
+            if not violations:
+                continue
+            await self._emit_state_invalid(cs, violations)
+            await self.session_manager.abort_session(
+                cs.id,
+                AbortReason.SYSTEM_ERROR,
+                f"State integrity violations on startup: {', '.join(v.code for v in violations)}",
+            )
+            aborted += 1
+
+        if stuck_sessions or aborted:
             logger.info(
                 "Crash recovery: %d stuck sessions found, %d recovered, %d aborted",
                 len(stuck_sessions),
@@ -72,16 +93,20 @@ class CrashRecovery:
             "aborted": aborted,
         }
 
+    async def _emit_state_invalid(self, cs: SessionState, violations: list[IntegrityViolation]) -> None:
+        """Record a state-bearing SESSION_STATE_INVALID audit event for *cs*."""
+        await self.event_store.append(
+            session_id=cs.id,
+            event_kind=EventKind.SESSION_STATE_INVALID,
+            payload={"violations": [{"code": v.code, "message": v.message} for v in violations]},
+            state_bearing=True,
+        )
+
     async def _recover_session(self, cs: SessionState) -> None:
         """Attempt to recover a single session, aborting if state invariants are violated."""
         violations = validate_session_integrity(cs)
         if violations:
-            await self.event_store.append(
-                session_id=cs.id,
-                event_kind=EventKind.SESSION_STATE_INVALID,
-                payload={"violations": [{"code": v.code, "message": v.message} for v in violations]},
-                state_bearing=True,
-            )
+            await self._emit_state_invalid(cs, violations)
             raise SessionStateIntegrityError(violations)
 
         last_event = await self._event_repo.get_last_event(cs.id)

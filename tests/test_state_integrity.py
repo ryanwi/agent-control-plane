@@ -193,3 +193,51 @@ async def test_crash_recovery_recovers_clean_session():
 
     assert result["recovered"] == 1
     assert (await repo.get_session(cs.id)).active_cycle_id is None
+
+
+@pytest.mark.asyncio
+async def test_crash_recovery_validates_non_stuck_active_sessions():
+    # An ACTIVE session with no active cycle ("not stuck") but corrupt persisted state must
+    # still be caught on startup — otherwise it silently resumes with unvalidated counters.
+    repo = InMemorySessionRepository()
+    event_repo = InMemoryEventRepository()
+    es = EventStore(event_repo)
+    sm = SessionManager(repo, event_store=es)
+    cr = CrashRecovery(sm, es, repo, event_repo)
+
+    cs = await repo.create_session(
+        session_name="non-stuck-corrupt",
+        status=SessionStatus.ACTIVE,
+        execution_mode=ExecutionMode.LIVE,
+        max_cost=Decimal("100"),
+        max_action_count=50,
+    )
+    await repo.update_session(cs.id, used_cost=Decimal("-5"))  # corrupt, no active_cycle_id
+
+    await cr.recover_on_startup()
+
+    assert (await repo.get_session(cs.id)).status == SessionStatus.ABORTED
+    events = await event_repo.replay(cs.id)
+    assert any(e.kind == EventKind.SESSION_STATE_INVALID for e in events)
+
+
+@pytest.mark.asyncio
+async def test_crash_recovery_leaves_clean_non_stuck_active_sessions_untouched():
+    # A clean ACTIVE-non-stuck session must not be disturbed by the startup integrity sweep.
+    repo = InMemorySessionRepository()
+    event_repo = InMemoryEventRepository()
+    es = EventStore(event_repo)
+    sm = SessionManager(repo, event_store=es)
+    cr = CrashRecovery(sm, es, repo, event_repo)
+
+    cs = await repo.create_session(
+        session_name="non-stuck-clean",
+        status=SessionStatus.ACTIVE,
+        execution_mode=ExecutionMode.LIVE,
+        max_cost=Decimal("100"),
+        max_action_count=50,
+    )
+
+    await cr.recover_on_startup()
+
+    assert (await repo.get_session(cs.id)).status == SessionStatus.ACTIVE
