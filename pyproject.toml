@@ -61,6 +61,11 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "C90", "N", "RUF"]
 
+[tool.ruff.lint.per-file-ignores]
+# __all__ in these files is organized by topic, not alphabetically
+"src/agent_control_plane/__init__.py" = ["RUF022"]
+"src/agent_control_plane/types/__init__.py" = ["RUF022"]
+
 [tool.ruff.lint.mccabe]
 max-complexity = 10
 

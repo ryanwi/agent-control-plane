@@ -1,7 +1,5 @@
 """agent-control-plane: Embeddable governance framework for agentic AI."""
 
-# ruff: noqa: RUF022
-
 from importlib.metadata import PackageNotFoundError, version
 
 from agent_control_plane.async_facade import AsyncControlPlaneFacade
