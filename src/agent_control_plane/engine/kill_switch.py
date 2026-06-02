@@ -94,7 +94,7 @@ class KillSwitch:
                 session_id=cs.id,
                 event_kind=EventKind.KILL_SWITCH_TRIGGERED,
                 payload={"scope": KillSwitchScope.AGENT_ABORT, "agent_id": agent_id, "reason": reason},
-                state_bearing=False,
+                state_bearing=True,
             )
             affected += 1
 

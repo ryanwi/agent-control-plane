@@ -56,7 +56,7 @@ class EventConfig:
 
     event_map: dict[str, EventKind] = field(default_factory=dict)
     mapper: AppEventMapper | None = None
-    unknown_event_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.IGNORE
+    unknown_event_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.RAISE
 
 
 @dataclass(frozen=True)

@@ -23,6 +23,7 @@ from agent_control_plane.sync import (
     KillResult,
     SessionGateway,
     SessionLifecycleResult,
+    UnknownAppEventError,
 )
 from agent_control_plane.types.agentic import (
     ControlPlaneScorecard,
@@ -60,7 +61,10 @@ _DEFAULT_MIXED_MODES: dict[OperationCategory, ResilienceMode] = {
     OperationCategory.STATE_BEARING: ResilienceMode.FAIL_CLOSED,
     OperationCategory.TELEMETRY: ResilienceMode.FAIL_OPEN,
     OperationCategory.QUERY: ResilienceMode.FAIL_OPEN,
-    OperationCategory.BUDGET: ResilienceMode.FAIL_OPEN,
+    # BUDGET is FAIL_CLOSED: a DB exception on check_budget must not silently allow
+    # unlimited spending. Hosts that want fail-open budget checks must opt in explicitly
+    # via category_overrides={OperationCategory.BUDGET: ResilienceMode.FAIL_OPEN}.
+    OperationCategory.BUDGET: ResilienceMode.FAIL_CLOSED,
 }
 
 
@@ -69,7 +73,8 @@ class ResiliencePolicy:
 
     In MIXED mode (the default):
       - STATE_BEARING ops → raise on error
-      - TELEMETRY / QUERY / BUDGET ops → return default value and log a warning
+      - BUDGET ops → raise on error (fail-closed; see _DEFAULT_MIXED_MODES)
+      - TELEMETRY / QUERY ops → return default value and log a warning
     """
 
     def __init__(
@@ -188,6 +193,8 @@ class ResilientSessionGateway:
                 correlation_id=correlation_id,
                 idempotency_key=idempotency_key,
             )
+        except UnknownAppEventError:
+            raise  # policy misconfiguration — never swallow
         except Exception as exc:
             return self._p.handle_error(exc, "emit_app", OperationCategory.TELEMETRY, None)
 

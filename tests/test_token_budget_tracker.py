@@ -297,6 +297,23 @@ class TestRecordUsage:
         # Validator routed through str(), so we don't carry float imprecision.
         assert "9999" not in str(usage.estimated_cost_usd)
 
+    async def test_negative_estimated_cost_raises(self) -> None:
+        """TokenUsage must reject negative estimated_cost_usd."""
+        from decimal import Decimal
+
+        import pydantic
+
+        from agent_control_plane.types.ids import ModelId
+
+        with pytest.raises(pydantic.ValidationError):
+            TokenUsage(
+                model_id=ModelId("test"),
+                input_tokens=1,
+                output_tokens=1,
+                total_tokens=2,
+                estimated_cost_usd=Decimal("-0.01"),
+            )
+
     async def test_tracker_from_session_classmethod(self) -> None:
         """TokenBudgetTracker.from_session builds tracker bound to caller's session."""
         from unittest.mock import MagicMock

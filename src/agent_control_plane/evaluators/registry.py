@@ -37,14 +37,25 @@ class EvaluatorRegistry:
         return list(self._instances.values())
 
     def _discover(self) -> None:
-        """Load evaluators from installed entry points."""
+        """Load evaluators from installed entry points.
+
+        Entry-point evaluators that share a name with an already-registered evaluator
+        are silently skipped with a warning.  This prevents a malicious or misconfigured
+        plugin from overriding a built-in evaluator by claiming the same name.
+        """
         group_eps = importlib.metadata.entry_points(group=_ENTRY_POINT_GROUP)
         for ep in group_eps:
             try:
                 factory = ep.load()
                 evaluator = factory()
-                if evaluator.name not in self._instances:
-                    self._instances[evaluator.name] = evaluator
-                    logger.debug("Discovered evaluator: %s", evaluator.name)
+                if evaluator.name in self._instances:
+                    logger.warning(
+                        "Entry-point evaluator %r claims name %r which is already registered; skipping.",
+                        ep.name,
+                        evaluator.name,
+                    )
+                    continue
+                self._instances[evaluator.name] = evaluator
+                logger.debug("Discovered evaluator: %s", evaluator.name)
             except Exception:
                 logger.warning("Failed to load evaluator entry point: %s", ep.name, exc_info=True)

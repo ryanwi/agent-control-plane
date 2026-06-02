@@ -160,7 +160,7 @@ class McpGatewayConfig(BaseModel):
     """Configuration for the embedded MCP gateway."""
 
     policy_snapshot: PolicySnapshot = Field(default_factory=PolicySnapshot)
-    auto_create_sessions: bool = True
+    auto_create_sessions: bool = False
     default_max_cost: Decimal = Decimal("10000")
     default_max_action_count: int = 100
     unknown_event_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.RAISE

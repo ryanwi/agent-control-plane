@@ -117,6 +117,39 @@ class TestWithCategoryOverrides:
         cp.close()
 
 
+class TestUnknownEventPolicy:
+    """EventConfig.unknown_event_policy must default to RAISE."""
+
+    def test_default_policy_raises_on_unknown_event(self, db_url: str) -> None:
+        from agent_control_plane.sync import UnknownAppEventError
+
+        # Configure a mapper with one known event so emit_app is wired up.
+        # Sending an unmapped name must raise when default policy is RAISE.
+        cp = ControlPlaneSetup(
+            db_url,
+            events=EventConfig(event_map={"job_started": EventKind.CYCLE_STARTED}),
+        ).build()
+        sid = cp.sessions.open_session("test")
+        with pytest.raises(UnknownAppEventError):
+            cp.sessions.emit_app(sid, "unmapped_event_xyz", {})
+        cp.close()
+
+    def test_explicit_ignore_policy_does_not_raise(self, db_url: str) -> None:
+        from agent_control_plane.types.enums import UnknownAppEventPolicy
+
+        cp = ControlPlaneSetup(
+            db_url,
+            events=EventConfig(
+                event_map={"job_started": EventKind.CYCLE_STARTED},
+                unknown_event_policy=UnknownAppEventPolicy.IGNORE,
+            ),
+        ).build()
+        sid = cp.sessions.open_session("test")
+        result = cp.sessions.emit_app(sid, "unmapped_event_xyz", {})
+        assert result is None
+        cp.close()
+
+
 class TestPropertyAccessors:
     """Config properties are accessible for composable engine setup."""
 

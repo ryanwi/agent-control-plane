@@ -26,7 +26,7 @@ from agent_control_plane.async_facade import (
     AsyncSessionGateway,
 )
 from agent_control_plane.resilient import ResiliencePolicy
-from agent_control_plane.sync import KillResult, SessionLifecycleResult
+from agent_control_plane.sync import KillResult, SessionLifecycleResult, UnknownAppEventError
 from agent_control_plane.types.agentic import (
     ControlPlaneScorecard,
     EvaluationResult,
@@ -155,6 +155,8 @@ class AsyncResilientSessionGateway:
                 correlation_id=correlation_id,
                 idempotency_key=idempotency_key,
             )
+        except UnknownAppEventError:
+            raise  # policy misconfiguration — never swallow
         except Exception as exc:
             return self._p.handle_error(exc, "emit_app", OperationCategory.TELEMETRY, None)
 

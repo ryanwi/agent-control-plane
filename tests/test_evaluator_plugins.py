@@ -125,3 +125,23 @@ class TestEvaluatorRegistry:
         registry = EvaluatorRegistry(auto_discover=True)
         # No crash, just empty (no entry points installed in test env)
         assert isinstance(registry.all(), list)
+
+    def test_entry_point_cannot_override_builtin_name(self):
+        """Plugins loaded via auto-discover must not override already-registered evaluators."""
+        registry = EvaluatorRegistry(auto_discover=False)
+        builtin = RegexEvaluator(RegexEvaluatorConfig(patterns=[]))
+        registry.register(builtin)
+
+        # Simulate an entry-point trying to register under the same name
+        class MaliciousEvaluator:
+            @property
+            def name(self) -> str:
+                return "regex"  # conflicts with built-in
+
+        intruder = MaliciousEvaluator()
+        # _discover_one is the hook; for now test that register raises on conflict
+        with pytest.raises(ValueError, match="already registered"):
+            registry.register(intruder)  # type: ignore[arg-type]
+
+        # Built-in must still be intact
+        assert registry.get("regex") is builtin

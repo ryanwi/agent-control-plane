@@ -1,18 +1,23 @@
 """Sync SQLAlchemy storage backend.
 
 Implements the sync repository protocols using SQLAlchemy Session.
-SQLite doesn't support FOR UPDATE, so this backend uses
-BEGIN IMMEDIATE transactions instead (handled at the session level).
+
+SQLite does not support SELECT … FOR UPDATE, so row-level locking is unavailable.
+Multi-threaded or multi-process deployments using SQLite must configure the engine
+with ``connect_args={"isolation_level": "IMMEDIATE"}`` to serialise writers at the
+BEGIN level.  For Postgres with multiple workers, prefer the async backend which uses
+``with_for_update()`` on all sensitive reads.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import delete, exists, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import Session
 
 from agent_control_plane.engine.budget_tracker import BudgetExhaustedError
@@ -106,19 +111,35 @@ class SyncSqlAlchemySessionRepo:
 
     def increment_budget(self, session_id: UUID, cost: Decimal, action_count: int) -> None:
         control_session_model = ModelRegistry.get("ControlSession")
-        result = self._session.execute(select(control_session_model).where(control_session_model.id == session_id))
-        cs = result.scalar_one()
-        new_cost = cs.used_cost + cost
-        new_count = cs.used_action_count + action_count
-        if new_cost > cs.max_cost:
-            raise BudgetExhaustedError(f"Cost budget exceeded: {new_cost} > {cs.max_cost}")
-        if new_count > cs.max_action_count:
-            raise BudgetExhaustedError(f"Action count exceeded: {new_count} > {cs.max_action_count}")
-        self._session.execute(
-            update(control_session_model)
-            .where(control_session_model.id == session_id)
-            .values(used_cost=new_cost, used_action_count=new_count)
+        # Single conditional UPDATE eliminates the check/increment TOCTOU race: the WHERE
+        # clause and the SET happen atomically, so two concurrent increments cannot both
+        # pass the budget check before either write is committed.
+        dml_result = cast(
+            CursorResult[Any],
+            self._session.execute(
+                update(control_session_model)
+                .where(
+                    control_session_model.id == session_id,
+                    control_session_model.used_cost + cost <= control_session_model.max_cost,
+                    control_session_model.used_action_count + action_count <= control_session_model.max_action_count,
+                )
+                .values(
+                    used_cost=control_session_model.used_cost + cost,
+                    used_action_count=control_session_model.used_action_count + action_count,
+                )
+            ),
         )
+        if dml_result.rowcount == 0:
+            # Row missing or budget would be exceeded — read back to produce a precise error.
+            cs_result = self._session.execute(
+                select(control_session_model).where(control_session_model.id == session_id)
+            )
+            cs = cs_result.scalar_one()  # propagates NoResultFound if session is gone
+            new_cost = cs.used_cost + cost
+            new_count = cs.used_action_count + action_count
+            if new_cost > cs.max_cost:
+                raise BudgetExhaustedError(f"Cost budget exceeded: {new_cost} > {cs.max_cost}")
+            raise BudgetExhaustedError(f"Action count exceeded: {new_count} > {cs.max_action_count}")
 
     def get_budget(self, session_id: UUID) -> BudgetInfo:
         control_session_model = ModelRegistry.get("ControlSession")

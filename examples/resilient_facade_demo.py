@@ -42,7 +42,7 @@ def main() -> None:
     cp.sessions.emit(sid, EventKind.CYCLE_STARTED, {"cycle": 1})
     cp.sessions.emit_app(sid, "job_started", {"job_id": "demo-1"})
 
-    # Budget check — fail-open (returns True on error)
+    # Budget check — fail-closed in MIXED mode (raises on DB error)
     ok = cp.budget.check_budget(sid, cost=Decimal("25"))
     print(f"Budget ok: {ok}")
 

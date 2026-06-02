@@ -93,6 +93,36 @@ def test_budget_operations(db_session: Session):
         repo.increment_budget(cs.id, Decimal("80"), 1)
 
 
+def test_budget_increment_action_count_exhausted(db_session: Session):
+    """increment_budget raises BudgetExhaustedError when action_count would be exceeded."""
+    repo = SyncSqlAlchemySessionRepo(db_session)
+    cs = repo.create_session(
+        session_name="count-limit",
+        status=SessionStatus.ACTIVE,
+        execution_mode="dry_run",
+        max_cost=Decimal("1000"),
+        max_action_count=2,
+    )
+    repo.increment_budget(cs.id, Decimal("0"), 2)
+    with pytest.raises(BudgetExhaustedError):
+        repo.increment_budget(cs.id, Decimal("0"), 1)
+
+
+def test_budget_increment_at_exact_cost_limit_then_raises(db_session: Session):
+    """Filling budget to exactly max_cost succeeds; any additional cost then raises."""
+    repo = SyncSqlAlchemySessionRepo(db_session)
+    cs = repo.create_session(
+        session_name="exact-limit",
+        status=SessionStatus.ACTIVE,
+        execution_mode="dry_run",
+        max_cost=Decimal("50"),
+        max_action_count=100,
+    )
+    repo.increment_budget(cs.id, Decimal("50"), 1)  # fills to exact limit
+    with pytest.raises(BudgetExhaustedError):
+        repo.increment_budget(cs.id, Decimal("0.01"), 0)
+
+
 def test_event_append_and_replay(db_session: Session):
     session_repo = SyncSqlAlchemySessionRepo(db_session)
     event_repo = SyncSqlAlchemyEventRepo(db_session)

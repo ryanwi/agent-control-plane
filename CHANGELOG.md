@@ -2,6 +2,79 @@
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-06-01
+
+### Security
+
+Seven security hardening fixes across three severity tiers, guided by a formal security
+review of the 0.20.x codebase.
+
+**Critical — fixed:**
+
+- **Resilient budget gate is now fail-closed** — `_DEFAULT_MIXED_MODES` previously set
+  `OperationCategory.BUDGET → FAIL_OPEN`, so any database exception in `check_budget`
+  returned `True` (allow), silently opening the budget gate under load or a DB partition.
+  Budget operations in MIXED mode now fail closed (raise). Hosts that intentionally want
+  fail-open budget semantics must opt in via
+  `category_overrides={OperationCategory.BUDGET: ResilienceMode.FAIL_OPEN}`.
+
+- **`McpGatewayConfig.auto_create_sessions` defaults to `False`** — previously `True`,
+  so any call missing a `session_id` silently created a new session with
+  `default_max_cost=10000` / `default_max_action_count=100`. Callers must now supply a
+  `session_id` explicitly, or set `auto_create_sessions=True` to restore the old behaviour.
+
+- **`increment_budget` (sync backend) is now a single atomic UPDATE** — the prior
+  SELECT + UPDATE pattern left a TOCTOU window where two concurrent calls could both read
+  the same `used_cost`, both pass the budget check, and both write, exceeding `max_cost`.
+  A single conditional `UPDATE … WHERE used_cost + cost ≤ max_cost …` eliminates the race;
+  `rowcount == 0` is the budget-exhausted signal.
+
+**High — fixed:**
+
+- **`EventConfig.unknown_event_policy` defaults to `RAISE`** — `ControlPlaneSetup`
+  previously passed `IGNORE` to the facade, silently dropping unmapped app events and
+  leaving unmapped tools audit-free. The default is now `RAISE`; hosts that want silent
+  drops must pass `EventConfig(unknown_event_policy=UnknownAppEventPolicy.IGNORE)`.
+
+- **`UnknownAppEventError` is never swallowed by resilient wrappers** — both
+  `ResilientSessionGateway.emit_app` (sync) and `AsyncResilientSessionGateway.emit_app`
+  now re-raise `UnknownAppEventError` before the generic TELEMETRY fail-open handler runs.
+  Policy misconfiguration errors must surface regardless of the resilience mode.
+
+- **`TokenUsage.estimated_cost_usd` rejects negative values** — a `@model_validator` now
+  raises `ValidationError` for any negative cost. Prevents a compromised caller from
+  reporting negative costs to manipulate budget state.
+
+**Medium — fixed:**
+
+- **Agent-abort kill switch events are now state-bearing** — `KillSwitch._abort_agent`
+  previously emitted `KILL_SWITCH_TRIGGERED` with `state_bearing=False`, so records of an
+  agent-scope emergency stop could be silently dropped during a DB outage. The event is now
+  `state_bearing=True` (fail-closed on write).
+
+- **Evaluator entry-point plugins cannot override built-in names** — `EvaluatorRegistry._discover`
+  now logs a warning and skips any plugin whose name collides with an already-registered
+  evaluator. Prevents a malicious or misconfigured package from replacing a built-in
+  evaluator (e.g. the `regex` evaluator) with one that always returns `allow=True`.
+
+### Breaking (pre-1.0)
+
+- `McpGatewayConfig.auto_create_sessions` changed from `True` → `False`. Any call to
+  `McpGateway.handle_tool_call` without a `session_id` now raises `PolicyDeniedError`.
+  **Migration:** always supply `session_id` (preferred), or pass
+  `McpGatewayConfig(auto_create_sessions=True)` to restore the old behaviour.
+
+- `ControlPlaneSetup`'s default `EventConfig.unknown_event_policy` changed from
+  `IGNORE` → `RAISE`. Unmapped `emit_app` calls now raise `UnknownAppEventError`.
+  **Migration:** add all event names to `event_map`, or pass
+  `EventConfig(unknown_event_policy=UnknownAppEventPolicy.IGNORE)` to restore old behaviour.
+
+- `ResilientControlPlane` / `AsyncResilientControlPlane` MIXED mode: `BUDGET` operations
+  changed from `FAIL_OPEN` → `FAIL_CLOSED`. A DB error on `check_budget` now raises
+  instead of returning `True`.
+  **Migration:** pass
+  `category_overrides={OperationCategory.BUDGET: ResilienceMode.FAIL_OPEN}` to restore.
+
 ## [0.20.1] - 2026-06-01
 
 ### Documented

@@ -118,6 +118,17 @@ class TestAgentAbort:
             assert cs.status == SessionStatus.PAUSED
 
     @pytest.mark.asyncio
+    async def test_agent_abort_events_are_state_bearing(self):
+        """KILL_SWITCH_TRIGGERED events from agent abort must be state_bearing=True."""
+        ks, _sm, _es, session_repo, event_repo, *_ = await _make_ks([{"status": SessionStatus.ACTIVE}])
+        await ks.trigger(KillSwitchScope.AGENT_ABORT, agent_id="agent-1", reason="stop")
+
+        all_events = await event_repo.replay(next(iter(session_repo._sessions.keys())))
+        kill_events = [e for e in all_events if e.kind == EventKind.KILL_SWITCH_TRIGGERED]
+        assert kill_events, "expected a KILL_SWITCH_TRIGGERED event"
+        assert all(e.state_bearing for e in kill_events), "agent abort events must be state_bearing"
+
+    @pytest.mark.asyncio
     async def test_does_not_pause_created_sessions(self):
         ks, _sm, _es, session_repo, _event_repo, *_ = await _make_ks([{"status": SessionStatus.CREATED}])
         result = await ks.trigger(KillSwitchScope.AGENT_ABORT, agent_id="agent-1", reason="stop")

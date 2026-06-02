@@ -154,6 +154,35 @@ def test_revoked_agent_is_blocked(tmp_path: Path):
     cp.close()
 
 
+def test_no_session_id_raises_by_default(tmp_path: Path):
+    """McpGatewayConfig.auto_create_sessions must default to False."""
+    cp = _new_cp(tmp_path, "mcp_no_session")
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    gateway = McpGateway(
+        cp,
+        _OkExecutor(),
+        ToolPolicyMap({"status": ActionName.STATUS}),
+        config=McpGatewayConfig(policy_snapshot=policy),
+    )
+    with pytest.raises(PolicyDeniedError):
+        gateway.handle_tool_call(ToolCallContext(tool_name="status"))  # no session_id
+
+
+def test_auto_create_sessions_opt_in_still_works(tmp_path: Path):
+    """Hosts that explicitly enable auto_create_sessions still get sessions created."""
+    cp = _new_cp(tmp_path, "mcp_autocreate")
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    gateway = McpGateway(
+        cp,
+        _OkExecutor(),
+        ToolPolicyMap({"status": ActionName.STATUS}),
+        config=McpGatewayConfig(policy_snapshot=policy, auto_create_sessions=True),
+    )
+    result = gateway.handle_tool_call(ToolCallContext(tool_name="status"))
+    assert result.ok is True
+    cp.close()
+
+
 def test_failed_tool_call_does_not_export_as_applied(tmp_path: Path):
     cp = _new_cp(tmp_path, "mcp_fail_outcome")
     sid = cp.create_session("mcp-fail-outcome")

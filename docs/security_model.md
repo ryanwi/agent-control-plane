@@ -22,15 +22,24 @@ This document defines the security posture of `agent-control-plane` as an embedd
 
 1. Unknown or unregistered operation/tool invocation
 - Control: fail-closed mapping (`ActionName.UNKNOWN`, `UnknownAppEventPolicy.RAISE`), policy denial path.
+  `ControlPlaneSetup` defaults `EventConfig.unknown_event_policy` to `RAISE`; unmapped `emit_app`
+  calls raise `UnknownAppEventError` regardless of the resilience mode
+  (`UnknownAppEventError` is re-raised before the generic TELEMETRY fail-open handler).
 
 2. Budget abuse/runaway execution
-- Control: pre-check + atomic budget increment and budget-deny handling.
+- Control: single conditional `UPDATE … WHERE used_cost + cost ≤ max_cost …` makes
+  `increment_budget` (sync backend) atomic — no TOCTOU between check and write.
+  `BUDGET` operations in MIXED resilience mode are `FAIL_CLOSED`; a DB error on
+  `check_budget` raises rather than silently allowing spend.
+  `TokenUsage.estimated_cost_usd` is validated non-negative at construction.
 
 3. Unauthorized high-risk action
 - Control: policy tiering + approval gate for manual review.
 
 4. Runaway or compromised runtime
 - Control: scoped kill switch (`session`, `agent`, `system`, `budget` semantics).
+  Agent-abort (`KillSwitchScope.AGENT_ABORT`) emits a state-bearing `KILL_SWITCH_TRIGGERED`
+  event so the record survives a DB outage.
 
 5. Lost auditability during failures
 - Control: state-bearing events fail closed; non-state-bearing telemetry may buffer.
@@ -97,10 +106,22 @@ Token budget enforcement and model access policy introduce additional trust cons
 - Control: `ModelGovernor.check_access()` is a sync pre-routing check. Host apps must invoke it before routing; the control plane does not auto-enforce it. Skipping the check bypasses model tier restrictions.
 
 9. Cost attribution integrity
-- Control: `TokenUsage.estimated_cost_usd` is caller-provided. Host apps should compute cost from authoritative LLM billing data, not from client-reported values. Inaccurate cost reporting undermines budget enforcement.
+- Control: `TokenUsage.estimated_cost_usd` is caller-provided and validated non-negative
+  at construction (`model_validator` raises `ValidationError` for negative values). Host
+  apps should compute cost from authoritative LLM billing data, not from client-reported
+  values. Inaccurate or manipulated cost reporting undermines budget enforcement.
 
 10. Cross-identity budget leakage
 - Control: identity matching uses subset semantics (an org-level config matches any user in that org). Ensure budget configs are scoped appropriately — an overly broad config (e.g., only `org_id` set) applies to all users in that org.
+
+14. Malicious evaluator plugin overrides built-in
+- Threat: a package installed in the same environment registers a plugin under the `regex`
+  entry-point name (or any built-in name), replacing the built-in evaluator with one that
+  always returns `allow=True`.
+- Control: `EvaluatorRegistry._discover` now logs a warning and skips any plugin whose
+  name collides with an already-registered evaluator. Built-ins registered via `register()`
+  before `_discover` runs are protected. For complete isolation, pass `auto_discover=False`
+  and register only explicitly trusted evaluators.
 
 ## Out of scope
 

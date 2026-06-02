@@ -175,3 +175,22 @@ class TestFacadeAccess:
     def test_facade_property(self, facade: ControlPlaneFacade) -> None:
         rcp = ResilientControlPlane(facade)
         assert rcp.facade is facade
+
+
+class TestBudgetFailClosedInMixed:
+    """BUDGET category must be FAIL_CLOSED in MIXED mode (security requirement)."""
+
+    def test_budget_check_raises_on_missing_session_in_mixed(self, facade: ControlPlaneFacade) -> None:
+        rcp = ResilientControlPlane(facade, mode=ResilienceMode.MIXED)
+        with pytest.raises((ValueError, OSError)):
+            rcp.budget.check_budget(UUID(int=999))
+
+    def test_budget_check_still_works_for_valid_session_in_mixed(self, facade: ControlPlaneFacade) -> None:
+        rcp = ResilientControlPlane(facade, mode=ResilienceMode.MIXED)
+        sid = rcp.sessions.open_session("test", max_cost=Decimal("100"))
+        assert rcp.budget.check_budget(sid, cost=Decimal("10")) is True
+
+    def test_budget_explicit_fail_open_still_returns_true_on_error(self, facade: ControlPlaneFacade) -> None:
+        rcp = ResilientControlPlane(facade, mode=ResilienceMode.FAIL_OPEN)
+        result = rcp.budget.check_budget(UUID(int=999))
+        assert result is True

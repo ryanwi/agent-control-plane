@@ -30,7 +30,7 @@ The task-oriented "how do I move my code" companion to `CHANGELOG.md`.
 
 ## Quick path
 
-1. Bump the pin (e.g. `agent-control-plane>=0.20.0,<0.21`) and sync.
+1. Bump the pin (e.g. `agent-control-plane>=0.21.0,<0.22`) and sync.
 2. Apply the breaking migrations below for the versions you actually cross. Let `mypy` and
    your test suite drive — most breaks surface as import/attribute/type errors.
 3. Optionally adopt the new security capabilities (last section).
@@ -41,6 +41,60 @@ The import package is `agent_control_plane` (underscores); the distribution is
 an `import agent_control_plane`.
 
 ## Breaking changes
+
+### 0.21.0 — security defaults tightened (three breaking changes)
+
+**`McpGatewayConfig.auto_create_sessions` is now `False`.**
+
+Any `handle_tool_call` call that omits `session_id` now raises `PolicyDeniedError`.
+
+```python
+# before (implicitly created a session with max_cost=10000)
+gateway.handle_tool_call(ToolCallContext(tool_name="status"))
+
+# after — explicit session required
+sid = cp.create_session("my-session", max_cost=Decimal("100"))
+gateway.handle_tool_call(ToolCallContext(tool_name="status", session_id=sid))
+
+# or opt back in
+config = McpGatewayConfig(policy_snapshot=policy, auto_create_sessions=True)
+```
+
+**`EventConfig.unknown_event_policy` default is now `RAISE`.**
+
+`ControlPlaneSetup(...).build()` and `build_async()` will raise `UnknownAppEventError`
+for any `emit_app` call whose event name is not in `event_map`.
+
+```python
+# before — silently returned None for unmapped events
+cp = ControlPlaneSetup(db_url, events=EventConfig(event_map={"job_started": ...})).build()
+cp.sessions.emit_app(sid, "unknown_xyz", {})  # returned None
+
+# after — raises UnknownAppEventError for unmapped events
+# Fix: either add all used event names to event_map, or:
+events = EventConfig(
+    event_map={"job_started": EventKind.CYCLE_STARTED},
+    unknown_event_policy=UnknownAppEventPolicy.IGNORE,  # restores old behaviour
+)
+```
+
+**`BUDGET` category in MIXED resilience mode is now `FAIL_CLOSED`.**
+
+A DB error on `check_budget` now raises instead of returning `True`.
+
+```python
+# before — DB failure on check_budget returned True in MIXED mode
+rcp = ResilientControlPlane(facade, mode=ResilienceMode.MIXED)
+
+# after — DB failure raises (correct security behaviour)
+# To restore the old behaviour:
+from agent_control_plane.types.enums import OperationCategory, ResilienceMode
+rcp = ResilientControlPlane(
+    facade,
+    mode=ResilienceMode.MIXED,
+    category_overrides={OperationCategory.BUDGET: ResilienceMode.FAIL_OPEN},
+)
+```
 
 ### 0.18.0 — facades split into focused gateways
 

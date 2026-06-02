@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .enums import BudgetPeriod, ModelTier
 from .ids import ModelId, OrgId, TeamId, UserId
@@ -41,6 +41,12 @@ class TokenUsage(BaseModel):
     estimated_cost_usd: Decimal
 
     _coerce_cost = field_validator("estimated_cost_usd", mode="before")(_coerce_decimal)
+
+    @model_validator(mode="after")
+    def _validate_cost_non_negative(self) -> "TokenUsage":
+        if self.estimated_cost_usd < Decimal("0"):
+            raise ValueError("estimated_cost_usd must be non-negative")
+        return self
 
 
 class TokenBudgetConfig(BaseModel):
