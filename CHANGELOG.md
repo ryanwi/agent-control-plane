@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-06-01
+
+### Documented
+
+- **Compatibility & Upgrading guide** — `docs/compatibility.md` now consolidates the
+  compatibility policy with a task-oriented cross-version upgrade guide: the breaking
+  migrations (facade gateway split, `EventMetadata`/`EmitMetadata`, `ControlPlaneSetup`
+  sub-configs, `EventFrame.event_kind` → `kind`, telemetry span rename), the resume/activate
+  integrity behavior change, and the opt-in security capabilities. Linked from `README.md`
+  and `CLAUDE.md`.
+
 ## [0.20.0] - 2026-06-01
 
 ### Added
