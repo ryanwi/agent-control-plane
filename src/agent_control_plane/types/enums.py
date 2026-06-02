@@ -67,7 +67,7 @@ class ActionName(StrEnum):
 
 ActionValue = ActionName | str
 _REGISTERED_ACTION_NAMES: set[str] = set()
-_BUILTIN_ACTION_NAMES: Final[set[str]] = set(ActionName._value2member_map_.keys())
+_BUILTIN_ACTION_NAMES: Final[set[str]] = {m.value for m in ActionName}
 
 
 def register_action_names(names: list[str]) -> None:
@@ -94,7 +94,7 @@ def parse_action_name(value: ActionValue) -> ActionValue:
     if isinstance(value, ActionName):
         return value
     normalized = value.strip().lower()
-    if normalized in ActionName._value2member_map_:
+    if normalized in _BUILTIN_ACTION_NAMES:
         return ActionName(normalized)
     if normalized in _REGISTERED_ACTION_NAMES:
         return normalized

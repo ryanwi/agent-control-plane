@@ -25,6 +25,7 @@ from agent_control_plane.engine.router import ProposalRouter
 from agent_control_plane.engine.session_manager import SessionManager
 from agent_control_plane.models.reference import ActionProposal, Base, register_models
 from agent_control_plane.storage.sqlalchemy_async import AsyncSqlAlchemyUnitOfWork
+from agent_control_plane.types.approvals import ApprovalScope
 from agent_control_plane.types.enums import (
     ActionName,
     ActionTier,
@@ -122,9 +123,7 @@ async def run_control_flow(uow: AsyncSqlAlchemyUnitOfWork) -> None:
         ticket.id,
         decision_type=ApprovalDecisionType.ALLOW_FOR_SESSION,
         decided_by="human-ops",
-        scope_resource_ids=[proposal.resource_id],
-        scope_max_cost=Decimal("20"),
-        scope_max_count=3,
+        scope=ApprovalScope(resource_ids=[proposal.resource_id], max_cost=Decimal("20"), max_count=3),
     )
 
     scoped = await approval_gate.check_session_scope(

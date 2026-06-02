@@ -16,31 +16,31 @@ def _facade(tmp_path: Path) -> ControlPlaneFacade:
 
 def test_checkpoint_and_rollback_flow(tmp_path: Path) -> None:
     facade = _facade(tmp_path)
-    sid = facade.open_session("checkpoint-demo")
+    sid = facade.sessions.open_session("checkpoint-demo")
 
-    cp = facade.create_checkpoint(sid, label="before-action", metadata={"stage": "init"})
+    cp = facade.agentic.create_checkpoint(sid, label="before-action", metadata={"stage": "init"})
     assert cp.session_id == sid
 
-    page = facade.list_checkpoints(sid)
+    page = facade.agentic.list_checkpoints(sid)
     assert page.items
     assert page.items[0].id == cp.id
 
-    result = facade.rollback_to_checkpoint(sid, cp.id, reason="operator rollback")
+    result = facade.agentic.rollback_to_checkpoint(sid, cp.id, reason="operator rollback")
     assert result.session_id == sid
     assert result.to_seq == cp.event_seq
 
 
 def test_goal_plan_and_progress_flow(tmp_path: Path) -> None:
     facade = _facade(tmp_path)
-    sid = facade.open_session("planning-demo")
+    sid = facade.sessions.open_session("planning-demo")
 
-    goal = facade.create_goal(sid, name="close incident", description="resolve customer ticket")
-    plan = facade.create_plan(sid, goal.id, title="incident workflow", steps=["triage", "fix", "verify"])
+    goal = facade.agentic.create_goal(sid, name="close incident", description="resolve customer ticket")
+    plan = facade.agentic.create_plan(sid, goal.id, title="incident workflow", steps=["triage", "fix", "verify"])
 
-    facade.start_plan_step(sid, plan.id, step_index=0)
-    facade.complete_plan_step(sid, plan.id, step_index=0, notes="triaged")
+    facade.agentic.start_plan_step(sid, plan.id, step_index=0)
+    facade.agentic.complete_plan_step(sid, plan.id, step_index=0, notes="triaged")
 
-    progress = facade.get_plan_progress(sid, goal.id)
+    progress = facade.agentic.get_plan_progress(sid, goal.id)
     assert progress.goal.id == goal.id
     assert progress.completed_steps == 1
     assert progress.total_steps == 3
@@ -48,9 +48,9 @@ def test_goal_plan_and_progress_flow(tmp_path: Path) -> None:
 
 def test_evaluation_guardrail_handoff_and_scorecard(tmp_path: Path) -> None:
     facade = _facade(tmp_path)
-    sid = facade.open_session("governance-demo")
+    sid = facade.sessions.open_session("governance-demo")
 
-    ev = facade.record_evaluation(
+    ev = facade.agentic.record_evaluation(
         sid,
         operation="approve_ticket",
         decision=EvaluationDecision.BLOCK,
@@ -59,7 +59,7 @@ def test_evaluation_guardrail_handoff_and_scorecard(tmp_path: Path) -> None:
     )
     assert ev.operation == "approve_ticket"
 
-    gd = facade.apply_guardrail(
+    gd = facade.agentic.apply_guardrail(
         sid,
         phase=GuardrailPhase.INPUT,
         allow=False,
@@ -68,14 +68,14 @@ def test_evaluation_guardrail_handoff_and_scorecard(tmp_path: Path) -> None:
     )
     assert gd.allow is False
 
-    handoff = facade.request_handoff(
+    handoff = facade.agentic.request_handoff(
         sid,
         source_agent_id="agent-a",
         target_agent_id="agent-b",
         allowed_actions=["status"],
     )
     assert handoff.accepted is True
-    rejected = facade.request_handoff(
+    rejected = facade.agentic.request_handoff(
         sid,
         source_agent_id="agent-a",
         target_agent_id="agent-c",
@@ -84,15 +84,15 @@ def test_evaluation_guardrail_handoff_and_scorecard(tmp_path: Path) -> None:
     )
     assert rejected.accepted is False
 
-    facade.emit(sid, EventKind.APPROVAL_REQUESTED, {}, state_bearing=False)
-    facade.emit(sid, EventKind.APPROVAL_GRANTED, {}, state_bearing=False)
-    facade.emit(sid, EventKind.CHECKPOINT_CREATED, {}, state_bearing=False)
-    facade.emit(sid, EventKind.ROLLBACK_COMPLETED, {}, state_bearing=False)
-    facade.emit(sid, EventKind.EXECUTION_COMPLETED, {"cost": 1.25}, state_bearing=False)
-    facade.emit(sid, EventKind.BUDGET_EXHAUSTED, {}, state_bearing=False)
-    facade.emit(sid, EventKind.KILL_SWITCH_TRIGGERED, {"reason": "budget_denied"}, state_bearing=False)
+    facade.sessions.emit(sid, EventKind.APPROVAL_REQUESTED, {}, state_bearing=False)
+    facade.sessions.emit(sid, EventKind.APPROVAL_GRANTED, {}, state_bearing=False)
+    facade.sessions.emit(sid, EventKind.CHECKPOINT_CREATED, {}, state_bearing=False)
+    facade.sessions.emit(sid, EventKind.ROLLBACK_COMPLETED, {}, state_bearing=False)
+    facade.sessions.emit(sid, EventKind.EXECUTION_COMPLETED, {"cost": 1.25}, state_bearing=False)
+    facade.sessions.emit(sid, EventKind.BUDGET_EXHAUSTED, {}, state_bearing=False)
+    facade.sessions.emit(sid, EventKind.KILL_SWITCH_TRIGGERED, {"reason": "budget_denied"}, state_bearing=False)
 
-    scorecard = facade.get_operational_scorecard(session_id=sid)
+    scorecard = facade.observer.get_operational_scorecard(session_id=sid)
     assert scorecard.evaluations_blocked >= 1
     assert scorecard.guardrail_denies >= 1
     assert scorecard.guardrail_allows == 0
@@ -112,8 +112,8 @@ def test_evaluation_guardrail_handoff_and_scorecard(tmp_path: Path) -> None:
 
 def test_scorecard_window_filtering(tmp_path: Path) -> None:
     facade = _facade(tmp_path)
-    sid = facade.open_session("window-demo")
-    facade.emit(sid, EventKind.CYCLE_STARTED, {}, state_bearing=False)
+    sid = facade.sessions.open_session("window-demo")
+    facade.sessions.emit(sid, EventKind.CYCLE_STARTED, {}, state_bearing=False)
     window_start = datetime.now(UTC) + timedelta(seconds=1)
-    scorecard = facade.get_operational_scorecard(session_id=sid, window_start=window_start)
+    scorecard = facade.observer.get_operational_scorecard(session_id=sid, window_start=window_start)
     assert scorecard.total_events == 0

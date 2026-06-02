@@ -80,22 +80,24 @@ source-roots = ["src"]
 max-line-length = 120
 
 [tool.pylint.design]
-max-args = 10
-max-positional-arguments = 10
-max-public-methods = 55
+max-args = 8
+max-positional-arguments = 5
+max-public-methods = 20
+max-attributes = 12
 max-locals = 15
-max-returns = 8
+max-returns = 6
 
 [tool.pylint.messages_control]
 disable = [
     "C",       # convention — covered by Ruff
-    "E",       # errors — covered by mypy
+    "E0704",   # misplaced-bare-raise — false positive: bare raise inside helper called from except
+    "E1102",   # not-callable — false positive: SQLAlchemy func.* uses __getattr__ magic
     "R0801",   # duplicate-code — too noisy across modules
     "R0903",   # too-few-public-methods — false positive for protocols/dataclasses
     "W0212",   # protected-access — intentional in facade/registry patterns
     "W0511",   # fixme — TODO comments are fine
     "W0603",   # global-statement — intentional in extension registry pattern
-    "W0718",   # broad-exception-caught — intentional fail-closed patterns throughout
+    "W0718",   # broad-exception-caught — intentional fail-open/fail-closed throughout
 ]
 
 [tool.pytest.ini_options]

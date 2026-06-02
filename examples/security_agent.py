@@ -178,11 +178,13 @@ class SecurityAgent:
         logger.info(f"Operator reviewing ticket {ticket_id} for {action.decision}...")
 
         # Simulate approval for everything except if we've already done it too much
+        from agent_control_plane.types.approvals import ApprovalScope
+
         await self.approval_gate.approve(
             ticket_id,
             decision_type=ApprovalDecisionType.ALLOW_FOR_SESSION,
             decided_by="security-ops-team",
-            scope_resource_ids=[action.resource_id],
+            scope=ApprovalScope(resource_ids=[action.resource_id]),
         )
 
         # Check if we are now scoped

@@ -70,26 +70,27 @@ class ConditionEvaluator:
         """Evaluate a condition node tree. Returns True if the condition is met."""
         if isinstance(node, RiskLevelCondition | WeightCondition | ScoreCondition | ActionCondition | AssetCondition):
             return _evaluate_leaf(node, proposal, risk_level)
-
         if isinstance(node, EvaluatorCondition):
             return await self._evaluate_evaluator(node, proposal, policy)
-
-        if isinstance(node, AndCondition):
-            for child in node.conditions:
-                if not await self.evaluate(child, proposal, risk_level, policy):
-                    return False
-            return True
-
-        if isinstance(node, OrCondition):
-            for child in node.conditions:
-                if await self.evaluate(child, proposal, risk_level, policy):
-                    return True
-            return False
-
+        if isinstance(node, AndCondition | OrCondition):
+            return await self._evaluate_logical(node, proposal, risk_level, policy)
         if isinstance(node, NotCondition):
             return not await self.evaluate(node.condition, proposal, risk_level, policy)
-
         raise TypeError(f"Unknown condition node type: {type(node)}")  # pragma: no cover
+
+    async def _evaluate_logical(
+        self,
+        node: AndCondition | OrCondition,
+        proposal: ActionProposal,
+        risk_level: RiskLevel,
+        policy: PolicySnapshot,
+    ) -> bool:
+        """Evaluate And/Or with short-circuit semantics."""
+        short_circuit = isinstance(node, OrCondition)
+        for child in node.conditions:
+            if await self.evaluate(child, proposal, risk_level, policy) == short_circuit:
+                return short_circuit
+        return not short_circuit
 
     async def _evaluate_evaluator(
         self,

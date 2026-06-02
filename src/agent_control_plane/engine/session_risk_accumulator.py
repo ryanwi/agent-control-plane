@@ -88,7 +88,13 @@ class SessionRiskAccumulator:
             new_recent = new_recent[-self._max_window :]
         new_score = state.accumulated_score + self._score_contribution(action_risk_level)
         new_count = state.action_count + 1
-        result = self._compute_assessment(state, new_score, new_count, new_recent, action_risk_level)
+        result = self._compute_assessment(
+            state,
+            new_score=new_score,
+            new_count=new_count,
+            new_recent=new_recent,
+            action_risk_level=action_risk_level,
+        )
         self._states[session_id] = result.new_state
 
         if result.was_escalated and self._event_store is not None:
@@ -115,6 +121,7 @@ class SessionRiskAccumulator:
     def _compute_assessment(
         self,
         state: SessionRiskState,
+        *,
         new_score: Decimal,
         new_count: int,
         new_recent: list[str],

@@ -41,16 +41,16 @@ class TestBasicBuild:
 
     def test_can_open_and_close_session(self, db_url: str) -> None:
         cp = ControlPlaneSetup(db_url).build()
-        sid = cp.open_session("test", max_cost=Decimal("100"))
-        session = cp.get_session(sid)
+        sid = cp.sessions.open_session("test", max_cost=Decimal("100"))
+        session = cp.sessions.get_session(sid)
         assert session is not None
-        cp.close_session(sid)
+        cp.sessions.close_session(sid)
         cp.close()
 
     def test_default_resilience_is_mixed(self, db_url: str) -> None:
         cp = ControlPlaneSetup(db_url).build()
-        session_id = cp.open_session("test")
-        result = cp.check_budget(session_id, cost=Decimal("10"))
+        session_id = cp.sessions.open_session("test")
+        result = cp.budget.check_budget(session_id, cost=Decimal("10"))
         assert result is True
         cp.close()
 
@@ -63,8 +63,8 @@ class TestWithEventMap:
             db_url,
             events=EventConfig(event_map={"job_started": EventKind.CYCLE_STARTED}),
         ).build()
-        sid = cp.open_session("test")
-        seq = cp.emit_app(sid, "job_started", {"job_id": "1"})
+        sid = cp.sessions.open_session("test")
+        seq = cp.sessions.emit_app(sid, "job_started", {"job_id": "1"})
         assert isinstance(seq, int)
         cp.close()
 
@@ -91,7 +91,7 @@ class TestWithResilienceMode:
             resilience=ResilienceConfig(mode=ResilienceMode.FAIL_CLOSED),
         ).build()
         with pytest.raises((ValueError, OSError)):
-            cp.check_budget(__import__("uuid").UUID(int=999))
+            cp.budget.check_budget(__import__("uuid").UUID(int=999))
         cp.close()
 
     def test_fail_open_mode(self, db_url: str) -> None:
@@ -99,7 +99,7 @@ class TestWithResilienceMode:
             db_url,
             resilience=ResilienceConfig(mode=ResilienceMode.FAIL_OPEN),
         ).build()
-        result = cp.check_budget(__import__("uuid").UUID(int=999))
+        result = cp.budget.check_budget(__import__("uuid").UUID(int=999))
         assert result is True
         cp.close()
 
@@ -113,7 +113,7 @@ class TestWithCategoryOverrides:
             resilience=ResilienceConfig(category_overrides={OperationCategory.BUDGET: ResilienceMode.FAIL_CLOSED}),
         ).build()
         with pytest.raises((ValueError, OSError)):
-            cp.check_budget(__import__("uuid").UUID(int=999))
+            cp.budget.check_budget(__import__("uuid").UUID(int=999))
         cp.close()
 
 

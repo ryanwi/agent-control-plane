@@ -15,6 +15,7 @@ class RegistryProtocol(Protocol):
     def register(self, name: str, model: type) -> None: ...
     def get(self, name: str) -> Any: ...
     def reset(self) -> None: ...
+    def models(self) -> dict[str, type]: ...
 
 
 class ModelRegistry:
@@ -32,36 +33,69 @@ class ModelRegistry:
 
     @classmethod
     def get(cls, name: str) -> Any:
-        models = cls._scoped_models.get() or cls._models
-        if name not in models:
+        scoped = cls._scoped_models.get()
+        model_map = scoped if scoped is not None else cls._models
+        if name not in model_map:
             raise RuntimeError(
                 f"Model '{name}' not registered. Call ModelRegistry.register('{name}', YourModel) at startup."
             )
-        return models[name]
+        return model_map[name]
 
     @classmethod
     def reset(cls) -> None:
         cls._models.clear()
+
+    @classmethod
+    def has_models(cls) -> bool:
+        """Return True if any models are registered in the global registry."""
+        return bool(cls._models)
+
+    @classmethod
+    def models(cls) -> dict[str, type]:
+        """Return the current model map (scoped or global)."""
+        scoped = cls._scoped_models.get()
+        return scoped if scoped is not None else cls._models
+
+    @classmethod
+    @contextmanager
+    def scope(cls, registry: RegistryProtocol) -> Iterator[None]:
+        """Temporarily scope ModelRegistry.get() to an explicit registry instance."""
+        if registry is cls:
+            yield
+            return
+        model_map = registry.models()
+        if not model_map:
+            yield
+            return
+        token = cls._scoped_models.set(model_map)
+        try:
+            yield
+        finally:
+            cls._scoped_models.reset(token)
 
 
 class ScopedModelRegistry:
     """Instance-scoped model registry for integration isolation."""
 
     def __init__(self) -> None:
-        self._models: dict[str, type] = {}
+        self._model_map: dict[str, type] = {}
 
     def register(self, name: str, model: type) -> None:
-        self._models[name] = model
+        self._model_map[name] = model
 
     def get(self, name: str) -> Any:
-        if name not in self._models:
+        if name not in self._model_map:
             raise RuntimeError(
                 f"Model '{name}' not registered. Call registry.register('{name}', YourModel) at startup."
             )
-        return self._models[name]
+        return self._model_map[name]
 
     def reset(self) -> None:
-        self._models.clear()
+        self._model_map.clear()
+
+    def models(self) -> dict[str, type]:
+        """Return all registered models."""
+        return self._model_map
 
 
 DEFAULT_MODEL_REGISTRY: RegistryProtocol = ModelRegistry
@@ -70,15 +104,5 @@ DEFAULT_MODEL_REGISTRY: RegistryProtocol = ModelRegistry
 @contextmanager
 def registry_scope(registry: RegistryProtocol) -> Iterator[None]:
     """Temporarily scope ModelRegistry.get() to an explicit registry instance."""
-    if registry is ModelRegistry:
+    with ModelRegistry.scope(registry):
         yield
-        return
-    models = getattr(registry, "_models", None)
-    if not isinstance(models, dict):
-        yield
-        return
-    token = ModelRegistry._scoped_models.set(models)
-    try:
-        yield
-    finally:
-        ModelRegistry._scoped_models.reset(token)

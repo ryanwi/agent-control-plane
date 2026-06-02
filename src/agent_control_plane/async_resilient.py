@@ -1,9 +1,9 @@
-"""Async resilient wrapper for AsyncControlPlaneFacade.
+"""Resilient wrappers for AsyncControlPlaneFacade with fail-open/fail-closed semantics.
 
-Async mirror of ResilientControlPlane — same ResilienceMode / OperationCategory
-semantics, wrapping AsyncControlPlaneFacade instead of ControlPlaneFacade.
-See ADR-0009 for design rationale.
+Async mirror of the sync resilient module — same ResiliencePolicy semantics,
+wrapping AsyncControlPlaneFacade gateway objects. See ADR-0009 for design rationale.
 """
+# pylint: disable=broad-exception-caught   # intentional: fail-open/fail-closed dispatch via ResiliencePolicy
 
 from __future__ import annotations
 
@@ -15,7 +15,17 @@ from decimal import Decimal
 from typing import Any, TypeVar
 from uuid import UUID
 
-from agent_control_plane.async_facade import AsyncControlPlaneFacade
+from agent_control_plane.async_facade import (
+    AsyncAgenticGateway,
+    AsyncApprovalGateway,
+    AsyncBudgetGateway,
+    AsyncControlPlaneFacade,
+    AsyncControlPlaneObserver,
+    AsyncLifecycleGateway,
+    AsyncMaintenanceGateway,
+    AsyncSessionGateway,
+)
+from agent_control_plane.resilient import ResiliencePolicy
 from agent_control_plane.sync import KillResult, SessionLifecycleResult
 from agent_control_plane.types.agentic import (
     ControlPlaneScorecard,
@@ -51,102 +61,13 @@ from agent_control_plane.types.sessions import SessionState
 
 T = TypeVar("T")
 
-_DEFAULT_MIXED_MODES: dict[OperationCategory, ResilienceMode] = {
-    OperationCategory.STATE_BEARING: ResilienceMode.FAIL_CLOSED,
-    OperationCategory.TELEMETRY: ResilienceMode.FAIL_OPEN,
-    OperationCategory.QUERY: ResilienceMode.FAIL_OPEN,
-    OperationCategory.BUDGET: ResilienceMode.FAIL_OPEN,
-}
 
+class AsyncResilientSessionGateway:
+    """Adds fail-open/fail-closed semantics to AsyncSessionGateway operations."""
 
-class AsyncResilientControlPlane:
-    """Async wrapper that adds fail-open/fail-closed semantics to AsyncControlPlaneFacade.
-
-    Eliminates the try/except boilerplate that consumers independently
-    build around every async CP call.
-
-    In MIXED mode (the default):
-      - STATE_BEARING ops (session transitions, budget increments) → raise on error
-      - TELEMETRY ops (event emission, scorecard) → return None/default, log warning
-      - QUERY ops (reads, replays, health checks) → return None/default, log warning
-      - BUDGET checks (not increments) → return True, log warning
-    """
-
-    def __init__(
-        self,
-        facade: AsyncControlPlaneFacade,
-        mode: ResilienceMode = ResilienceMode.MIXED,
-        logger: logging.Logger | None = None,
-        category_overrides: dict[OperationCategory, ResilienceMode] | None = None,
-    ) -> None:
-        self._facade = facade
-        self._mode = mode
-        self._logger = logger or logging.getLogger(__name__)
-        self._category_modes = dict(_DEFAULT_MIXED_MODES)
-        if category_overrides:
-            self._category_modes.update(category_overrides)
-
-    @property
-    def facade(self) -> AsyncControlPlaneFacade:
-        """Access the underlying facade for advanced use cases."""
-        return self._facade
-
-    def _should_raise(self, category: OperationCategory) -> bool:
-        if self._mode == ResilienceMode.FAIL_CLOSED:
-            return True
-        if self._mode == ResilienceMode.FAIL_OPEN:
-            return False
-        return self._category_modes.get(category, ResilienceMode.FAIL_CLOSED) == ResilienceMode.FAIL_CLOSED
-
-    def _handle_error(self, exc: Exception, method: str, category: OperationCategory, default: T) -> T:
-        if self._should_raise(category):
-            raise
-        self._logger.warning("CP %s failed (%s), returning default: %s", method, exc, default)
-        return default
-
-    # ── Lifecycle ──────────────────────────────────────────────────
-
-    async def close(self) -> None:
-        await self._facade.close()
-
-    @asynccontextmanager
-    async def session_scope(self) -> AsyncIterator[Any]:
-        async with self._facade.session_scope() as db:
-            yield db
-
-    @asynccontextmanager
-    async def token_budget_tracker(self) -> AsyncIterator[Any]:
-        """Yield a TokenBudgetTracker bound to a fresh DB session.
-
-        Commits on clean exit. Also commits on ``TokenBudgetExhaustedError``
-        so the ledger row that ``record_usage`` writes before raising
-        actually persists — without this, the rollback would silently
-        undo the ledger entry for the over-budget attempt. Other
-        exceptions still trigger rollback.
-
-        Removes the per-call ``AsyncSqlAlchemyTokenBudgetRepo(session)``
-        ceremony for consumers that just want to ``record_usage`` from a
-        request handler.
-        """
-        from agent_control_plane.engine.token_budget_tracker import (
-            TokenBudgetExhaustedError,
-            TokenBudgetTracker,
-        )
-        from agent_control_plane.storage.sqlalchemy_async import AsyncSqlAlchemyTokenBudgetRepo
-
-        async with self._facade.session_scope() as db:
-            tracker = TokenBudgetTracker(AsyncSqlAlchemyTokenBudgetRepo(db))
-            try:
-                yield tracker
-                await db.commit()
-            except TokenBudgetExhaustedError:
-                await db.commit()
-                raise
-            except Exception:
-                await db.rollback()
-                raise
-
-    # ── Session lifecycle (STATE_BEARING) ──────────────────────────
+    def __init__(self, gateway: AsyncSessionGateway, policy: ResiliencePolicy) -> None:
+        self._g = gateway
+        self._p = policy
 
     async def open_session(
         self,
@@ -158,7 +79,7 @@ class AsyncResilientControlPlane:
         command_id: IdempotencyKey | None = None,
     ) -> UUID:
         try:
-            return await self._facade.open_session(
+            return await self._g.open_session(
                 name,
                 max_cost=max_cost,
                 max_action_count=max_action_count,
@@ -166,25 +87,22 @@ class AsyncResilientControlPlane:
                 command_id=command_id,
             )
         except Exception as exc:
-            return self._handle_error(exc, "open_session", OperationCategory.STATE_BEARING, UUID(int=0))
+            return self._p.handle_error(exc, "open_session", OperationCategory.STATE_BEARING, UUID(int=0))
 
     async def close_session(
         self,
         session_id: UUID,
         *,
         final_event_kind: EventKind | None = None,
-        payload: dict[str, object] | None = None,
+        payload: dict[str, Any] | None = None,
         command_id: IdempotencyKey | None = None,
     ) -> SessionLifecycleResult | None:
         try:
-            return await self._facade.close_session(
-                session_id,
-                final_event_kind=final_event_kind,
-                payload=payload,
-                command_id=command_id,
+            return await self._g.close_session(
+                session_id, final_event_kind=final_event_kind, payload=payload, command_id=command_id
             )
         except Exception as exc:
-            return self._handle_error(exc, "close_session", OperationCategory.STATE_BEARING, None)
+            return self._p.handle_error(exc, "close_session", OperationCategory.STATE_BEARING, None)
 
     async def abort_session(
         self,
@@ -195,82 +113,32 @@ class AsyncResilientControlPlane:
         command_id: IdempotencyKey | None = None,
     ) -> SessionLifecycleResult | None:
         try:
-            return await self._facade.abort_session(
+            return await self._g.abort_session(
                 session_id, reason=reason, abort_reason=abort_reason, command_id=command_id
             )
         except Exception as exc:
-            return self._handle_error(exc, "abort_session", OperationCategory.STATE_BEARING, None)
-
-    async def activate_session(self, session_id: UUID) -> SessionLifecycleResult | None:
-        try:
-            return await self._facade.activate_session(session_id)
-        except Exception as exc:
-            return self._handle_error(exc, "activate_session", OperationCategory.STATE_BEARING, None)
-
-    async def pause_session(self, session_id: UUID) -> SessionLifecycleResult | None:
-        try:
-            return await self._facade.pause_session(session_id)
-        except Exception as exc:
-            return self._handle_error(exc, "pause_session", OperationCategory.STATE_BEARING, None)
-
-    async def resume_session(self, session_id: UUID) -> SessionLifecycleResult | None:
-        try:
-            return await self._facade.resume_session(session_id)
-        except Exception as exc:
-            return self._handle_error(exc, "resume_session", OperationCategory.STATE_BEARING, None)
-
-    async def set_active_cycle(self, session_id: UUID, cycle_id: UUID | None) -> None:
-        try:
-            await self._facade.set_active_cycle(session_id, cycle_id)
-        except Exception as exc:
-            self._handle_error(exc, "set_active_cycle", OperationCategory.STATE_BEARING, None)
-
-    async def acquire_cycle(self, session_id: UUID, cycle_id: UUID) -> None:
-        try:
-            await self._facade.acquire_cycle(session_id, cycle_id)
-        except Exception as exc:
-            self._handle_error(exc, "acquire_cycle", OperationCategory.STATE_BEARING, None)
-
-    async def release_cycle(self, session_id: UUID) -> None:
-        try:
-            await self._facade.release_cycle(session_id)
-        except Exception as exc:
-            self._handle_error(exc, "release_cycle", OperationCategory.STATE_BEARING, None)
-
-    async def create_policy(self, **fields: Any) -> UUID:
-        try:
-            return await self._facade.create_policy(**fields)
-        except Exception as exc:
-            return self._handle_error(exc, "create_policy", OperationCategory.STATE_BEARING, UUID(int=0))
-
-    # ── Telemetry (TELEMETRY) ──────────────────────────────────────
+            return self._p.handle_error(exc, "abort_session", OperationCategory.STATE_BEARING, None)
 
     async def emit(
         self,
         session_id: UUID,
         event_kind: EventKind,
-        payload: dict[str, object],
+        payload: dict[str, Any],
         *,
         state_bearing: bool = False,
         metadata: EmitMetadata | None = None,
     ) -> int | None:
         category = OperationCategory.STATE_BEARING if state_bearing else OperationCategory.TELEMETRY
         try:
-            return await self._facade.emit(
-                session_id,
-                event_kind,
-                payload,
-                state_bearing=state_bearing,
-                metadata=metadata,
-            )
+            return await self._g.emit(session_id, event_kind, payload, state_bearing=state_bearing, metadata=metadata)
         except Exception as exc:
-            return self._handle_error(exc, "emit", category, None)
+            return self._p.handle_error(exc, "emit", category, None)
 
     async def emit_app(
         self,
         session_id: UUID,
         event_name: str,
-        payload: Mapping[str, object],
+        payload: Mapping[str, Any],
         *,
         state_bearing: bool | None = None,
         agent_id: AgentId | None = None,
@@ -278,7 +146,7 @@ class AsyncResilientControlPlane:
         idempotency_key: IdempotencyKey | None = None,
     ) -> int | None:
         try:
-            return await self._facade.emit_app(
+            return await self._g.emit_app(
                 session_id,
                 event_name,
                 payload,
@@ -288,184 +156,91 @@ class AsyncResilientControlPlane:
                 idempotency_key=idempotency_key,
             )
         except Exception as exc:
-            return self._handle_error(exc, "emit_app", OperationCategory.TELEMETRY, None)
-
-    async def get_operational_scorecard(
-        self,
-        *,
-        session_id: UUID | None = None,
-        window_start: datetime | None = None,
-        window_end: datetime | None = None,
-    ) -> ControlPlaneScorecard | None:
-        try:
-            return await self._facade.get_operational_scorecard(
-                session_id=session_id,
-                window_start=window_start,
-                window_end=window_end,
-            )
-        except Exception as exc:
-            return self._handle_error(exc, "get_operational_scorecard", OperationCategory.TELEMETRY, None)
-
-    # ── Query (QUERY) ──────────────────────────────────────────────
-
-    async def get_session(self, session_id: UUID) -> SessionState | None:
-        try:
-            return await self._facade.get_session(session_id)
-        except Exception as exc:
-            return self._handle_error(exc, "get_session", OperationCategory.QUERY, None)
-
-    async def list_sessions(
-        self,
-        *,
-        statuses: list[SessionStatus] | None = None,
-        limit: int = 50,
-    ) -> list[SessionState]:
-        try:
-            return await self._facade.list_sessions(statuses=statuses, limit=limit)
-        except Exception as exc:
-            return self._handle_error(exc, "list_sessions", OperationCategory.QUERY, [])
+            return self._p.handle_error(exc, "emit_app", OperationCategory.TELEMETRY, None)
 
     async def replay(self, session_id: UUID, *, after_seq: int = 0, limit: int = 100) -> list[EventFrame]:
         try:
-            return await self._facade.replay(session_id, after_seq=after_seq, limit=limit)
+            return await self._g.replay(session_id, after_seq=after_seq, limit=limit)
         except Exception as exc:
-            return self._handle_error(exc, "replay", OperationCategory.QUERY, [])
+            return self._p.handle_error(exc, "replay", OperationCategory.QUERY, [])
 
-    async def get_health_snapshot(self) -> SessionHealth | None:
+    async def get_session(self, session_id: UUID) -> SessionState | None:
         try:
-            return await self._facade.get_health_snapshot()
+            return await self._g.get_session(session_id)
         except Exception as exc:
-            return self._handle_error(exc, "get_health_snapshot", OperationCategory.QUERY, None)
+            return self._p.handle_error(exc, "get_session", OperationCategory.QUERY, None)
 
-    async def get_ticket(self, ticket_id: UUID) -> ApprovalTicket | None:
-        try:
-            return await self._facade.get_ticket(ticket_id)
-        except Exception as exc:
-            return self._handle_error(exc, "get_ticket", OperationCategory.QUERY, None)
-
-    async def list_tickets(
+    async def kill_session(
         self,
+        session_id: UUID,
         *,
-        session_id: UUID | None = None,
-        statuses: list[ApprovalStatus] | None = None,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> Page[ApprovalTicket] | None:
-        try:
-            return await self._facade.list_tickets(session_id=session_id, statuses=statuses, limit=limit, offset=offset)
-        except Exception as exc:
-            return self._handle_error(exc, "list_tickets", OperationCategory.QUERY, None)
-
-    async def get_pending_tickets(self, session_id: UUID | None = None) -> list[ApprovalTicket]:
-        try:
-            return await self._facade.get_pending_tickets(session_id)
-        except Exception as exc:
-            return self._handle_error(exc, "get_pending_tickets", OperationCategory.QUERY, [])
-
-    async def expire_timed_out_tickets(self) -> int:
-        try:
-            return await self._facade.expire_timed_out_tickets()
-        except Exception as exc:
-            return self._handle_error(exc, "expire_timed_out_tickets", OperationCategory.QUERY, 0)
-
-    async def get_proposal(self, proposal_id: UUID) -> ActionProposal | None:
-        try:
-            return await self._facade.get_proposal(proposal_id)
-        except Exception as exc:
-            return self._handle_error(exc, "get_proposal", OperationCategory.QUERY, None)
-
-    async def list_proposals(
-        self,
-        *,
-        session_id: UUID | None = None,
-        statuses: list[ProposalStatus] | None = None,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> Page[ActionProposal] | None:
-        try:
-            return await self._facade.list_proposals(
-                session_id=session_id, statuses=statuses, limit=limit, offset=offset
-            )
-        except Exception as exc:
-            return self._handle_error(exc, "list_proposals", OperationCategory.QUERY, None)
-
-    async def get_state_change_feed(
-        self,
-        *,
-        session_id: UUID | None = None,
-        cursor: int = 0,
-        limit: int = 100,
-    ) -> StateChangePage | None:
-        try:
-            return await self._facade.get_state_change_feed(session_id=session_id, cursor=cursor, limit=limit)
-        except Exception as exc:
-            return self._handle_error(exc, "get_state_change_feed", OperationCategory.QUERY, None)
-
-    async def list_checkpoints(
-        self, session_id: UUID, *, limit: int = 50, offset: int = 0
-    ) -> Page[SessionCheckpoint] | None:
-        try:
-            return await self._facade.list_checkpoints(session_id, limit=limit, offset=offset)
-        except Exception as exc:
-            return self._handle_error(exc, "list_checkpoints", OperationCategory.QUERY, None)
-
-    async def get_plan_progress(self, session_id: UUID, goal_id: UUID) -> PlanProgress | None:
-        try:
-            return await self._facade.get_plan_progress(session_id, goal_id)
-        except Exception as exc:
-            return self._handle_error(exc, "get_plan_progress", OperationCategory.QUERY, None)
-
-    async def get_remaining_budget(self, session_id: UUID) -> dict[str, Decimal | int] | None:
-        try:
-            return await self._facade.get_remaining_budget(session_id)
-        except Exception as exc:
-            return self._handle_error(exc, "get_remaining_budget", OperationCategory.QUERY, None)
-
-    async def recover_stuck_sessions(self) -> dict[str, int]:
-        try:
-            return await self._facade.recover_stuck_sessions()
-        except Exception as exc:
-            return self._handle_error(
-                exc,
-                "recover_stuck_sessions",
-                OperationCategory.QUERY,
-                {"stuck_sessions": 0, "recovered": 0, "aborted": 0},
-            )
-
-    async def check_stuck_cycles(self, timeout_seconds: int = 900) -> dict[str, int]:
-        try:
-            return await self._facade.check_stuck_cycles(timeout_seconds=timeout_seconds)
-        except Exception as exc:
-            return self._handle_error(
-                exc, "check_stuck_cycles", OperationCategory.QUERY, {"checked": 0, "escalated": 0}
-            )
-
-    # ── Budget (BUDGET for checks, STATE_BEARING for mutations) ────
-
-    async def check_budget(self, session_id: UUID, cost: Decimal = Decimal("0"), action_count: int = 1) -> bool:
-        try:
-            return await self._facade.check_budget(session_id, cost=cost, action_count=action_count)
-        except Exception as exc:
-            return self._handle_error(exc, "check_budget", OperationCategory.BUDGET, True)
-
-    async def increment_budget(self, session_id: UUID, cost: Decimal, action_count: int = 1) -> None:
-        try:
-            await self._facade.increment_budget(session_id, cost=cost, action_count=action_count)
-        except Exception as exc:
-            self._handle_error(exc, "increment_budget", OperationCategory.STATE_BEARING, None)
-
-    # ── Proposals & approvals (STATE_BEARING) ──────────────────────
-
-    async def create_proposal(
-        self,
-        proposal: ActionProposal,
-        *,
+        reason: str = "Kill switch triggered",
         command_id: IdempotencyKey | None = None,
-    ) -> ActionProposal | None:
+    ) -> KillResult | None:
         try:
-            return await self._facade.create_proposal(proposal, command_id=command_id)
+            return await self._g.kill_session(session_id, reason=reason, command_id=command_id)
         except Exception as exc:
-            return self._handle_error(exc, "create_proposal", OperationCategory.STATE_BEARING, None)
+            return self._p.handle_error(exc, "kill_session", OperationCategory.STATE_BEARING, None)
+
+    async def kill_system(
+        self, *, reason: str = "System halt", command_id: IdempotencyKey | None = None
+    ) -> KillResult | None:
+        try:
+            return await self._g.kill_system(reason=reason, command_id=command_id)
+        except Exception as exc:
+            return self._p.handle_error(exc, "kill_system", OperationCategory.STATE_BEARING, None)
+
+
+class AsyncResilientLifecycleGateway:
+    """Adds fail-open/fail-closed semantics to AsyncLifecycleGateway operations."""
+
+    def __init__(self, gateway: AsyncLifecycleGateway, policy: ResiliencePolicy) -> None:
+        self._g = gateway
+        self._p = policy
+
+    async def activate_session(self, session_id: UUID) -> SessionLifecycleResult | None:
+        try:
+            return await self._g.activate_session(session_id)
+        except Exception as exc:
+            return self._p.handle_error(exc, "activate_session", OperationCategory.STATE_BEARING, None)
+
+    async def pause_session(self, session_id: UUID) -> SessionLifecycleResult | None:
+        try:
+            return await self._g.pause_session(session_id)
+        except Exception as exc:
+            return self._p.handle_error(exc, "pause_session", OperationCategory.STATE_BEARING, None)
+
+    async def resume_session(self, session_id: UUID) -> SessionLifecycleResult | None:
+        try:
+            return await self._g.resume_session(session_id)
+        except Exception as exc:
+            return self._p.handle_error(exc, "resume_session", OperationCategory.STATE_BEARING, None)
+
+    async def set_active_cycle(self, session_id: UUID, cycle_id: UUID | None) -> None:
+        try:
+            await self._g.set_active_cycle(session_id, cycle_id)
+        except Exception as exc:
+            self._p.handle_error(exc, "set_active_cycle", OperationCategory.STATE_BEARING, None)
+
+    async def acquire_cycle(self, session_id: UUID, cycle_id: UUID) -> None:
+        try:
+            await self._g.acquire_cycle(session_id, cycle_id)
+        except Exception as exc:
+            self._p.handle_error(exc, "acquire_cycle", OperationCategory.STATE_BEARING, None)
+
+    async def release_cycle(self, session_id: UUID) -> None:
+        try:
+            await self._g.release_cycle(session_id)
+        except Exception as exc:
+            self._p.handle_error(exc, "release_cycle", OperationCategory.STATE_BEARING, None)
+
+
+class AsyncResilientApprovalGateway:
+    """Adds fail-open/fail-closed semantics to AsyncApprovalGateway operations."""
+
+    def __init__(self, gateway: AsyncApprovalGateway, policy: ResiliencePolicy) -> None:
+        self._g = gateway
+        self._p = policy
 
     async def create_ticket(
         self,
@@ -476,9 +251,9 @@ class AsyncResilientControlPlane:
         command_id: IdempotencyKey | None = None,
     ) -> ApprovalTicket | None:
         try:
-            return await self._facade.create_ticket(session_id, proposal_id, timeout_at, command_id=command_id)
+            return await self._g.create_ticket(session_id, proposal_id, timeout_at, command_id=command_id)
         except Exception as exc:
-            return self._handle_error(exc, "create_ticket", OperationCategory.STATE_BEARING, None)
+            return self._p.handle_error(exc, "create_ticket", OperationCategory.STATE_BEARING, None)
 
     async def approve_ticket(
         self,
@@ -491,7 +266,7 @@ class AsyncResilientControlPlane:
         command_id: IdempotencyKey | None = None,
     ) -> ApprovalTicket | None:
         try:
-            return await self._facade.approve_ticket(
+            return await self._g.approve_ticket(
                 ticket_id,
                 decided_by=decided_by,
                 reason=reason,
@@ -500,7 +275,7 @@ class AsyncResilientControlPlane:
                 command_id=command_id,
             )
         except Exception as exc:
-            return self._handle_error(exc, "approve_ticket", OperationCategory.STATE_BEARING, None)
+            return self._p.handle_error(exc, "approve_ticket", OperationCategory.STATE_BEARING, None)
 
     async def deny_ticket(
         self,
@@ -510,66 +285,104 @@ class AsyncResilientControlPlane:
         command_id: IdempotencyKey | None = None,
     ) -> ApprovalTicket | None:
         try:
-            return await self._facade.deny_ticket(ticket_id, reason=reason, command_id=command_id)
+            return await self._g.deny_ticket(ticket_id, reason=reason, command_id=command_id)
         except Exception as exc:
-            return self._handle_error(exc, "deny_ticket", OperationCategory.STATE_BEARING, None)
+            return self._p.handle_error(exc, "deny_ticket", OperationCategory.STATE_BEARING, None)
 
-    # ── Kill switch (STATE_BEARING) ────────────────────────────────
+    async def get_ticket(self, ticket_id: UUID) -> ApprovalTicket | None:
+        try:
+            return await self._g.get_ticket(ticket_id)
+        except Exception as exc:
+            return self._p.handle_error(exc, "get_ticket", OperationCategory.QUERY, None)
 
-    async def kill_session(
+    async def list_tickets(
         self,
-        session_id: UUID,
         *,
-        reason: str = "Kill switch triggered",
-        command_id: IdempotencyKey | None = None,
-    ) -> KillResult | None:
+        session_id: UUID | None = None,
+        statuses: list[ApprovalStatus] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Page[ApprovalTicket] | None:
         try:
-            return await self._facade.kill_session(session_id, reason=reason, command_id=command_id)
+            return await self._g.list_tickets(session_id=session_id, statuses=statuses, limit=limit, offset=offset)
         except Exception as exc:
-            return self._handle_error(exc, "kill_session", OperationCategory.STATE_BEARING, None)
+            return self._p.handle_error(exc, "list_tickets", OperationCategory.QUERY, None)
 
-    async def kill_system(
-        self, *, reason: str = "System halt", command_id: IdempotencyKey | None = None
-    ) -> KillResult | None:
+    async def get_pending_tickets(self, session_id: UUID | None = None) -> list[ApprovalTicket]:
         try:
-            return await self._facade.kill_system(reason=reason, command_id=command_id)
+            return await self._g.get_pending_tickets(session_id)
         except Exception as exc:
-            return self._handle_error(exc, "kill_system", OperationCategory.STATE_BEARING, None)
+            return self._p.handle_error(exc, "get_pending_tickets", OperationCategory.QUERY, [])
 
-    # ── Checkpoints & rollback (STATE_BEARING) ─────────────────────
+    async def expire_timed_out_tickets(self) -> int:
+        try:
+            return await self._g.expire_timed_out_tickets()
+        except Exception as exc:
+            return self._p.handle_error(exc, "expire_timed_out_tickets", OperationCategory.STATE_BEARING, 0)
 
-    async def create_checkpoint(
+    async def create_proposal(
         self,
-        session_id: UUID,
+        proposal: ActionProposal,
         *,
-        label: str,
-        metadata: dict[str, object] | None = None,
-        created_by: str = "system",
         command_id: IdempotencyKey | None = None,
-    ) -> SessionCheckpoint | None:
+    ) -> ActionProposal | None:
         try:
-            return await self._facade.create_checkpoint(
-                session_id, label=label, metadata=metadata, created_by=created_by, command_id=command_id
-            )
+            return await self._g.create_proposal(proposal, command_id=command_id)
         except Exception as exc:
-            return self._handle_error(exc, "create_checkpoint", OperationCategory.STATE_BEARING, None)
+            return self._p.handle_error(exc, "create_proposal", OperationCategory.STATE_BEARING, None)
 
-    async def rollback_to_checkpoint(
+    async def get_proposal(self, proposal_id: UUID) -> ActionProposal | None:
+        try:
+            return await self._g.get_proposal(proposal_id)
+        except Exception as exc:
+            return self._p.handle_error(exc, "get_proposal", OperationCategory.QUERY, None)
+
+    async def list_proposals(
         self,
-        session_id: UUID,
-        checkpoint_id: UUID,
         *,
-        reason: str,
-        command_id: IdempotencyKey | None = None,
-    ) -> RollbackResult | None:
+        session_id: UUID | None = None,
+        statuses: list[ProposalStatus] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Page[ActionProposal] | None:
         try:
-            return await self._facade.rollback_to_checkpoint(
-                session_id, checkpoint_id, reason=reason, command_id=command_id
-            )
+            return await self._g.list_proposals(session_id=session_id, statuses=statuses, limit=limit, offset=offset)
         except Exception as exc:
-            return self._handle_error(exc, "rollback_to_checkpoint", OperationCategory.STATE_BEARING, None)
+            return self._p.handle_error(exc, "list_proposals", OperationCategory.QUERY, None)
 
-    # ── Goals & plans (TELEMETRY) ──────────────────────────────────
+
+class AsyncResilientBudgetGateway:
+    """Adds fail-open/fail-closed semantics to AsyncBudgetGateway operations."""
+
+    def __init__(self, gateway: AsyncBudgetGateway, policy: ResiliencePolicy) -> None:
+        self._g = gateway
+        self._p = policy
+
+    async def check_budget(self, session_id: UUID, cost: Decimal = Decimal("0"), action_count: int = 1) -> bool:
+        try:
+            return await self._g.check_budget(session_id, cost=cost, action_count=action_count)
+        except Exception as exc:
+            return self._p.handle_error(exc, "check_budget", OperationCategory.BUDGET, True)
+
+    async def increment_budget(self, session_id: UUID, cost: Decimal, action_count: int = 1) -> None:
+        try:
+            await self._g.increment_budget(session_id, cost, action_count)
+        except Exception as exc:
+            self._p.handle_error(exc, "increment_budget", OperationCategory.STATE_BEARING, None)
+
+    async def get_remaining_budget(self, session_id: UUID) -> dict[str, Decimal | int] | None:
+        try:
+            return await self._g.get_remaining_budget(session_id)
+        except Exception as exc:
+            return self._p.handle_error(exc, "get_remaining_budget", OperationCategory.QUERY, None)
+
+
+class AsyncResilientAgenticGateway:
+    """Adds fail-open/fail-closed semantics to AsyncAgenticGateway operations."""
+
+    def __init__(self, gateway: AsyncAgenticGateway, policy: ResiliencePolicy) -> None:
+        self._g = gateway
+        self._p = policy
 
     async def create_goal(
         self,
@@ -580,31 +393,35 @@ class AsyncResilientControlPlane:
         metadata: dict[str, object] | None = None,
     ) -> Goal | None:
         try:
-            return await self._facade.create_goal(session_id, name=name, description=description, metadata=metadata)
+            return await self._g.create_goal(session_id, name=name, description=description, metadata=metadata)
         except Exception as exc:
-            return self._handle_error(exc, "create_goal", OperationCategory.TELEMETRY, None)
+            return self._p.handle_error(exc, "create_goal", OperationCategory.TELEMETRY, None)
 
     async def create_plan(self, session_id: UUID, goal_id: UUID, *, title: str, steps: list[str]) -> Plan | None:
         try:
-            return await self._facade.create_plan(session_id, goal_id, title=title, steps=steps)
+            return await self._g.create_plan(session_id, goal_id, title=title, steps=steps)
         except Exception as exc:
-            return self._handle_error(exc, "create_plan", OperationCategory.TELEMETRY, None)
+            return self._p.handle_error(exc, "create_plan", OperationCategory.TELEMETRY, None)
 
     async def start_plan_step(self, session_id: UUID, plan_id: UUID, *, step_index: int) -> PlanStep | None:
         try:
-            return await self._facade.start_plan_step(session_id, plan_id, step_index=step_index)
+            return await self._g.start_plan_step(session_id, plan_id, step_index=step_index)
         except Exception as exc:
-            return self._handle_error(exc, "start_plan_step", OperationCategory.TELEMETRY, None)
+            return self._p.handle_error(exc, "start_plan_step", OperationCategory.TELEMETRY, None)
 
     async def complete_plan_step(
         self, session_id: UUID, plan_id: UUID, *, step_index: int, notes: str | None = None
     ) -> PlanStep | None:
         try:
-            return await self._facade.complete_plan_step(session_id, plan_id, step_index=step_index, notes=notes)
+            return await self._g.complete_plan_step(session_id, plan_id, step_index=step_index, notes=notes)
         except Exception as exc:
-            return self._handle_error(exc, "complete_plan_step", OperationCategory.TELEMETRY, None)
+            return self._p.handle_error(exc, "complete_plan_step", OperationCategory.TELEMETRY, None)
 
-    # ── Evaluations & guardrails (TELEMETRY) ───────────────────────
+    async def get_plan_progress(self, session_id: UUID, goal_id: UUID) -> PlanProgress | None:
+        try:
+            return await self._g.get_plan_progress(session_id, goal_id)
+        except Exception as exc:
+            return self._p.handle_error(exc, "get_plan_progress", OperationCategory.QUERY, None)
 
     async def record_evaluation(
         self,
@@ -617,11 +434,16 @@ class AsyncResilientControlPlane:
         actions: list[str] | None = None,
     ) -> EvaluationResult | None:
         try:
-            return await self._facade.record_evaluation(
-                session_id, operation=operation, decision=decision, score=score, reasons=reasons, actions=actions
+            return await self._g.record_evaluation(
+                session_id,
+                operation=operation,
+                decision=decision,
+                score=score,
+                reasons=reasons,
+                actions=actions,
             )
         except Exception as exc:
-            return self._handle_error(exc, "record_evaluation", OperationCategory.TELEMETRY, None)
+            return self._p.handle_error(exc, "record_evaluation", OperationCategory.TELEMETRY, None)
 
     async def apply_guardrail(
         self,
@@ -634,11 +456,16 @@ class AsyncResilientControlPlane:
         metadata: dict[str, object] | None = None,
     ) -> GuardrailDecision | None:
         try:
-            return await self._facade.apply_guardrail(
-                session_id, phase=phase, allow=allow, policy_code=policy_code, reason=reason, metadata=metadata
+            return await self._g.apply_guardrail(
+                session_id,
+                phase=phase,
+                allow=allow,
+                policy_code=policy_code,
+                reason=reason,
+                metadata=metadata,
             )
         except Exception as exc:
-            return self._handle_error(exc, "apply_guardrail", OperationCategory.TELEMETRY, None)
+            return self._p.handle_error(exc, "apply_guardrail", OperationCategory.TELEMETRY, None)
 
     async def request_handoff(
         self,
@@ -652,7 +479,7 @@ class AsyncResilientControlPlane:
         metadata: dict[str, object] | None = None,
     ) -> HandoffResult | None:
         try:
-            return await self._facade.request_handoff(
+            return await self._g.request_handoff(
                 session_id,
                 source_agent_id=source_agent_id,
                 target_agent_id=target_agent_id,
@@ -662,4 +489,164 @@ class AsyncResilientControlPlane:
                 metadata=metadata,
             )
         except Exception as exc:
-            return self._handle_error(exc, "request_handoff", OperationCategory.TELEMETRY, None)
+            return self._p.handle_error(exc, "request_handoff", OperationCategory.TELEMETRY, None)
+
+    async def create_checkpoint(
+        self,
+        session_id: UUID,
+        *,
+        label: str,
+        metadata: dict[str, object] | None = None,
+        created_by: str = "system",
+        command_id: IdempotencyKey | None = None,
+    ) -> SessionCheckpoint | None:
+        try:
+            return await self._g.create_checkpoint(
+                session_id,
+                label=label,
+                metadata=metadata,
+                created_by=created_by,
+                command_id=command_id,
+            )
+        except Exception as exc:
+            return self._p.handle_error(exc, "create_checkpoint", OperationCategory.STATE_BEARING, None)
+
+    async def list_checkpoints(
+        self, session_id: UUID, *, limit: int = 50, offset: int = 0
+    ) -> Page[SessionCheckpoint] | None:
+        try:
+            return await self._g.list_checkpoints(session_id, limit=limit, offset=offset)
+        except Exception as exc:
+            return self._p.handle_error(exc, "list_checkpoints", OperationCategory.QUERY, None)
+
+    async def rollback_to_checkpoint(
+        self,
+        session_id: UUID,
+        checkpoint_id: UUID,
+        *,
+        reason: str,
+        command_id: IdempotencyKey | None = None,
+    ) -> RollbackResult | None:
+        try:
+            return await self._g.rollback_to_checkpoint(session_id, checkpoint_id, reason=reason, command_id=command_id)
+        except Exception as exc:
+            return self._p.handle_error(exc, "rollback_to_checkpoint", OperationCategory.STATE_BEARING, None)
+
+
+class AsyncResilientObserverGateway:
+    """Adds fail-open/fail-closed semantics to AsyncControlPlaneObserver operations."""
+
+    def __init__(self, observer: AsyncControlPlaneObserver, policy: ResiliencePolicy) -> None:
+        self._o = observer
+        self._p = policy
+
+    async def list_sessions(
+        self, *, statuses: list[SessionStatus] | None = None, limit: int = 50
+    ) -> list[SessionState]:
+        try:
+            return await self._o.list_sessions(statuses=statuses, limit=limit)
+        except Exception as exc:
+            return self._p.handle_error(exc, "list_sessions", OperationCategory.QUERY, [])
+
+    async def get_state_change_feed(
+        self,
+        *,
+        session_id: UUID | None = None,
+        cursor: int = 0,
+        limit: int = 100,
+    ) -> StateChangePage | None:
+        try:
+            return await self._o.get_state_change_feed(session_id=session_id, cursor=cursor, limit=limit)
+        except Exception as exc:
+            return self._p.handle_error(exc, "get_state_change_feed", OperationCategory.QUERY, None)
+
+    async def get_health_snapshot(self) -> SessionHealth | None:
+        try:
+            return await self._o.get_health_snapshot()
+        except Exception as exc:
+            return self._p.handle_error(exc, "get_health_snapshot", OperationCategory.QUERY, None)
+
+    async def get_operational_scorecard(
+        self,
+        *,
+        session_id: UUID | None = None,
+        window_start: datetime | None = None,
+        window_end: datetime | None = None,
+    ) -> ControlPlaneScorecard | None:
+        try:
+            return await self._o.get_operational_scorecard(
+                session_id=session_id, window_start=window_start, window_end=window_end
+            )
+        except Exception as exc:
+            return self._p.handle_error(exc, "get_operational_scorecard", OperationCategory.TELEMETRY, None)
+
+
+class AsyncResilientMaintenanceGateway:
+    """Adds fail-open/fail-closed semantics to AsyncMaintenanceGateway operations."""
+
+    def __init__(self, gateway: AsyncMaintenanceGateway, policy: ResiliencePolicy) -> None:
+        self._g = gateway
+        self._p = policy
+
+    async def recover_stuck_sessions(self) -> dict[str, int]:
+        try:
+            return await self._g.recover_stuck_sessions()
+        except Exception as exc:
+            return self._p.handle_error(
+                exc,
+                "recover_stuck_sessions",
+                OperationCategory.STATE_BEARING,
+                {"stuck_sessions": 0, "recovered": 0, "aborted": 0},
+            )
+
+    async def check_stuck_cycles(self, timeout_seconds: int = 900) -> dict[str, int]:
+        try:
+            return await self._g.check_stuck_cycles(timeout_seconds=timeout_seconds)
+        except Exception as exc:
+            return self._p.handle_error(
+                exc, "check_stuck_cycles", OperationCategory.STATE_BEARING, {"checked": 0, "escalated": 0}
+            )
+
+
+class AsyncResilientControlPlane:
+    """Composes resilient async gateway objects as a fault-tolerant control-plane entry point."""
+
+    def __init__(
+        self,
+        facade: AsyncControlPlaneFacade,
+        mode: ResilienceMode = ResilienceMode.MIXED,
+        logger: logging.Logger | None = None,
+        category_overrides: dict[OperationCategory, ResilienceMode] | None = None,
+    ) -> None:
+        policy = ResiliencePolicy(mode, logger, category_overrides)
+        self.sessions: AsyncResilientSessionGateway = AsyncResilientSessionGateway(facade.sessions, policy)
+        self.lifecycle: AsyncResilientLifecycleGateway = AsyncResilientLifecycleGateway(facade.lifecycle, policy)
+        self.approvals: AsyncResilientApprovalGateway = AsyncResilientApprovalGateway(facade.approvals, policy)
+        self.budget: AsyncResilientBudgetGateway = AsyncResilientBudgetGateway(facade.budget, policy)
+        self.agentic: AsyncResilientAgenticGateway = AsyncResilientAgenticGateway(facade.agentic, policy)
+        self.observer: AsyncResilientObserverGateway = AsyncResilientObserverGateway(facade.observer, policy)
+        self.maintenance: AsyncResilientMaintenanceGateway = AsyncResilientMaintenanceGateway(
+            facade.maintenance, policy
+        )
+        self._facade = facade
+
+    @property
+    def facade(self) -> AsyncControlPlaneFacade:
+        """Access the underlying facade for advanced use cases."""
+        return self._facade
+
+    async def close(self) -> None:
+        await self._facade.close()
+
+    @asynccontextmanager
+    async def session_scope(self) -> AsyncIterator[Any]:
+        async with self._facade.session_scope() as db:
+            yield db
+
+    @asynccontextmanager
+    async def token_budget_tracker(self) -> AsyncIterator[Any]:
+        async with self._facade.token_budget_tracker() as tracker:
+            yield tracker
+
+    async def create_policy(self, **fields: Any) -> UUID:
+        return await self._facade.create_policy(**fields)
