@@ -22,13 +22,13 @@
 
 - **`EmitMetadata` dataclass** — `emit()` on `ControlPlaneFacade`, `AsyncControlPlaneFacade`, `ResilientControlPlane`, and `AsyncResilientControlPlane` now takes a single `EmitMetadata` frozen dataclass instead of 7 optional keyword arguments (`agent_id`, `correlation_id`, `idempotency_key`, `state_bearing`, `policy_snapshot_id`, `action_id`, `extra`). Callers must wrap attribution kwargs in `EmitMetadata(...)`. `EmitMetadata` is exported from `agent_control_plane`.
 - **`ControlPlaneSetup` sub-configs** — `ControlPlaneSetup.__init__()` now takes three typed sub-config objects instead of 13 flat keyword arguments: `GovernanceConfig` (action names, policy, token budgets), `EventConfig` (event map, unknown-event policy), and `ResilienceConfig` (mode and per-category overrides). All three are exported from `agent_control_plane`.
-- **`EventFrame.event_kind`** — the `kind` field on `EventFrame` has been renamed to `event_kind` for consistency with the `cp.event_kind` telemetry attribute. Any code that accessed `frame.kind` directly must update to `frame.event_kind`.
+- **`EventFrame.kind`** — the `event_kind` field on `EventFrame` has been renamed to `kind`. The `event_` prefix was redundant on a class already named `EventFrame`. Any code that accessed `frame.event_kind` must update to `frame.kind`. The OTEL attribute key `cp.event_kind` and the ORM column name are unchanged.
 
 ### Breaking (pre-1.0)
 
 - `emit()` signature changed: 7 optional kwargs → `EmitMetadata` dataclass (see Changed above).
 - `ControlPlaneSetup.__init__()` signature changed: 13 flat kwargs → 3 sub-config objects (`GovernanceConfig`, `EventConfig`, `ResilienceConfig`).
-- `EventFrame.kind` renamed to `EventFrame.event_kind`.
+- `EventFrame.event_kind` renamed to `EventFrame.kind`.
 - Telemetry span name changed from `"agent_control_plane.event"` to `"agent_control_plane.governance"`. Any OTel span name filters or dashboards targeting the old name must update.
 
 ## [0.16.0] - 2026-06-01
