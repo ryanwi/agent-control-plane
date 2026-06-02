@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, exists, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent_control_plane.engine.budget_tracker import BudgetExhaustedError
@@ -657,9 +657,9 @@ class AsyncSqlAlchemyAgentRepo:
     async def is_agent_revoked(self, session_id: UUID, agent_id: str) -> bool:
         model = ModelRegistry.get("AgentSessionRevocation")
         result = await self._session.execute(
-            select(model.id).where(model.session_id == session_id, model.agent_id == agent_id)
+            select(exists().where(model.session_id == session_id, model.agent_id == agent_id))
         )
-        return result.first() is not None
+        return bool(result.scalar())
 
 
 class AsyncSqlAlchemyTokenBudgetRepo:

@@ -4,7 +4,7 @@
 
 This package separates *decision governance* from *execution*.
 
-It is intentionally designed as a reusable control-plane building block for:
+It is a reusable control-plane building block for:
 
 - agent harnesses that coordinate multiple LLM/tool loops,
 - workflows with human-in-the-loop approvals,
@@ -225,13 +225,12 @@ Future roadmap:
 
 ## 7) Open-source framing
 
-Most agent orchestration libraries offer coordination primitives.
-This package is narrower and production-oriented:
+Agent orchestration libraries handle coordination. This package handles governance:
 - approval/risk/budget orchestration
 - kill-switch escalation
 - event-sourced recovery
 
-Use it where correctness and operational safety matter as much as throughput.
+Production safety systems need it; quick demos probably don't.
 
 The intended fit is:
 

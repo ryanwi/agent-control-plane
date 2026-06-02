@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from agent_control_plane._scorecard import ScorecardAcc, accumulate_scorecard_event, normalize_utc, percentile
+from agent_control_plane._scorecard import ScorecardAcc, accumulate_scorecard_event, finalize_scorecard, normalize_utc
 from agent_control_plane.models.reference import Base, register_models
 from agent_control_plane.models.registry import (
     RegistryProtocol,
@@ -1092,17 +1092,7 @@ class ControlPlaneObserver(_SyncGatewayBase):
                 and isinstance(e.payload, dict)
                 and e.payload.get("reason") in ("budget_denied", "budget_exhausted")
             )
-        scorecard.approval_latency_ms_p50 = percentile(acc.approval_latencies, 50)
-        scorecard.approval_latency_ms_p95 = percentile(acc.approval_latencies, 95)
-        scorecard.checkpoint_rollback_latency_ms_p50 = percentile(acc.rollback_latencies, 50)
-        scorecard.checkpoint_rollback_latency_ms_p95 = percentile(acc.rollback_latencies, 95)
-        scorecard.avg_cost_per_successful_action = (
-            acc.total_cost / acc.successful_actions if acc.successful_actions > 0 else None
-        )
-        handoff_total = scorecard.handoffs_accepted + scorecard.handoffs_rejected
-        scorecard.handoff_accept_rate = (scorecard.handoffs_accepted / handoff_total) if handoff_total > 0 else None
-        approval_total = scorecard.approvals_granted + scorecard.approvals_denied
-        scorecard.approval_grant_rate = (scorecard.approvals_granted / approval_total) if approval_total > 0 else None
+        finalize_scorecard(scorecard, acc)
         return scorecard
 
 

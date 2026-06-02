@@ -14,7 +14,7 @@ The **control plane** decides when/how an agent may act. The **data plane** exec
 
 ## Why This Exists
 
-Most agent stacks have strong execution layers but weak governance. This package provides:
+Agent stacks handle execution well; governance is the gap. This package provides:
 
 - Deterministic policy enforcement before execution.
 - Human/risk approval gates for high-impact actions.

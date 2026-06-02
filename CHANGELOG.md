@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-06-01
+
+### Changed
+
+- **Internal: `finalize_scorecard` extracted to `_scorecard.py`** — the derived-field computation block (latency percentiles, `avg_cost_per_successful_action`, `handoff_accept_rate`, `approval_grant_rate`) was duplicated verbatim in both the sync and async observer gateways. It is now a single `finalize_scorecard(sc, acc)` helper in `_scorecard.py`, called by both facades. No behaviour change.
+- **`is_agent_revoked` uses `EXISTS`** — the storage query now uses a SQL `EXISTS` subquery instead of fetching a row. No behaviour change.
+
 ## [0.19.0] - 2026-06-01
 
 ### Added

@@ -127,6 +127,19 @@ SCORECARD_HANDLERS: dict[EventKind, ScorecardHandler] = {
 }
 
 
+def finalize_scorecard(sc: ControlPlaneScorecard, acc: ScorecardAcc) -> None:
+    """Compute derived fields from accumulated raw counts and latency lists."""
+    sc.approval_latency_ms_p50 = percentile(acc.approval_latencies, 50)
+    sc.approval_latency_ms_p95 = percentile(acc.approval_latencies, 95)
+    sc.checkpoint_rollback_latency_ms_p50 = percentile(acc.rollback_latencies, 50)
+    sc.checkpoint_rollback_latency_ms_p95 = percentile(acc.rollback_latencies, 95)
+    sc.avg_cost_per_successful_action = acc.total_cost / acc.successful_actions if acc.successful_actions > 0 else None
+    handoff_total = sc.handoffs_accepted + sc.handoffs_rejected
+    sc.handoff_accept_rate = (sc.handoffs_accepted / handoff_total) if handoff_total > 0 else None
+    approval_total = sc.approvals_granted + sc.approvals_denied
+    sc.approval_grant_rate = (sc.approvals_granted / approval_total) if approval_total > 0 else None
+
+
 def accumulate_scorecard_event(
     event: EventFrame,
     sc: ControlPlaneScorecard,
