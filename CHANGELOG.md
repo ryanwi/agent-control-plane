@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-06-01
+
 ### Fixed (security)
 
 - **Killed sessions can no longer be reactivated** — `SessionManager.activate_session()`
