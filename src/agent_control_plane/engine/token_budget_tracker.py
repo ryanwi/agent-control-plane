@@ -128,7 +128,11 @@ class TokenBudgetTracker:
         for config in configs:
             window = _compute_window(config.period)
             await self._repo.increment_usage(
-                config.id, window.start, window.end, usage.total_tokens, usage.estimated_cost_usd
+                config.id,
+                window_start=window.start,
+                window_end=window.end,
+                tokens=usage.total_tokens,
+                cost_usd=usage.estimated_cost_usd,
             )
 
         await self._repo.record_usage(session_id, usage, identity)

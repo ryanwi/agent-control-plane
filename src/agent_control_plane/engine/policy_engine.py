@@ -176,8 +176,7 @@ class PolicyEngine:
         if not self._passes_asset_scope(proposal):
             return RoutingReason(
                 reason=(
-                    f"Action blocked by asset scope"
-                    f" (resource={proposal.resource_id}, scope={self.policy.asset_scope})"
+                    f"Action blocked by asset scope (resource={proposal.resource_id}, scope={self.policy.asset_scope})"
                 ),
                 resolution_step=RoutingResolutionStep.CAPABILITY_MATCH,
             )

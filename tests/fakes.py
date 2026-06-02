@@ -21,7 +21,7 @@ from agent_control_plane.types.enums import (
     ProposalStatus,
     SessionStatus,
 )
-from agent_control_plane.types.frames import EventFrame
+from agent_control_plane.types.frames import EventFrame, EventMetadata
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
 from agent_control_plane.types.token_governance import (
@@ -126,25 +126,22 @@ class InMemoryEventRepository:
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
-        agent_id: str | None = None,
-        correlation_id: UUID | None = None,
-        routing_decision: dict[str, Any] | None = None,
-        routing_reason: str | None = None,
-        idempotency_key: str | None = None,
+        metadata: EventMetadata | None = None,
     ) -> int:
         if self._fail:
             raise RuntimeError("event repo failure")
+        m = metadata or EventMetadata()
         seq = self._seq_counters.get(session_id, 1)
         self._seq_counters[session_id] = seq + 1
         event = EventFrame(
             session_id=session_id,
             seq=seq,
             kind=event_kind,
-            agent_id=agent_id,
-            correlation_id=correlation_id,
+            agent_id=m.agent_id,
+            correlation_id=m.correlation_id,
             payload=payload,
-            routing_decision=routing_decision,
-            routing_reason=routing_reason,
+            routing_decision=m.routing_decision,
+            routing_reason=m.routing_reason,
         )
         self._events.setdefault(session_id, []).append(event)
         return seq

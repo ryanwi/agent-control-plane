@@ -27,6 +27,7 @@ class TimeoutEscalation:
         self,
         session_manager: SessionManager,
         event_store: EventStore,
+        *,
         session_repo: AsyncSessionRepository,
         event_repo: AsyncEventRepository,
         cycle_timeout_seconds: int = DEFAULT_CYCLE_TIMEOUT_SECONDS,

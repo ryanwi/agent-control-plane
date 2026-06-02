@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agent_control_plane.engine.event_store import EventStore
-from agent_control_plane.types.approvals import ApprovalTicket
+from agent_control_plane.types.approvals import ApprovalScope, ApprovalTicket
 from agent_control_plane.types.enums import (
     ApprovalDecisionType,
     ApprovalStatus,
@@ -70,12 +70,10 @@ class ApprovalGate:
         decision_type: ApprovalDecisionType = ApprovalDecisionType.ALLOW_ONCE,
         decided_by: str = "operator",
         reason: str | None = None,
-        scope_resource_ids: list[str] | None = None,
-        scope_max_cost: Decimal | None = None,
-        scope_max_count: int | None = None,
-        scope_expiry: datetime | None = None,
+        scope: ApprovalScope | None = None,
     ) -> ApprovalTicket:
         """Approve a pending ticket. State-bearing write."""
+        s = scope or ApprovalScope()
         ticket = await self._approval_repo.get_pending_ticket_for_update(ticket_id)
 
         fields: dict[str, Any] = {
@@ -86,10 +84,10 @@ class ApprovalGate:
             "decided_at": datetime.now(UTC),
         }
         if decision_type == ApprovalDecisionType.ALLOW_FOR_SESSION:
-            fields["scope_resource_ids"] = scope_resource_ids
-            fields["scope_max_cost"] = scope_max_cost
-            fields["scope_max_count"] = scope_max_count
-            fields["scope_expiry"] = scope_expiry
+            fields["scope_resource_ids"] = s.resource_ids if s.resource_ids else None
+            fields["scope_max_cost"] = s.max_cost
+            fields["scope_max_count"] = s.max_count
+            fields["scope_expiry"] = s.expiry
 
         await self._approval_repo.update_ticket(ticket_id, **fields)
         await self._proposal_repo.update_status(ticket.proposal_id, ProposalStatus.APPROVED)

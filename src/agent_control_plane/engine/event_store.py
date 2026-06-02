@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from agent_control_plane.types.enums import EventKind
-from agent_control_plane.types.ids import AgentId, IdempotencyKey
+from agent_control_plane.types.frames import EventMetadata
 
 if TYPE_CHECKING:
     from agent_control_plane.storage.protocols import AsyncEventRepository
@@ -34,11 +34,7 @@ class EventStore:
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
-        agent_id: AgentId | None = None,
-        correlation_id: UUID | None = None,
-        routing_decision: dict[str, Any] | None = None,
-        routing_reason: str | None = None,
-        idempotency_key: IdempotencyKey | None = None,
+        metadata: EventMetadata | None = None,
     ) -> int | None:
         """Append an event with monotonic sequence allocation.
 
@@ -52,25 +48,19 @@ class EventStore:
                 event_kind,
                 payload,
                 state_bearing=state_bearing,
-                agent_id=agent_id,
-                correlation_id=correlation_id,
-                routing_decision=routing_decision,
-                routing_reason=routing_reason,
-                idempotency_key=idempotency_key,
+                metadata=metadata,
             )
             return seq
         except Exception:
             if state_bearing:
                 raise
+            m = metadata or EventMetadata()
             self._buffer.append(
                 {
                     "session_id": session_id,
                     "event_kind": event_kind,
                     "payload": payload,
-                    "agent_id": agent_id,
-                    "correlation_id": correlation_id,
-                    "routing_decision": routing_decision,
-                    "routing_reason": routing_reason,
+                    "metadata": m,
                     "buffered_at": datetime.now(UTC).isoformat(),
                 }
             )
@@ -100,10 +90,7 @@ class EventStore:
                     item["event_kind"],
                     item["payload"],
                     state_bearing=False,
-                    agent_id=item.get("agent_id"),
-                    correlation_id=item.get("correlation_id"),
-                    routing_decision=item.get("routing_decision"),
-                    routing_reason=item.get("routing_reason"),
+                    metadata=item.get("metadata"),
                 )
                 flushed += 1
             except Exception:

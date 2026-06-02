@@ -35,6 +35,7 @@ from agent_control_plane.types.enums import (
     UnknownAppEventPolicy,
     parse_action_name,
 )
+from agent_control_plane.types.frames import EventMetadata
 from agent_control_plane.types.ids import AgentId, IdempotencyKey, ResourceId
 from agent_control_plane.types.policies import PolicySnapshot
 from agent_control_plane.types.proposals import ActionProposal
@@ -512,6 +513,8 @@ class McpGateway:
             mapper=self._event_mapper,
             unknown_policy=self._config.unknown_event_policy,
             state_bearing=state_bearing,
-            correlation_id=correlation_id,
-            idempotency_key=IdempotencyKey(idempotency_key) if idempotency_key is not None else None,
+            metadata=EventMetadata(
+                correlation_id=correlation_id,
+                idempotency_key=IdempotencyKey(idempotency_key) if idempotency_key is not None else None,
+            ),
         )

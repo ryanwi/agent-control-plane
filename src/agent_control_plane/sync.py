@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Final, Protocol, TypedDict, runtime_checkable
@@ -14,6 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from agent_control_plane._scorecard import ScorecardAcc, accumulate_scorecard_event, normalize_utc, percentile
 from agent_control_plane.models.reference import Base, register_models
 from agent_control_plane.models.registry import (
     RegistryProtocol,
@@ -49,7 +49,7 @@ from agent_control_plane.types.enums import (
     SessionStatus,
     UnknownAppEventPolicy,
 )
-from agent_control_plane.types.frames import EmitMetadata, EventFrame
+from agent_control_plane.types.frames import EmitMetadata, EventFrame, EventMetadata
 from agent_control_plane.types.ids import AgentId, IdempotencyKey, ResourceId
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import Page, SessionHealth, StateChange, StateChangePage
@@ -75,131 +75,6 @@ def guardrail_event_kind(phase: GuardrailPhase) -> EventKind:
     if phase == GuardrailPhase.TOOL:
         return EventKind.GUARDRAIL_TOOL
     return EventKind.GUARDRAIL_OUTPUT
-
-
-def _percentile(values: list[float], percentile: float) -> float | None:
-    if not values:
-        return None
-    ordered = sorted(values)
-    idx = max(0, min(len(ordered) - 1, round((percentile / 100.0) * (len(ordered) - 1))))
-    return ordered[idx]
-
-
-def _normalize_utc(dt: datetime) -> datetime:
-    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
-
-
-@dataclass
-class _ScorecardAcc:
-    """Mutable per-session state accumulated while scanning events for a scorecard."""
-
-    pending_checkpoint_at: datetime | None = None
-    approval_requested_at: datetime | None = None
-    approval_latencies: list[float] = field(default_factory=list)
-    rollback_latencies: list[float] = field(default_factory=list)
-    total_cost: float = 0.0
-    successful_actions: int = 0
-
-
-def _sc_checkpoint(event_at: datetime, _event: EventFrame, sc: ControlPlaneScorecard, acc: _ScorecardAcc) -> None:
-    sc.checkpoints_created += 1
-    acc.pending_checkpoint_at = event_at
-
-
-def _sc_rollback(event_at: datetime, _event: EventFrame, sc: ControlPlaneScorecard, acc: _ScorecardAcc) -> None:
-    sc.rollbacks_completed += 1
-    if acc.pending_checkpoint_at is not None:
-        acc.rollback_latencies.append((event_at - acc.pending_checkpoint_at).total_seconds() * 1000.0)
-
-
-def _sc_eval_blocked(_at: datetime, event: EventFrame, sc: ControlPlaneScorecard, _acc: _ScorecardAcc) -> None:
-    sc.evaluations_blocked += 1
-    if isinstance(event.payload, dict):
-        for reason in event.payload.get("reasons", []):
-            key = str(reason)
-            sc.evaluation_block_reasons[key] = sc.evaluation_block_reasons.get(key, 0) + 1
-
-
-def _sc_guardrail(_at: datetime, event: EventFrame, sc: ControlPlaneScorecard, _acc: _ScorecardAcc) -> None:
-    if not isinstance(event.payload, dict):
-        return
-    code = str(event.payload.get("policy_code", "unknown"))
-    sc.guardrail_policy_code_counts[code] = sc.guardrail_policy_code_counts.get(code, 0) + 1
-    if event.payload.get("allow") is False:
-        sc.guardrail_denies += 1
-    else:
-        sc.guardrail_allows += 1
-
-
-def _sc_handoff_accepted(_at: datetime, _event: EventFrame, sc: ControlPlaneScorecard, _acc: _ScorecardAcc) -> None:
-    sc.handoffs_accepted += 1
-
-
-def _sc_handoff_rejected(_at: datetime, _event: EventFrame, sc: ControlPlaneScorecard, _acc: _ScorecardAcc) -> None:
-    sc.handoffs_rejected += 1
-
-
-def _sc_approval_requested(
-    event_at: datetime, _event: EventFrame, _sc: ControlPlaneScorecard, acc: _ScorecardAcc
-) -> None:
-    acc.approval_requested_at = event_at
-
-
-def _sc_approval_resolved(
-    event_at: datetime, _event: EventFrame, _sc: ControlPlaneScorecard, acc: _ScorecardAcc
-) -> None:
-    if acc.approval_requested_at is not None:
-        acc.approval_latencies.append((event_at - acc.approval_requested_at).total_seconds() * 1000.0)
-        acc.approval_requested_at = None
-
-
-def _sc_budget_exhausted(_at: datetime, _event: EventFrame, sc: ControlPlaneScorecard, _acc: _ScorecardAcc) -> None:
-    sc.budget_exhausted_count += 1
-
-
-def _sc_execution_completed(_at: datetime, event: EventFrame, _sc: ControlPlaneScorecard, acc: _ScorecardAcc) -> None:
-    acc.successful_actions += 1
-    if isinstance(event.payload, dict):
-        value = event.payload.get("cost")
-        if isinstance(value, int | float):
-            acc.total_cost += float(value)
-
-
-_ScorecardHandler = Callable[[datetime, EventFrame, ControlPlaneScorecard, _ScorecardAcc], None]
-
-_SCORECARD_HANDLERS: dict[EventKind, _ScorecardHandler] = {
-    EventKind.CHECKPOINT_CREATED: _sc_checkpoint,
-    EventKind.ROLLBACK_COMPLETED: _sc_rollback,
-    EventKind.EVALUATION_BLOCKED: _sc_eval_blocked,
-    EventKind.GUARDRAIL_INPUT: _sc_guardrail,
-    EventKind.GUARDRAIL_TOOL: _sc_guardrail,
-    EventKind.GUARDRAIL_OUTPUT: _sc_guardrail,
-    EventKind.HANDOFF_ACCEPTED: _sc_handoff_accepted,
-    EventKind.HANDOFF_REJECTED: _sc_handoff_rejected,
-    EventKind.APPROVAL_REQUESTED: _sc_approval_requested,
-    EventKind.APPROVAL_GRANTED: _sc_approval_resolved,
-    EventKind.APPROVAL_DENIED: _sc_approval_resolved,
-    EventKind.BUDGET_EXHAUSTED: _sc_budget_exhausted,
-    EventKind.EXECUTION_COMPLETED: _sc_execution_completed,
-}
-
-
-def _accumulate_scorecard_event(
-    event: EventFrame,
-    sc: ControlPlaneScorecard,
-    acc: _ScorecardAcc,
-    window_start: datetime | None,
-    window_end: datetime | None,
-) -> None:
-    event_at = _normalize_utc(event.created_at)
-    if window_start and event_at < window_start:
-        return
-    if window_end and event_at > window_end:
-        return
-    sc.total_events += 1
-    handler = _SCORECARD_HANDLERS.get(event.kind)
-    if handler:
-        handler(event_at, event, sc, acc)
 
 
 class ApprovalTicketUpdateFields(TypedDict, total=False):
@@ -288,6 +163,11 @@ class SyncControlPlane:
         if register_reference_models:
             register_models(registry=self._registry)
 
+    @property
+    def uow_factory(self) -> Callable[[Session], SyncSqlAlchemyUnitOfWork]:
+        """Unit-of-work factory bound to this control plane's storage configuration."""
+        return self._uow_factory
+
     def setup(self) -> None:
         """Create reference-model tables for control-plane state."""
         Base.metadata.create_all(self._engine)
@@ -369,11 +249,7 @@ class SyncControlPlane:
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
-        agent_id: AgentId | None = None,
-        correlation_id: UUID | None = None,
-        routing_decision: dict[str, Any] | None = None,
-        routing_reason: str | None = None,
-        idempotency_key: IdempotencyKey | None = None,
+        metadata: EventMetadata | None = None,
     ) -> int:
         with self.session_scope() as db:
             uow = self._uow_factory(db)
@@ -382,11 +258,7 @@ class SyncControlPlane:
                 event_kind=event_kind,
                 payload=payload,
                 state_bearing=state_bearing,
-                agent_id=agent_id,
-                correlation_id=correlation_id,
-                routing_decision=routing_decision,
-                routing_reason=routing_reason,
-                idempotency_key=idempotency_key,
+                metadata=metadata,
             )
             uow.commit()
             return seq
@@ -405,25 +277,27 @@ class SyncControlPlane:
         mapper: AppEventMapper,
         unknown_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.RAISE,
         state_bearing: bool | None = None,
-        agent_id: AgentId | None = None,
-        correlation_id: UUID | None = None,
-        idempotency_key: IdempotencyKey | None = None,
+        metadata: EventMetadata | None = None,
     ) -> int | None:
         mapped = mapper.map_event(event_name, payload)
         if mapped is None:
             if unknown_policy == UnknownAppEventPolicy.IGNORE:
                 return None
             raise UnknownAppEventError(f"Unknown app event: {event_name}")
+        m = metadata or EventMetadata()
+        merged = EventMetadata(
+            agent_id=m.agent_id if m.agent_id is not None else mapped.agent_id,
+            correlation_id=m.correlation_id if m.correlation_id is not None else mapped.correlation_id,
+            routing_decision=mapped.routing_decision,
+            routing_reason=mapped.routing_reason,
+            idempotency_key=m.idempotency_key if m.idempotency_key is not None else mapped.idempotency_key,
+        )
         return self.emit_event(
             session_id=session_id,
             event_kind=mapped.event_kind,
             payload=mapped.payload,
             state_bearing=mapped.state_bearing if state_bearing is None else state_bearing,
-            agent_id=mapped.agent_id if agent_id is None else agent_id,
-            correlation_id=mapped.correlation_id if correlation_id is None else correlation_id,
-            routing_decision=mapped.routing_decision,
-            routing_reason=mapped.routing_reason,
-            idempotency_key=mapped.idempotency_key if idempotency_key is None else idempotency_key,
+            metadata=merged,
         )
 
     def complete_session(self, session_id: UUID) -> SessionLifecycleResult:
@@ -534,48 +408,53 @@ class SyncControlPlane:
             raise ValueError(f"Unsupported kill scope for sync API: {scope}")
 
 
-class ControlPlaneFacade:
-    """High-level sync facade for host applications."""
+class _SyncGatewayBase:
+    """Base providing idempotency helpers for sync gateways."""
+
+    def __init__(self, cp: SyncControlPlane) -> None:
+        self._cp = cp
+
+    def _cached(
+        self,
+        uow: SyncSqlAlchemyUnitOfWork,
+        command_id: IdempotencyKey | None,
+        operation: str,
+    ) -> dict[str, object] | None:
+        if command_id is None:
+            return None
+        cached = uow.command_repo.get_command(str(command_id))
+        if cached is None:
+            return None
+        if cached.operation != operation:
+            raise ValueError(f"Command id {command_id} already used for operation {cached.operation}")
+        return cached.result
+
+    def _record(
+        self,
+        uow: SyncSqlAlchemyUnitOfWork,
+        command_id: IdempotencyKey | None,
+        operation: str,
+        result: dict[str, object],
+        *,
+        session_id: UUID | None = None,
+    ) -> None:
+        if command_id is None:
+            return
+        uow.command_repo.record_command(str(command_id), operation, result, session_id=session_id)
+
+
+class SessionGateway(_SyncGatewayBase):
+    """Session lifecycle, event emission, and kill switches."""
 
     def __init__(
         self,
-        control_plane: SyncControlPlane,
-        *,
-        mapper: AppEventMapper | None = None,
-        unknown_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.RAISE,
+        cp: SyncControlPlane,
+        mapper: AppEventMapper | None,
+        unknown_policy: UnknownAppEventPolicy,
     ) -> None:
-        self._cp = control_plane
+        super().__init__(cp)
         self._mapper = mapper
         self._unknown_policy = unknown_policy
-
-    @classmethod
-    def from_database_url(
-        cls,
-        database_url: str = "sqlite:///./control_plane.db",
-        *,
-        mapper: AppEventMapper | None = None,
-        unknown_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.RAISE,
-        engine: Engine | None = None,
-        session_factory: sessionmaker[Session] | None = None,
-        registry: RegistryProtocol | None = None,
-        uow_factory: Callable[[Session], SyncSqlAlchemyUnitOfWork] | None = None,
-        register_reference_models: bool = True,
-    ) -> ControlPlaneFacade:
-        cp = SyncControlPlane(
-            database_url=database_url,
-            engine=engine,
-            session_factory=session_factory,
-            registry=registry,
-            uow_factory=uow_factory,
-            register_reference_models=register_reference_models,
-        )
-        return cls(cp, mapper=mapper, unknown_policy=unknown_policy)
-
-    def setup(self) -> None:
-        self._cp.setup()
-
-    def close(self) -> None:
-        self._cp.close()
 
     def open_session(
         self,
@@ -587,28 +466,19 @@ class ControlPlaneFacade:
         command_id: IdempotencyKey | None = None,
     ) -> UUID:
         with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, CMD_OPEN_SESSION)
+            uow = self._cp.uow_factory(db)
+            cached = self._cached(uow, command_id, CMD_OPEN_SESSION)
             if cached is not None:
-                raw_session_id = cached.get("session_id")
-                if not isinstance(raw_session_id, str):
+                raw = cached.get("session_id")
+                if not isinstance(raw, str):
                     raise ValueError("Invalid cached idempotency payload for open_session")
-                return UUID(raw_session_id)
+                return UUID(raw)
         session_id = self._cp.create_session(
-            name=name,
-            max_cost=max_cost,
-            max_action_count=max_action_count,
-            execution_mode=execution_mode,
+            name=name, max_cost=max_cost, max_action_count=max_action_count, execution_mode=execution_mode
         )
         with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            self._record_command_result(
-                uow,
-                command_id,
-                CMD_OPEN_SESSION,
-                {"session_id": str(session_id)},
-                session_id=session_id,
-            )
+            uow = self._cp.uow_factory(db)
+            self._record(uow, command_id, CMD_OPEN_SESSION, {"session_id": str(session_id)}, session_id=session_id)
             uow.commit()
         return session_id
 
@@ -621,8 +491,8 @@ class ControlPlaneFacade:
         command_id: IdempotencyKey | None = None,
     ) -> SessionLifecycleResult:
         with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, CMD_CLOSE_SESSION)
+            uow = self._cp.uow_factory(db)
+            cached = self._cached(uow, command_id, CMD_CLOSE_SESSION)
             if cached is not None:
                 return SessionLifecycleResult.model_validate(cached)
         appended = 0
@@ -632,14 +502,8 @@ class ControlPlaneFacade:
         result = self._cp.complete_session(session_id)
         output = SessionLifecycleResult(session=result.session, events_appended=result.events_appended + appended)
         with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            self._record_command_result(
-                uow,
-                command_id,
-                CMD_CLOSE_SESSION,
-                output.model_dump(mode="json"),
-                session_id=session_id,
-            )
+            uow = self._cp.uow_factory(db)
+            self._record(uow, command_id, CMD_CLOSE_SESSION, output.model_dump(mode="json"), session_id=session_id)
             uow.commit()
         return output
 
@@ -651,20 +515,14 @@ class ControlPlaneFacade:
         command_id: IdempotencyKey | None = None,
     ) -> SessionLifecycleResult:
         with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, CMD_ABORT_SESSION)
+            uow = self._cp.uow_factory(db)
+            cached = self._cached(uow, command_id, CMD_ABORT_SESSION)
             if cached is not None:
                 return SessionLifecycleResult.model_validate(cached)
         result = self._cp.abort_session(session_id, reason=reason)
         with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            self._record_command_result(
-                uow,
-                command_id,
-                CMD_ABORT_SESSION,
-                result.model_dump(mode="json"),
-                session_id=session_id,
-            )
+            uow = self._cp.uow_factory(db)
+            self._record(uow, command_id, CMD_ABORT_SESSION, result.model_dump(mode="json"), session_id=session_id)
             uow.commit()
         return result
 
@@ -679,155 +537,21 @@ class ControlPlaneFacade:
     ) -> int:
         meta = metadata or EmitMetadata()
         with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, meta.command_id, CMD_EMIT)
+            uow = self._cp.uow_factory(db)
+            cached = self._cached(uow, meta.command_id, CMD_EMIT)
             if cached is not None:
                 seq = cached.get("seq")
                 if not isinstance(seq, int):
                     raise ValueError("Invalid cached idempotency payload for emit")
                 return seq
-
         seq = self._cp.emit_event(
-            session_id,
-            event_kind,
-            payload,
-            state_bearing=state_bearing,
-            agent_id=meta.agent_id,
-            correlation_id=meta.correlation_id,
-            routing_decision=meta.routing_decision,
-            routing_reason=meta.routing_reason,
-            idempotency_key=meta.idempotency_key,
+            session_id, event_kind, payload, state_bearing=state_bearing, metadata=meta.as_event_metadata()
         )
         with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            self._record_command_result(
-                uow,
-                meta.command_id,
-                CMD_EMIT,
-                {"seq": seq},
-                session_id=session_id,
-            )
+            uow = self._cp.uow_factory(db)
+            self._record(uow, meta.command_id, CMD_EMIT, {"seq": seq}, session_id=session_id)
             uow.commit()
         return seq
-
-    def create_ticket(
-        self,
-        session_id: UUID,
-        proposal_id: UUID,
-        timeout_at: datetime,
-        *,
-        command_id: IdempotencyKey | None = None,
-    ) -> ApprovalTicket:
-        with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, CMD_CREATE_TICKET)
-            if cached is not None:
-                return ApprovalTicket.model_validate(cached)
-            ticket = uow.approval_repo.create_ticket(session_id, proposal_id, timeout_at)
-            self._record_command_result(
-                uow,
-                command_id,
-                CMD_CREATE_TICKET,
-                ticket.model_dump(mode="json"),
-                session_id=session_id,
-            )
-            uow.commit()
-            return ticket
-
-    def create_proposal(
-        self,
-        proposal: ActionProposal,
-        *,
-        command_id: IdempotencyKey | None = None,
-    ) -> ActionProposal:
-        with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, CMD_CREATE_PROPOSAL)
-            if cached is not None:
-                return ActionProposal.model_validate(cached)
-            created = uow.proposal_repo.create_proposal(proposal)
-            self._record_command_result(
-                uow,
-                command_id,
-                CMD_CREATE_PROPOSAL,
-                created.model_dump(mode="json"),
-                session_id=proposal.session_id,
-            )
-            uow.commit()
-            return created
-
-    def approve_ticket(
-        self,
-        ticket_id: UUID,
-        *,
-        decided_by: str = "operator",
-        reason: str | None = None,
-        decision_type: ApprovalDecisionType = ApprovalDecisionType.ALLOW_ONCE,
-        scope: ApprovalScope | None = None,
-        command_id: IdempotencyKey | None = None,
-    ) -> ApprovalTicket:
-        s = scope or ApprovalScope()
-        with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, CMD_APPROVE_TICKET)
-            if cached is not None:
-                return ApprovalTicket.model_validate(cached)
-            ticket = uow.approval_repo.get_pending_ticket_for_update(ticket_id)
-            fields: ApprovalTicketUpdateFields = {
-                "status": ApprovalStatus.APPROVED,
-                "decision_type": decision_type,
-                "decided_by": decided_by,
-                "decision_reason": reason,
-                "decided_at": datetime.now(UTC),
-            }
-            if decision_type == ApprovalDecisionType.ALLOW_FOR_SESSION:
-                fields["scope_resource_ids"] = s.resource_ids if s.resource_ids else None
-                fields["scope_max_cost"] = s.max_cost
-                fields["scope_max_count"] = s.max_count
-                fields["scope_expiry"] = s.expiry
-            uow.approval_repo.update_ticket(ticket_id, **fields)
-            uow.proposal_repo.update_status(ticket.proposal_id, ProposalStatus.APPROVED)
-            result = ticket.model_copy(update=fields)
-            self._record_command_result(
-                uow,
-                command_id,
-                CMD_APPROVE_TICKET,
-                result.model_dump(mode="json"),
-                session_id=ticket.session_id,
-            )
-            uow.commit()
-            return result
-
-    def deny_ticket(
-        self,
-        ticket_id: UUID,
-        *,
-        reason: str = "",
-        command_id: IdempotencyKey | None = None,
-    ) -> ApprovalTicket:
-        with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, CMD_DENY_TICKET)
-            if cached is not None:
-                return ApprovalTicket.model_validate(cached)
-            ticket = uow.approval_repo.get_pending_ticket_for_update(ticket_id)
-            fields: ApprovalTicketUpdateFields = {
-                "status": ApprovalStatus.DENIED,
-                "decision_reason": reason,
-                "decided_at": datetime.now(UTC),
-            }
-            uow.approval_repo.update_ticket(ticket_id, **fields)
-            uow.proposal_repo.update_status(ticket.proposal_id, ProposalStatus.DENIED)
-            result = ticket.model_copy(update=fields)
-            self._record_command_result(
-                uow,
-                command_id,
-                CMD_DENY_TICKET,
-                result.model_dump(mode="json"),
-                session_id=ticket.session_id,
-            )
-            uow.commit()
-            return result
 
     def emit_app(
         self,
@@ -849,9 +573,11 @@ class ControlPlaneFacade:
             mapper=self._mapper,
             unknown_policy=self._unknown_policy,
             state_bearing=state_bearing,
-            agent_id=agent_id,
-            correlation_id=correlation_id,
-            idempotency_key=idempotency_key,
+            metadata=EventMetadata(
+                agent_id=agent_id,
+                correlation_id=correlation_id,
+                idempotency_key=idempotency_key,
+            ),
         )
 
     def replay(self, session_id: UUID, *, after_seq: int = 0, limit: int = 100) -> list[EventFrame]:
@@ -860,9 +586,150 @@ class ControlPlaneFacade:
     def get_session(self, session_id: UUID) -> SessionState | None:
         return self._cp.get_session(session_id)
 
+    def kill_session(
+        self,
+        session_id: UUID,
+        *,
+        reason: str = "Kill switch triggered",
+        command_id: IdempotencyKey | None = None,
+    ) -> KillResult:
+        op = kill_command_operation(KillSwitchScope.SESSION_ABORT)
+        with self._cp.session_scope() as db:
+            uow = self._cp.uow_factory(db)
+            cached = self._cached(uow, command_id, op)
+            if cached is not None:
+                return KillResult.model_validate(cached)
+        result = self._cp.kill(session_id, reason=reason)
+        with self._cp.session_scope() as db:
+            uow = self._cp.uow_factory(db)
+            self._record(uow, command_id, op, result.model_dump(mode="json"), session_id=session_id)
+            uow.commit()
+        return result
+
+    def kill_system(self, *, reason: str = "System halt", command_id: IdempotencyKey | None = None) -> KillResult:
+        op = kill_command_operation(KillSwitchScope.SYSTEM_HALT)
+        with self._cp.session_scope() as db:
+            uow = self._cp.uow_factory(db)
+            cached = self._cached(uow, command_id, op)
+            if cached is not None:
+                return KillResult.model_validate(cached)
+        result = self._cp.kill_all(reason=reason)
+        with self._cp.session_scope() as db:
+            uow = self._cp.uow_factory(db)
+            self._record(uow, command_id, op, result.model_dump(mode="json"))
+            uow.commit()
+        return result
+
+
+class ApprovalGateway(_SyncGatewayBase):
+    """Approval tickets and action proposals."""
+
+    def create_ticket(
+        self,
+        session_id: UUID,
+        proposal_id: UUID,
+        timeout_at: datetime,
+        *,
+        command_id: IdempotencyKey | None = None,
+    ) -> ApprovalTicket:
+        with self._cp.session_scope() as db:
+            uow = self._cp.uow_factory(db)
+            cached = self._cached(uow, command_id, CMD_CREATE_TICKET)
+            if cached is not None:
+                return ApprovalTicket.model_validate(cached)
+            ticket = uow.approval_repo.create_ticket(session_id, proposal_id, timeout_at)
+            self._record(uow, command_id, CMD_CREATE_TICKET, ticket.model_dump(mode="json"), session_id=session_id)
+            uow.commit()
+            return ticket
+
+    def create_proposal(
+        self,
+        proposal: ActionProposal,
+        *,
+        command_id: IdempotencyKey | None = None,
+    ) -> ActionProposal:
+        with self._cp.session_scope() as db:
+            uow = self._cp.uow_factory(db)
+            cached = self._cached(uow, command_id, CMD_CREATE_PROPOSAL)
+            if cached is not None:
+                return ActionProposal.model_validate(cached)
+            created = uow.proposal_repo.create_proposal(proposal)
+            self._record(
+                uow, command_id, CMD_CREATE_PROPOSAL, created.model_dump(mode="json"), session_id=proposal.session_id
+            )
+            uow.commit()
+            return created
+
+    def approve_ticket(
+        self,
+        ticket_id: UUID,
+        *,
+        decided_by: str = "operator",
+        reason: str | None = None,
+        decision_type: ApprovalDecisionType = ApprovalDecisionType.ALLOW_ONCE,
+        scope: ApprovalScope | None = None,
+        command_id: IdempotencyKey | None = None,
+    ) -> ApprovalTicket:
+        s = scope or ApprovalScope()
+        with self._cp.session_scope() as db:
+            uow = self._cp.uow_factory(db)
+            cached = self._cached(uow, command_id, CMD_APPROVE_TICKET)
+            if cached is not None:
+                return ApprovalTicket.model_validate(cached)
+            ticket = uow.approval_repo.get_pending_ticket_for_update(ticket_id)
+            fields: ApprovalTicketUpdateFields = {
+                "status": ApprovalStatus.APPROVED,
+                "decision_type": decision_type,
+                "decided_by": decided_by,
+                "decision_reason": reason,
+                "decided_at": datetime.now(UTC),
+            }
+            if decision_type == ApprovalDecisionType.ALLOW_FOR_SESSION:
+                fields["scope_resource_ids"] = s.resource_ids if s.resource_ids else None
+                fields["scope_max_cost"] = s.max_cost
+                fields["scope_max_count"] = s.max_count
+                fields["scope_expiry"] = s.expiry
+            uow.approval_repo.update_ticket(ticket_id, **fields)
+            uow.proposal_repo.update_status(ticket.proposal_id, ProposalStatus.APPROVED)
+            result = ticket.model_copy(update=fields)
+            self._record(
+                uow,
+                command_id,
+                CMD_APPROVE_TICKET,
+                result.model_dump(mode="json"),
+                session_id=ticket.session_id,
+            )
+            uow.commit()
+            return result
+
+    def deny_ticket(
+        self,
+        ticket_id: UUID,
+        *,
+        reason: str = "",
+        command_id: IdempotencyKey | None = None,
+    ) -> ApprovalTicket:
+        with self._cp.session_scope() as db:
+            uow = self._cp.uow_factory(db)
+            cached = self._cached(uow, command_id, CMD_DENY_TICKET)
+            if cached is not None:
+                return ApprovalTicket.model_validate(cached)
+            ticket = uow.approval_repo.get_pending_ticket_for_update(ticket_id)
+            fields: ApprovalTicketUpdateFields = {
+                "status": ApprovalStatus.DENIED,
+                "decision_reason": reason,
+                "decided_at": datetime.now(UTC),
+            }
+            uow.approval_repo.update_ticket(ticket_id, **fields)
+            uow.proposal_repo.update_status(ticket.proposal_id, ProposalStatus.DENIED)
+            result = ticket.model_copy(update=fields)
+            self._record(uow, command_id, CMD_DENY_TICKET, result.model_dump(mode="json"), session_id=ticket.session_id)
+            uow.commit()
+            return result
+
     def get_ticket(self, ticket_id: UUID) -> ApprovalTicket | None:
         with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
+            uow = self._cp.uow_factory(db)
             return uow.approval_repo.get_ticket(ticket_id)
 
     def list_tickets(
@@ -874,19 +741,16 @@ class ControlPlaneFacade:
         offset: int = 0,
     ) -> Page[ApprovalTicket]:
         with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
+            uow = self._cp.uow_factory(db)
             rows = uow.approval_repo.list_tickets(
-                session_id=session_id,
-                statuses=statuses,
-                limit=limit + 1,
-                offset=offset,
+                session_id=session_id, statuses=statuses, limit=limit + 1, offset=offset
             )
             has_more = len(rows) > limit
             return Page(items=rows[:limit], next_offset=(offset + limit if has_more else None))
 
     def get_proposal(self, proposal_id: UUID) -> ActionProposal | None:
         with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
+            uow = self._cp.uow_factory(db)
             return uow.proposal_repo.get_proposal(proposal_id)
 
     def list_proposals(
@@ -898,150 +762,29 @@ class ControlPlaneFacade:
         offset: int = 0,
     ) -> Page[ActionProposal]:
         with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
+            uow = self._cp.uow_factory(db)
             rows = uow.proposal_repo.list_proposals(
-                session_id=session_id,
-                statuses=statuses,
-                limit=limit + 1,
-                offset=offset,
+                session_id=session_id, statuses=statuses, limit=limit + 1, offset=offset
             )
             has_more = len(rows) > limit
             return Page(items=rows[:limit], next_offset=(offset + limit if has_more else None))
 
-    def get_state_change_feed(
-        self,
-        *,
-        session_id: UUID | None = None,
-        cursor: int = 0,
-        limit: int = 100,
-    ) -> StateChangePage:
-        with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            rows = uow.event_repo.list_state_bearing_events(
-                session_id=session_id,
-                offset=cursor,
-                limit=limit + 1,
-            )
-            has_more = len(rows) > limit
-            items = [StateChange(cursor=cursor + idx + 1, event=row) for idx, row in enumerate(rows[:limit])]
-            return StateChangePage(items=items, next_cursor=(cursor + limit if has_more else None))
 
-    def get_health_snapshot(self) -> SessionHealth:
-        created = self._cp.list_sessions(statuses=[SessionStatus.CREATED], limit=10_000)
-        active = self._cp.list_sessions(statuses=[SessionStatus.ACTIVE], limit=10_000)
-        paused = self._cp.list_sessions(statuses=[SessionStatus.PAUSED], limit=10_000)
-        with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            pending = uow.approval_repo.get_pending_tickets()
-        sessions_with_cycles = sum(1 for session in created + active + paused if session.active_cycle_id is not None)
-        return SessionHealth(
-            total_sessions=len(created) + len(active) + len(paused),
-            active_sessions=len(active),
-            created_sessions=len(created),
-            paused_sessions=len(paused),
-            sessions_with_active_cycles=sessions_with_cycles,
-            pending_tickets=len(pending),
-        )
+class BudgetGateway(_SyncGatewayBase):
+    """Session cost and action-count budget."""
 
-    def create_checkpoint(
-        self,
-        session_id: UUID,
-        *,
-        label: str,
-        metadata: dict[str, object] | None = None,
-        created_by: str = "system",
-        command_id: IdempotencyKey | None = None,
-    ) -> SessionCheckpoint:
-        operation = "checkpoint:create"
-        with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, operation)
-            if cached is not None:
-                return SessionCheckpoint.model_validate(cached)
-            last = uow.event_repo.get_last_event(session_id)
-            cp = SessionCheckpoint(
-                session_id=session_id,
-                event_seq=last.seq if last is not None else 0,
-                label=label,
-                metadata=dict(metadata or {}),
-                created_by=created_by,
-            )
-            uow.event_repo.append(
-                session_id,
-                EventKind.CHECKPOINT_CREATED,
-                cp.model_dump(mode="json"),
-                state_bearing=True,
-            )
-            self._record_command_result(
-                uow,
-                command_id,
-                operation,
-                cp.model_dump(mode="json"),
-                session_id=session_id,
-            )
-            uow.commit()
-            return cp
+    def check_budget(self, session_id: UUID, *, cost: Decimal = Decimal("0"), action_count: int = 1) -> bool:
+        return self._cp.check_budget(session_id, cost=cost, action_count=action_count)
 
-    def list_checkpoints(self, session_id: UUID, *, limit: int = 50, offset: int = 0) -> Page[SessionCheckpoint]:
-        events = self._cp.replay_events(session_id, after_seq=0, limit=10_000)
-        rows = [
-            SessionCheckpoint.model_validate(e.payload)
-            for e in events
-            if e.kind == EventKind.CHECKPOINT_CREATED and isinstance(e.payload, dict)
-        ]
-        sliced = rows[offset : offset + limit + 1]
-        has_more = len(sliced) > limit
-        items = sliced[:limit]
-        return Page(items=items, next_offset=(offset + limit if has_more else None))
+    def increment_budget(self, session_id: UUID, *, cost: Decimal, action_count: int = 1) -> None:
+        self._cp.increment_budget(session_id, cost=cost, action_count=action_count)
 
-    def rollback_to_checkpoint(
-        self,
-        session_id: UUID,
-        checkpoint_id: UUID,
-        *,
-        reason: str,
-        command_id: IdempotencyKey | None = None,
-    ) -> RollbackResult:
-        operation = "checkpoint:rollback"
-        with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(uow, command_id, operation)
-            if cached is not None:
-                return RollbackResult.model_validate(cached)
-            cps = self.list_checkpoints(session_id, limit=10_000, offset=0).items
-            target = next((cp for cp in cps if cp.id == checkpoint_id), None)
-            if target is None:
-                raise ValueError(f"Checkpoint not found: {checkpoint_id}")
-            last = uow.event_repo.get_last_event(session_id)
-            from_seq = last.seq if last is not None else 0
-            uow.event_repo.append(
-                session_id,
-                EventKind.ROLLBACK_REQUESTED,
-                {"checkpoint_id": str(checkpoint_id), "reason": reason},
-                state_bearing=True,
-            )
-            result = RollbackResult(
-                session_id=session_id,
-                from_seq=from_seq,
-                to_seq=target.event_seq,
-                restored_fields=["session_state", "proposal_state", "approval_state"],
-                events_appended=2,
-            )
-            uow.event_repo.append(
-                session_id,
-                EventKind.ROLLBACK_COMPLETED,
-                result.model_dump(mode="json"),
-                state_bearing=True,
-            )
-            self._record_command_result(
-                uow,
-                command_id,
-                operation,
-                result.model_dump(mode="json"),
-                session_id=session_id,
-            )
-            uow.commit()
-            return result
+    def get_remaining_budget(self, session_id: UUID) -> dict[str, Decimal | int]:
+        return self._cp.get_remaining_budget(session_id)
+
+
+class AgenticGateway(_SyncGatewayBase):
+    """Agentic planning, evaluation, guardrails, and checkpoints."""
 
     def create_goal(
         self,
@@ -1070,10 +813,7 @@ class ControlPlaneFacade:
 
     def start_plan_step(self, session_id: UUID, plan_id: UUID, *, step_index: int) -> PlanStep:
         step = PlanStep(
-            plan_id=plan_id,
-            step_index=step_index,
-            title=f"step-{step_index}",
-            status=PlanStepStatus.RUNNING,
+            plan_id=plan_id, step_index=step_index, title=f"step-{step_index}", status=PlanStepStatus.RUNNING
         )
         self._cp.emit_event(session_id, EventKind.PLAN_STEP_STARTED, step.model_dump(mode="json"), state_bearing=True)
         return step
@@ -1115,15 +855,11 @@ class ControlPlaneFacade:
             ),
             None,
         )
-        completed_steps = 0
-        failed_steps = 0
-        running_steps = 0
+        completed_steps = failed_steps = running_steps = 0
         if plan is not None:
             total_steps = len(plan.steps)
             for e in events:
-                if not isinstance(e.payload, dict):
-                    continue
-                if e.payload.get("plan_id") != str(plan.id):
+                if not isinstance(e.payload, dict) or e.payload.get("plan_id") != str(plan.id):
                     continue
                 if e.kind == EventKind.PLAN_STEP_COMPLETED:
                     completed_steps += 1
@@ -1217,6 +953,122 @@ class ControlPlaneFacade:
         self._cp.emit_event(session_id, event_kind, result.model_dump(mode="json"), state_bearing=False)
         return result
 
+    def create_checkpoint(
+        self,
+        session_id: UUID,
+        *,
+        label: str,
+        metadata: dict[str, object] | None = None,
+        created_by: str = "system",
+        command_id: IdempotencyKey | None = None,
+    ) -> SessionCheckpoint:
+        operation = "checkpoint:create"
+        with self._cp.session_scope() as db:
+            uow = self._cp.uow_factory(db)
+            cached = self._cached(uow, command_id, operation)
+            if cached is not None:
+                return SessionCheckpoint.model_validate(cached)
+            last = uow.event_repo.get_last_event(session_id)
+            cp = SessionCheckpoint(
+                session_id=session_id,
+                event_seq=last.seq if last is not None else 0,
+                label=label,
+                metadata=dict(metadata or {}),
+                created_by=created_by,
+            )
+            uow.event_repo.append(
+                session_id, EventKind.CHECKPOINT_CREATED, cp.model_dump(mode="json"), state_bearing=True
+            )
+            self._record(uow, command_id, operation, cp.model_dump(mode="json"), session_id=session_id)
+            uow.commit()
+            return cp
+
+    def list_checkpoints(self, session_id: UUID, *, limit: int = 50, offset: int = 0) -> Page[SessionCheckpoint]:
+        events = self._cp.replay_events(session_id, after_seq=0, limit=10_000)
+        rows = [
+            SessionCheckpoint.model_validate(e.payload)
+            for e in events
+            if e.kind == EventKind.CHECKPOINT_CREATED and isinstance(e.payload, dict)
+        ]
+        sliced = rows[offset : offset + limit + 1]
+        has_more = len(sliced) > limit
+        return Page(items=sliced[:limit], next_offset=(offset + limit if has_more else None))
+
+    def rollback_to_checkpoint(
+        self,
+        session_id: UUID,
+        checkpoint_id: UUID,
+        *,
+        reason: str,
+        command_id: IdempotencyKey | None = None,
+    ) -> RollbackResult:
+        operation = "checkpoint:rollback"
+        with self._cp.session_scope() as db:
+            uow = self._cp.uow_factory(db)
+            cached = self._cached(uow, command_id, operation)
+            if cached is not None:
+                return RollbackResult.model_validate(cached)
+            cps = self.list_checkpoints(session_id, limit=10_000, offset=0).items
+            target = next((cp for cp in cps if cp.id == checkpoint_id), None)
+            if target is None:
+                raise ValueError(f"Checkpoint not found: {checkpoint_id}")
+            last = uow.event_repo.get_last_event(session_id)
+            from_seq = last.seq if last is not None else 0
+            uow.event_repo.append(
+                session_id,
+                EventKind.ROLLBACK_REQUESTED,
+                {"checkpoint_id": str(checkpoint_id), "reason": reason},
+                state_bearing=True,
+            )
+            result = RollbackResult(
+                session_id=session_id,
+                from_seq=from_seq,
+                to_seq=target.event_seq,
+                restored_fields=["session_state", "proposal_state", "approval_state"],
+                events_appended=2,
+            )
+            uow.event_repo.append(
+                session_id, EventKind.ROLLBACK_COMPLETED, result.model_dump(mode="json"), state_bearing=True
+            )
+            self._record(uow, command_id, operation, result.model_dump(mode="json"), session_id=session_id)
+            uow.commit()
+            return result
+
+
+class ControlPlaneObserver(_SyncGatewayBase):
+    """Read-only session queries, health checks, and operational metrics."""
+
+    def get_state_change_feed(
+        self,
+        *,
+        session_id: UUID | None = None,
+        cursor: int = 0,
+        limit: int = 100,
+    ) -> StateChangePage:
+        with self._cp.session_scope() as db:
+            uow = self._cp.uow_factory(db)
+            rows = uow.event_repo.list_state_bearing_events(session_id=session_id, offset=cursor, limit=limit + 1)
+            has_more = len(rows) > limit
+            items = [StateChange(cursor=cursor + idx + 1, event=row) for idx, row in enumerate(rows[:limit])]
+            return StateChangePage(items=items, next_cursor=(cursor + limit if has_more else None))
+
+    def get_health_snapshot(self) -> SessionHealth:
+        created = self._cp.list_sessions(statuses=[SessionStatus.CREATED], limit=10_000)
+        active = self._cp.list_sessions(statuses=[SessionStatus.ACTIVE], limit=10_000)
+        paused = self._cp.list_sessions(statuses=[SessionStatus.PAUSED], limit=10_000)
+        with self._cp.session_scope() as db:
+            uow = self._cp.uow_factory(db)
+            pending = uow.approval_repo.get_pending_tickets()
+        sessions_with_cycles = sum(1 for s in created + active + paused if s.active_cycle_id is not None)
+        return SessionHealth(
+            total_sessions=len(created) + len(active) + len(paused),
+            active_sessions=len(active),
+            created_sessions=len(created),
+            paused_sessions=len(paused),
+            sessions_with_active_cycles=sessions_with_cycles,
+            pending_tickets=len(pending),
+        )
+
     def get_operational_scorecard(
         self,
         *,
@@ -1226,13 +1078,13 @@ class ControlPlaneFacade:
     ) -> ControlPlaneScorecard:
         sessions = [session_id] if session_id is not None else [s.id for s in self._cp.list_sessions(limit=10_000)]
         scorecard = ControlPlaneScorecard()
-        ws = _normalize_utc(window_start) if window_start is not None else None
-        we = _normalize_utc(window_end) if window_end is not None else None
-        acc = _ScorecardAcc()
+        ws = normalize_utc(window_start) if window_start is not None else None
+        we = normalize_utc(window_end) if window_end is not None else None
+        acc = ScorecardAcc()
         for sid in sessions:
             events = self._cp.replay_events(sid, after_seq=0, limit=10_000)
             for event in events:
-                _accumulate_scorecard_event(event, scorecard, acc, ws, we)
+                accumulate_scorecard_event(event, scorecard, acc, ws, we)
             scorecard.budget_denied_count += sum(
                 1
                 for e in events
@@ -1240,10 +1092,10 @@ class ControlPlaneFacade:
                 and isinstance(e.payload, dict)
                 and e.payload.get("reason") in ("budget_denied", "budget_exhausted")
             )
-        scorecard.approval_latency_ms_p50 = _percentile(acc.approval_latencies, 50)
-        scorecard.approval_latency_ms_p95 = _percentile(acc.approval_latencies, 95)
-        scorecard.checkpoint_rollback_latency_ms_p50 = _percentile(acc.rollback_latencies, 50)
-        scorecard.checkpoint_rollback_latency_ms_p95 = _percentile(acc.rollback_latencies, 95)
+        scorecard.approval_latency_ms_p50 = percentile(acc.approval_latencies, 50)
+        scorecard.approval_latency_ms_p95 = percentile(acc.approval_latencies, 95)
+        scorecard.checkpoint_rollback_latency_ms_p50 = percentile(acc.rollback_latencies, 50)
+        scorecard.checkpoint_rollback_latency_ms_p95 = percentile(acc.rollback_latencies, 95)
         scorecard.avg_cost_per_successful_action = (
             acc.total_cost / acc.successful_actions if acc.successful_actions > 0 else None
         )
@@ -1251,91 +1103,47 @@ class ControlPlaneFacade:
         scorecard.handoff_accept_rate = (scorecard.handoffs_accepted / handoff_total) if handoff_total > 0 else None
         return scorecard
 
-    def check_budget(self, session_id: UUID, *, cost: Decimal = Decimal("0"), action_count: int = 1) -> bool:
-        return self._cp.check_budget(session_id, cost=cost, action_count=action_count)
 
-    def increment_budget(self, session_id: UUID, *, cost: Decimal, action_count: int = 1) -> None:
-        self._cp.increment_budget(session_id, cost=cost, action_count=action_count)
+class ControlPlaneFacade:
+    """High-level sync entry point — composes focused gateway objects."""
 
-    def get_remaining_budget(self, session_id: UUID) -> dict[str, Decimal | int]:
-        return self._cp.get_remaining_budget(session_id)
-
-    def kill_session(
+    def __init__(
         self,
-        session_id: UUID,
+        control_plane: SyncControlPlane,
         *,
-        reason: str = "Kill switch triggered",
-        command_id: IdempotencyKey | None = None,
-    ) -> KillResult:
-        with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(
-                uow, command_id, kill_command_operation(KillSwitchScope.SESSION_ABORT)
-            )
-            if cached is not None:
-                return KillResult.model_validate(cached)
-        result = self._cp.kill(session_id, reason=reason)
-        with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            self._record_command_result(
-                uow,
-                command_id,
-                kill_command_operation(KillSwitchScope.SESSION_ABORT),
-                result.model_dump(mode="json"),
-                session_id=session_id,
-            )
-            uow.commit()
-        return result
-
-    def kill_system(self, *, reason: str = "System halt", command_id: IdempotencyKey | None = None) -> KillResult:
-        with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            cached = self._get_cached_command_result(
-                uow, command_id, kill_command_operation(KillSwitchScope.SYSTEM_HALT)
-            )
-            if cached is not None:
-                return KillResult.model_validate(cached)
-        result = self._cp.kill_all(reason=reason)
-        with self._cp.session_scope() as db:
-            uow = self._cp._uow_factory(db)
-            self._record_command_result(
-                uow,
-                command_id,
-                kill_command_operation(KillSwitchScope.SYSTEM_HALT),
-                result.model_dump(mode="json"),
-            )
-            uow.commit()
-        return result
-
-    def _get_cached_command_result(
-        self,
-        uow: SyncSqlAlchemyUnitOfWork,
-        command_id: IdempotencyKey | None,
-        operation: str,
-    ) -> dict[str, object] | None:
-        if command_id is None:
-            return None
-        cached = uow.command_repo.get_command(str(command_id))
-        if cached is None:
-            return None
-        if cached.operation != operation:
-            raise ValueError(f"Command id {command_id} already used for operation {cached.operation}")
-        return cached.result
-
-    def _record_command_result(
-        self,
-        uow: SyncSqlAlchemyUnitOfWork,
-        command_id: IdempotencyKey | None,
-        operation: str,
-        result: dict[str, object],
-        *,
-        session_id: UUID | None = None,
+        mapper: AppEventMapper | None = None,
+        unknown_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.RAISE,
     ) -> None:
-        if command_id is None:
-            return
-        uow.command_repo.record_command(
-            str(command_id),
-            operation,
-            result,
-            session_id=session_id,
+        self.sessions: SessionGateway = SessionGateway(control_plane, mapper, unknown_policy)
+        self.approvals: ApprovalGateway = ApprovalGateway(control_plane)
+        self.budget: BudgetGateway = BudgetGateway(control_plane)
+        self.agentic: AgenticGateway = AgenticGateway(control_plane)
+        self.observer: ControlPlaneObserver = ControlPlaneObserver(control_plane)
+        self._cp = control_plane
+
+    @classmethod
+    def from_database_url(
+        cls,
+        database_url: str = "sqlite:///./control_plane.db",
+        *,
+        mapper: AppEventMapper | None = None,
+        unknown_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.RAISE,
+        engine: Engine | None = None,
+        session_factory: sessionmaker[Session] | None = None,
+        registry: RegistryProtocol | None = None,
+        uow_factory: Callable[[Session], SyncSqlAlchemyUnitOfWork] | None = None,
+    ) -> ControlPlaneFacade:
+        cp = SyncControlPlane(
+            database_url=database_url,
+            engine=engine,
+            session_factory=session_factory,
+            registry=registry,
+            uow_factory=uow_factory,
         )
+        return cls(cp, mapper=mapper, unknown_policy=unknown_policy)
+
+    def setup(self) -> None:
+        self._cp.setup()
+
+    def close(self) -> None:
+        self._cp.close()

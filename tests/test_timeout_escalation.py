@@ -18,7 +18,7 @@ async def _make_escalation(*, fail_events=False):
     es = EventStore(event_repo)
     from agent_control_plane.recovery.timeout_escalation import TimeoutEscalation
 
-    escalation = TimeoutEscalation(sm, es, session_repo, event_repo)
+    escalation = TimeoutEscalation(sm, es, session_repo=session_repo, event_repo=event_repo)
     return escalation, session_repo, event_repo
 
 

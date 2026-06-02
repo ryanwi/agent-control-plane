@@ -36,7 +36,7 @@ from agent_control_plane.types.enums import (
     RiskLevel,
     UnknownAppEventPolicy,
 )
-from agent_control_plane.types.frames import EmitMetadata
+from agent_control_plane.types.frames import EmitMetadata, EventMetadata
 from agent_control_plane.types.proposals import ActionProposal
 
 
@@ -122,9 +122,7 @@ def test_sync_control_plane_emit_app_event_mapper_and_unknown_policy(tmp_path: P
         mapper=mapper,
         unknown_policy=UnknownAppEventPolicy.RAISE,
         state_bearing=True,
-        agent_id="agent-42",
-        correlation_id=uuid4(),
-        idempotency_key="idem-1",
+        metadata=EventMetadata(agent_id="agent-42", correlation_id=uuid4(), idempotency_key="idem-1"),
     )
     assert tagged_seq == 2
 
@@ -152,22 +150,24 @@ def test_control_plane_facade_session_budget_and_replay(tmp_path: Path):
     )
     facade.setup()
 
-    sid = facade.open_session("facade-demo", max_cost=Decimal("25"), max_action_count=3)
-    assert facade.check_budget(sid, cost=Decimal("10"), action_count=1) is True
-    facade.increment_budget(sid, cost=Decimal("10"), action_count=1)
+    sid = facade.sessions.open_session("facade-demo", max_cost=Decimal("25"), max_action_count=3)
+    assert facade.budget.check_budget(sid, cost=Decimal("10"), action_count=1) is True
+    facade.budget.increment_budget(sid, cost=Decimal("10"), action_count=1)
 
-    seq = facade.emit_app(sid, "scan_started", {"resource": "host-1"}, state_bearing=True, agent_id="sec-agent")
+    seq = facade.sessions.emit_app(
+        sid, "scan_started", {"resource": "host-1"}, state_bearing=True, agent_id="sec-agent"
+    )
     assert seq == 1
-    close_result = facade.close_session(sid)
+    close_result = facade.sessions.close_session(sid)
     assert close_result.events_appended == 0
     assert close_result.session.status.value == "completed"
 
-    events = facade.replay(sid)
+    events = facade.sessions.replay(sid)
     assert len(events) == 1
     assert events[0].kind == EventKind.CYCLE_STARTED
     assert events[0].state_bearing is True
 
-    emitted = facade.emit(
+    emitted = facade.sessions.emit(
         sid,
         EventKind.CYCLE_COMPLETED,
         {"done": True},
@@ -176,8 +176,8 @@ def test_control_plane_facade_session_budget_and_replay(tmp_path: Path):
     )
     assert emitted == 2
 
-    sid2 = facade.open_session("abort-demo", max_cost=Decimal("5"), max_action_count=1)
-    abort_result = facade.abort_session(sid2, reason="operator stop")
+    sid2 = facade.sessions.open_session("abort-demo", max_cost=Decimal("5"), max_action_count=1)
+    abort_result = facade.sessions.abort_session(sid2, reason="operator stop")
     assert abort_result.session.status.value == "aborted"
     facade.close()
 
@@ -187,22 +187,26 @@ def test_control_plane_facade_command_id_idempotency(tmp_path: Path):
     facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_file}")
     facade.setup()
 
-    sid = facade.open_session("idempotency-demo", command_id="sync-open-1")
-    sid_again = facade.open_session("ignored-name", command_id="sync-open-1")
+    sid = facade.sessions.open_session("idempotency-demo", command_id="sync-open-1")
+    sid_again = facade.sessions.open_session("ignored-name", command_id="sync-open-1")
     assert sid_again == sid
 
-    seq1 = facade.emit(sid, EventKind.CYCLE_STARTED, {"phase": "one"}, metadata=EmitMetadata(command_id="sync-emit-1"))
-    seq2 = facade.emit(sid, EventKind.CYCLE_STARTED, {"phase": "two"}, metadata=EmitMetadata(command_id="sync-emit-1"))
+    seq1 = facade.sessions.emit(
+        sid, EventKind.CYCLE_STARTED, {"phase": "one"}, metadata=EmitMetadata(command_id="sync-emit-1")
+    )
+    seq2 = facade.sessions.emit(
+        sid, EventKind.CYCLE_STARTED, {"phase": "two"}, metadata=EmitMetadata(command_id="sync-emit-1")
+    )
     assert seq2 == seq1
 
-    close1 = facade.close_session(sid, command_id="sync-close-1")
-    close2 = facade.close_session(sid, command_id="sync-close-1")
+    close1 = facade.sessions.close_session(sid, command_id="sync-close-1")
+    close2 = facade.sessions.close_session(sid, command_id="sync-close-1")
     assert close1.session.status.value == "completed"
     assert close2.session.status.value == "completed"
 
-    sid_kill = facade.open_session("kill-target")
-    kill1 = facade.kill_session(sid_kill, command_id="sync-kill-1")
-    kill2 = facade.kill_session(sid_kill, command_id="sync-kill-1")
+    sid_kill = facade.sessions.open_session("kill-target")
+    kill1 = facade.sessions.kill_session(sid_kill, command_id="sync-kill-1")
+    kill2 = facade.sessions.kill_session(sid_kill, command_id="sync-kill-1")
     assert kill1.scope == kill2.scope
     assert kill1.session_id == kill2.session_id
     assert kill1.tickets_denied == kill2.tickets_denied
@@ -215,21 +219,21 @@ def test_control_plane_facade_approval_flows_and_idempotency(tmp_path: Path):
     facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_file}")
     facade.setup()
 
-    sid = facade.open_session("sync-approvals")
+    sid = facade.sessions.open_session("sync-approvals")
     proposal_id = _insert_pending_proposal(facade, sid, resource_id="sync-asset-1")
 
     timeout_at = datetime.now(UTC) + timedelta(minutes=10)
-    ticket = facade.create_ticket(sid, proposal_id, timeout_at, command_id="sync-ticket-create-1")
-    ticket_again = facade.create_ticket(sid, proposal_id, timeout_at, command_id="sync-ticket-create-1")
+    ticket = facade.approvals.create_ticket(sid, proposal_id, timeout_at, command_id="sync-ticket-create-1")
+    ticket_again = facade.approvals.create_ticket(sid, proposal_id, timeout_at, command_id="sync-ticket-create-1")
     assert ticket_again.id == ticket.id
     assert ticket_again.status == ApprovalStatus.PENDING
 
-    approved = facade.approve_ticket(
+    approved = facade.approvals.approve_ticket(
         ticket.id,
         reason="sync approve",
         command_id="sync-ticket-approve-1",
     )
-    approved_again = facade.approve_ticket(
+    approved_again = facade.approvals.approve_ticket(
         ticket.id,
         reason="ignored",
         command_id="sync-ticket-approve-1",
@@ -237,18 +241,18 @@ def test_control_plane_facade_approval_flows_and_idempotency(tmp_path: Path):
     assert approved.status == ApprovalStatus.APPROVED
     assert approved_again.status == ApprovalStatus.APPROVED
 
-    approved_proposal = facade.get_proposal(proposal_id)
+    approved_proposal = facade.approvals.get_proposal(proposal_id)
     assert approved_proposal is not None
     assert approved_proposal.status == ProposalStatus.APPROVED
 
     proposal_id_2 = _insert_pending_proposal(facade, sid, resource_id="sync-asset-2")
-    ticket_2 = facade.create_ticket(sid, proposal_id_2, datetime.now(UTC) + timedelta(minutes=5))
-    denied = facade.deny_ticket(ticket_2.id, reason="sync deny", command_id="sync-ticket-deny-1")
-    denied_again = facade.deny_ticket(ticket_2.id, reason="ignored", command_id="sync-ticket-deny-1")
+    ticket_2 = facade.approvals.create_ticket(sid, proposal_id_2, datetime.now(UTC) + timedelta(minutes=5))
+    denied = facade.approvals.deny_ticket(ticket_2.id, reason="sync deny", command_id="sync-ticket-deny-1")
+    denied_again = facade.approvals.deny_ticket(ticket_2.id, reason="ignored", command_id="sync-ticket-deny-1")
     assert denied.status == ApprovalStatus.DENIED
     assert denied_again.status == ApprovalStatus.DENIED
 
-    denied_proposal = facade.get_proposal(proposal_id_2)
+    denied_proposal = facade.approvals.get_proposal(proposal_id_2)
     assert denied_proposal is not None
     assert denied_proposal.status == ProposalStatus.DENIED
 
@@ -260,7 +264,7 @@ def test_control_plane_facade_create_proposal_idempotency(tmp_path: Path):
     facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_file}")
     facade.setup()
 
-    sid = facade.open_session("sync-create-proposal")
+    sid = facade.sessions.open_session("sync-create-proposal")
     proposal = ActionProposal(
         session_id=sid,
         resource_id="sync-resource-1",
@@ -271,23 +275,23 @@ def test_control_plane_facade_create_proposal_idempotency(tmp_path: Path):
         score=Decimal("0.8"),
     )
 
-    created = facade.create_proposal(proposal, command_id="sync-create-proposal-1")
-    replayed = facade.create_proposal(proposal, command_id="sync-create-proposal-1")
+    created = facade.approvals.create_proposal(proposal, command_id="sync-create-proposal-1")
+    replayed = facade.approvals.create_proposal(proposal, command_id="sync-create-proposal-1")
     assert replayed.id == created.id
 
-    second = facade.create_proposal(
+    second = facade.approvals.create_proposal(
         proposal.model_copy(update={"id": uuid4(), "resource_id": "sync-resource-2"}),
         command_id="sync-create-proposal-2",
     )
     assert second.id != created.id
 
-    loaded = facade.get_proposal(created.id)
+    loaded = facade.approvals.get_proposal(created.id)
     assert loaded is not None
     assert loaded.id == created.id
     assert loaded.resource_id == "sync-resource-1"
 
     with pytest.raises(ValueError, match="already used for operation"):
-        facade.create_ticket(
+        facade.approvals.create_ticket(
             sid,
             created.id,
             datetime.now(UTC) + timedelta(minutes=5),
@@ -302,36 +306,36 @@ def test_control_plane_facade_state_feed_projection_end_to_end(tmp_path: Path):
     facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_file}")
     facade.setup()
 
-    sid = facade.open_session("sync-projection")
+    sid = facade.sessions.open_session("sync-projection")
     proposal_id = _insert_pending_proposal(facade, sid, resource_id="projection-sync-asset-1")
-    ticket = facade.create_ticket(sid, proposal_id, datetime.now(UTC) + timedelta(minutes=10))
+    ticket = facade.approvals.create_ticket(sid, proposal_id, datetime.now(UTC) + timedelta(minutes=10))
 
-    facade.emit(sid, EventKind.CYCLE_STARTED, {"phase": "start"}, state_bearing=True)
-    facade.approve_ticket(ticket.id, reason="projection approve")
-    facade.emit(sid, EventKind.CYCLE_COMPLETED, {"phase": "done"}, state_bearing=True)
+    facade.sessions.emit(sid, EventKind.CYCLE_STARTED, {"phase": "start"}, state_bearing=True)
+    facade.approvals.approve_ticket(ticket.id, reason="projection approve")
+    facade.sessions.emit(sid, EventKind.CYCLE_COMPLETED, {"phase": "done"}, state_bearing=True)
 
     projection_tickets: dict[UUID, ApprovalStatus] = {}
     projection_proposals: dict[UUID, ProposalStatus] = {}
     cursor = 0
 
     while True:
-        feed = facade.get_state_change_feed(cursor=cursor, limit=10)
+        feed = facade.observer.get_state_change_feed(cursor=cursor, limit=10)
         if not feed.items:
             break
         for item in feed.items:
             session_id = item.event.session_id
-            tickets_page = facade.list_tickets(session_id=session_id, limit=200, offset=0)
+            tickets_page = facade.approvals.list_tickets(session_id=session_id, limit=200, offset=0)
             for projected_ticket in tickets_page.items:
                 projection_tickets[projected_ticket.id] = projected_ticket.status
 
-            proposals_page = facade.list_proposals(session_id=session_id, limit=200, offset=0)
+            proposals_page = facade.approvals.list_proposals(session_id=session_id, limit=200, offset=0)
             for projected_proposal in proposals_page.items:
                 projection_proposals[projected_proposal.id] = projected_proposal.status
 
             cursor = item.cursor
 
-    canonical_ticket = facade.get_ticket(ticket.id)
-    canonical_proposal = facade.get_proposal(proposal_id)
+    canonical_ticket = facade.approvals.get_ticket(ticket.id)
+    canonical_proposal = facade.approvals.get_proposal(proposal_id)
 
     assert canonical_ticket is not None
     assert canonical_proposal is not None

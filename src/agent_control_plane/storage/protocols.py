@@ -14,8 +14,8 @@ from uuid import UUID
 from agent_control_plane.types.agents import AgentMetadata, DelegationProposal
 from agent_control_plane.types.approvals import ApprovalTicket
 from agent_control_plane.types.enums import ApprovalStatus, BudgetPeriod, EventKind, ProposalStatus, SessionStatus
-from agent_control_plane.types.frames import EventFrame
-from agent_control_plane.types.ids import AgentId, IdempotencyKey, ResourceId
+from agent_control_plane.types.frames import EventFrame, EventMetadata
+from agent_control_plane.types.ids import AgentId, ResourceId
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import CommandResult
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
@@ -76,11 +76,7 @@ class EventRepository(Protocol):
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
-        agent_id: AgentId | None = None,
-        correlation_id: UUID | None = None,
-        routing_decision: dict[str, Any] | None = None,
-        routing_reason: str | None = None,
-        idempotency_key: IdempotencyKey | None = None,
+        metadata: EventMetadata | None = None,
     ) -> int: ...
 
     def replay(self, session_id: UUID, after_seq: int = 0, limit: int = 100) -> list[EventFrame]: ...
@@ -99,11 +95,7 @@ class AsyncEventRepository(Protocol):
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
-        agent_id: AgentId | None = None,
-        correlation_id: UUID | None = None,
-        routing_decision: dict[str, Any] | None = None,
-        routing_reason: str | None = None,
-        idempotency_key: IdempotencyKey | None = None,
+        metadata: EventMetadata | None = None,
     ) -> int: ...
 
     async def replay(self, session_id: UUID, after_seq: int = 0, limit: int = 100) -> list[EventFrame]: ...
@@ -242,7 +234,7 @@ class TokenBudgetRepository(Protocol):
     def create_budget_config(self, config: TokenBudgetConfig) -> TokenBudgetConfig: ...
     def get_budget_state(self, config_id: UUID, window_start: datetime) -> TokenBudgetState | None: ...
     def increment_usage(
-        self, config_id: UUID, window_start: datetime, window_end: datetime, tokens: int, cost_usd: Decimal
+        self, config_id: UUID, *, window_start: datetime, window_end: datetime, tokens: int, cost_usd: Decimal
     ) -> TokenBudgetState: ...
     def record_usage(self, session_id: UUID | None, usage: TokenUsage, identity: IdentityContext) -> None: ...
     def get_usage_summary(
@@ -257,7 +249,7 @@ class AsyncTokenBudgetRepository(Protocol):
     async def create_budget_config(self, config: TokenBudgetConfig) -> TokenBudgetConfig: ...
     async def get_budget_state(self, config_id: UUID, window_start: datetime) -> TokenBudgetState | None: ...
     async def increment_usage(
-        self, config_id: UUID, window_start: datetime, window_end: datetime, tokens: int, cost_usd: Decimal
+        self, config_id: UUID, *, window_start: datetime, window_end: datetime, tokens: int, cost_usd: Decimal
     ) -> TokenBudgetState: ...
     async def record_usage(self, session_id: UUID | None, usage: TokenUsage, identity: IdentityContext) -> None: ...
     async def get_usage_summary(

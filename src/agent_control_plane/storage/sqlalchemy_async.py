@@ -25,7 +25,7 @@ from agent_control_plane.types.enums import (
     ProposalStatus,
     SessionStatus,
 )
-from agent_control_plane.types.frames import EventFrame
+from agent_control_plane.types.frames import EventFrame, EventMetadata
 from agent_control_plane.types.ids import ModelId, OrgId, TeamId, UserId
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import CommandResult
@@ -47,7 +47,7 @@ def _ensure_reference_models_registered() -> None:
     without first building the facade or calling ``register_models()``. If
     consumers have already registered custom models, this is a no-op.
     """
-    if ModelRegistry._models:
+    if ModelRegistry.has_models():
         return
     from agent_control_plane.models.reference import register_models
 
@@ -191,12 +191,9 @@ class AsyncSqlAlchemyEventRepo:
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
-        agent_id: str | None = None,
-        correlation_id: UUID | None = None,
-        routing_decision: dict[str, Any] | None = None,
-        routing_reason: str | None = None,
-        idempotency_key: str | None = None,
+        metadata: EventMetadata | None = None,
     ) -> int:
+        m = metadata or EventMetadata()
         seq = await self._allocate_seq(session_id)
         control_event_model = ModelRegistry.get("ControlEvent")
         event = control_event_model(
@@ -204,13 +201,13 @@ class AsyncSqlAlchemyEventRepo:
             session_id=session_id,
             seq=seq,
             event_kind=event_kind,
-            agent_id=agent_id,
-            correlation_id=correlation_id,
+            agent_id=m.agent_id,
+            correlation_id=m.correlation_id,
             payload=payload,
             state_bearing=state_bearing,
-            routing_decision=routing_decision,
-            routing_reason=routing_reason,
-            idempotency_key=idempotency_key,
+            routing_decision=m.routing_decision,
+            routing_reason=m.routing_reason,
+            idempotency_key=m.idempotency_key,
         )
         self._session.add(event)
         await self._session.flush()
@@ -720,7 +717,7 @@ class AsyncSqlAlchemyTokenBudgetRepo:
         )
 
     async def increment_usage(
-        self, config_id: UUID, window_start: datetime, window_end: datetime, tokens: int, cost_usd: Decimal
+        self, config_id: UUID, *, window_start: datetime, window_end: datetime, tokens: int, cost_usd: Decimal
     ) -> TokenBudgetState:
         state_model = ModelRegistry.get("TokenBudgetState")
         result = await self._session.execute(
@@ -750,10 +747,12 @@ class AsyncSqlAlchemyTokenBudgetRepo:
             )
             self._session.add(new_row)
             await self._session.flush()
-        return await self._build_budget_state(config_id, window_start, window_end, new_tokens, new_cost)
+        return await self._build_budget_state(
+            config_id, window_start=window_start, window_end=window_end, new_tokens=new_tokens, new_cost=new_cost
+        )
 
     async def _build_budget_state(
-        self, config_id: UUID, window_start: datetime, window_end: datetime, new_tokens: int, new_cost: Decimal
+        self, config_id: UUID, *, window_start: datetime, window_end: datetime, new_tokens: int, new_cost: Decimal
     ) -> TokenBudgetState:
         config = await self.get_budget_config(config_id)
         identity = config.identity if config else IdentityContext()

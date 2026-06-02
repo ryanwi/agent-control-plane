@@ -12,8 +12,19 @@ from .ids import AgentId, IdempotencyKey
 
 
 @dataclass(frozen=True)
+class EventMetadata:
+    """Optional attribution metadata carried through the storage/engine layer."""
+
+    agent_id: AgentId | None = None
+    correlation_id: UUID | None = None
+    routing_decision: dict[str, Any] | None = None
+    routing_reason: str | None = None
+    idempotency_key: IdempotencyKey | None = None
+
+
+@dataclass(frozen=True)
 class EmitMetadata:
-    """Optional metadata for an emit() call — correlation, routing, and idempotency fields."""
+    """Optional metadata for a facade emit() call — extends EventMetadata with command_id."""
 
     agent_id: AgentId | None = None
     correlation_id: UUID | None = None
@@ -21,6 +32,16 @@ class EmitMetadata:
     routing_reason: str | None = None
     idempotency_key: IdempotencyKey | None = None
     command_id: IdempotencyKey | None = None
+
+    def as_event_metadata(self) -> EventMetadata:
+        """Strip command_id and return the storage-layer metadata view."""
+        return EventMetadata(
+            agent_id=self.agent_id,
+            correlation_id=self.correlation_id,
+            routing_decision=self.routing_decision,
+            routing_reason=self.routing_reason,
+            idempotency_key=self.idempotency_key,
+        )
 
 
 class RequestFrame(BaseModel):

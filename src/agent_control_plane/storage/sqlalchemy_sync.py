@@ -27,7 +27,7 @@ from agent_control_plane.types.enums import (
     ProposalStatus,
     SessionStatus,
 )
-from agent_control_plane.types.frames import EventFrame
+from agent_control_plane.types.frames import EventFrame, EventMetadata
 from agent_control_plane.types.ids import ModelId, OrgId, TeamId, UserId
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import CommandResult
@@ -47,7 +47,7 @@ def _ensure_reference_models_registered() -> None:
     Removes the silent "RuntimeError: Model 'X' not registered" footgun for
     consumers using a repo directly without first building the facade.
     """
-    if ModelRegistry._models:
+    if ModelRegistry.has_models():
         return
     from agent_control_plane.models.reference import register_models
 
@@ -183,12 +183,9 @@ class SyncSqlAlchemyEventRepo:
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
-        agent_id: str | None = None,
-        correlation_id: UUID | None = None,
-        routing_decision: dict[str, Any] | None = None,
-        routing_reason: str | None = None,
-        idempotency_key: str | None = None,
+        metadata: EventMetadata | None = None,
     ) -> int:
+        m = metadata or EventMetadata()
         seq = self._allocate_seq(session_id)
         control_event_model = ModelRegistry.get("ControlEvent")
         event = control_event_model(
@@ -196,13 +193,13 @@ class SyncSqlAlchemyEventRepo:
             session_id=session_id,
             seq=seq,
             event_kind=event_kind,
-            agent_id=agent_id,
-            correlation_id=correlation_id,
+            agent_id=m.agent_id,
+            correlation_id=m.correlation_id,
             payload=payload,
             state_bearing=state_bearing,
-            routing_decision=routing_decision,
-            routing_reason=routing_reason,
-            idempotency_key=idempotency_key,
+            routing_decision=m.routing_decision,
+            routing_reason=m.routing_reason,
+            idempotency_key=m.idempotency_key,
         )
         self._session.add(event)
         self._session.flush()
@@ -323,6 +320,7 @@ class SyncSqlAlchemyApprovalRepo:
         query = select(approval_ticket_model).where(approval_ticket_model.status == ApprovalStatus.PENDING)
         if session_id:
             query = query.where(approval_ticket_model.session_id == session_id)
+        query = query.order_by(approval_ticket_model.created_at.desc())
         result = self._session.execute(query)
         return [self._to_dto(row) for row in result.scalars().all()]
 
@@ -700,7 +698,7 @@ class SyncSqlAlchemyTokenBudgetRepo:
         )
 
     def increment_usage(
-        self, config_id: UUID, window_start: datetime, window_end: datetime, tokens: int, cost_usd: Decimal
+        self, config_id: UUID, *, window_start: datetime, window_end: datetime, tokens: int, cost_usd: Decimal
     ) -> TokenBudgetState:
         state_model = ModelRegistry.get("TokenBudgetState")
         result = self._session.execute(
@@ -728,10 +726,12 @@ class SyncSqlAlchemyTokenBudgetRepo:
             )
             self._session.add(new_row)
             self._session.flush()
-        return self._build_budget_state(config_id, window_start, window_end, new_tokens, new_cost)
+        return self._build_budget_state(
+            config_id, window_start=window_start, window_end=window_end, new_tokens=new_tokens, new_cost=new_cost
+        )
 
     def _build_budget_state(
-        self, config_id: UUID, window_start: datetime, window_end: datetime, new_tokens: int, new_cost: Decimal
+        self, config_id: UUID, *, window_start: datetime, window_end: datetime, new_tokens: int, new_cost: Decimal
     ) -> TokenBudgetState:
         config = self.get_budget_config(config_id)
         identity = config.identity if config else IdentityContext()
