@@ -14,6 +14,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 from agent_control_plane.engine.concurrency import CycleAlreadyActiveError
+from agent_control_plane.engine.state_integrity import SessionStateIntegrityError, validate_session_integrity
 from agent_control_plane.models.reference import Base, register_models
 from agent_control_plane.models.registry import RegistryProtocol, ScopedModelRegistry, registry_scope
 from agent_control_plane.storage.sqlalchemy_async import AsyncSqlAlchemyUnitOfWork
@@ -371,6 +372,16 @@ class AsyncControlPlaneFacade:
             cs = await uow.session_repo.get_session_for_update(session_id)
             if cs.status != SessionStatus.PAUSED:
                 raise ValueError(f"Cannot resume session in state {cs.status}")
+            violations = validate_session_integrity(cs)
+            if violations:
+                await uow.event_repo.append(
+                    session_id=session_id,
+                    event_kind=EventKind.SESSION_STATE_INVALID,
+                    payload={"violations": [{"code": v.code, "message": v.message} for v in violations]},
+                    state_bearing=True,
+                )
+                await uow.commit()
+                raise SessionStateIntegrityError(violations)
             await uow.session_repo.update_session(session_id, status=SessionStatus.ACTIVE, updated_at=datetime.now(UTC))
             await uow.commit()
             session = await uow.session_repo.get_session(session_id)

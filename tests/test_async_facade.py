@@ -11,6 +11,7 @@ import pytest
 
 from agent_control_plane.async_facade import AsyncControlPlaneFacade
 from agent_control_plane.engine.concurrency import CycleAlreadyActiveError
+from agent_control_plane.engine.state_integrity import SessionStateIntegrityError
 from agent_control_plane.models.registry import ModelRegistry
 from agent_control_plane.sync import DictEventMapper
 from agent_control_plane.types.approvals import ApprovalScope
@@ -81,6 +82,39 @@ async def test_async_facade_session_transitions_and_cycle_lock(tmp_path: Path):
 
     resumed = await facade.resume_session(sid)
     assert resumed.session.status == SessionStatus.ACTIVE
+
+    await facade.close()
+
+
+@pytest.mark.asyncio
+async def test_async_facade_resume_fails_closed_on_corrupt_state(tmp_path: Path):
+    db_file = tmp_path / "cp_async_integrity.db"
+    facade = AsyncControlPlaneFacade.from_database_url(f"sqlite+aiosqlite:///{db_file}")
+
+    sid = await facade.open_session("integrity-test")
+    await facade.activate_session(sid)
+    await facade.pause_session(sid)
+
+    # Corrupt persisted state by writing a negative used_cost directly.
+    async with facade.session_scope() as db:
+        session_model = ModelRegistry.get("ControlSession")
+        row = await db.get(session_model, sid)
+        row.used_cost = Decimal("-5")
+        await db.commit()
+
+    with pytest.raises(SessionStateIntegrityError):
+        await facade.resume_session(sid)
+
+    # Session must stay PAUSED — fail closed.
+    session = await facade.get_session(sid)
+    assert session is not None
+    assert session.status == SessionStatus.PAUSED
+
+    # State-bearing audit event must be recorded.
+    events = await facade.replay(sid)
+    invalid = [e for e in events if e.kind == EventKind.SESSION_STATE_INVALID]
+    assert invalid
+    assert "negative_used_cost" in str(invalid[-1].payload)
 
     await facade.close()
 
