@@ -207,6 +207,12 @@ class SyncControlPlane:
             uow = self._uow_factory(db)
             return uow.session_repo.get_session(session_id)
 
+    def is_agent_revoked(self, session_id: UUID, agent_id: str) -> bool:
+        """Whether ``agent_id`` is currently revoked for ``session_id`` (fail-closed gate)."""
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
+            return uow.agent_repo.is_agent_revoked(session_id, agent_id)
+
     def list_sessions(
         self,
         *,

@@ -218,6 +218,7 @@ class McpGateway:
         """Govern and execute an MCP tool call."""
         session_id = self._resolve_session_id(context)
         self._assert_session_executable(session_id)
+        self._assert_agent_not_revoked(session_id, context)
 
         action = self._tool_policy_map.resolve(context.tool_name)
         action_value = action.value if isinstance(action, ActionName) else action
@@ -408,6 +409,19 @@ class McpGateway:
             if not outcome.allow:
                 return _RejectionContext(evaluator=evaluator.name, reason=outcome.reason)
         return None
+
+    def _assert_agent_not_revoked(self, session_id: UUID, context: ToolCallContext) -> None:
+        """Fail closed if the acting agent has been revoked for this session."""
+        if not context.agent_id or not self._cp.is_agent_revoked(session_id, context.agent_id):
+            return
+        self._emit(
+            session_id,
+            McpEventName.TOOL_CALL_BLOCKED,
+            {"tool_name": context.tool_name, "agent_id": context.agent_id, "reason": "agent_revoked"},
+            correlation_id=context.correlation_id,
+            idempotency_key=context.idempotency_key,
+        )
+        raise PolicyDeniedError(f"Agent {context.agent_id} is revoked for session {session_id}")
 
     def _resolve_session_id(self, context: ToolCallContext) -> UUID:
         if context.session_id is not None:

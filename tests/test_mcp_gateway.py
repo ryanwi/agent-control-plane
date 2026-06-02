@@ -127,6 +127,33 @@ def test_correlation_id_is_propagated_to_emitted_events(tmp_path: Path):
     cp.close()
 
 
+def test_revoked_agent_is_blocked(tmp_path: Path):
+    cp = _new_cp(tmp_path, "mcp_revoked")
+    sid = cp.create_session("mcp-revoked")
+
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    gateway = McpGateway(
+        cp,
+        _OkExecutor(),
+        ToolPolicyMap({"status": ActionName.STATUS}),
+        config=McpGatewayConfig(policy_snapshot=policy),
+    )
+
+    # Revoke the agent for this session.
+    with cp.session_scope() as db:
+        uow = cp.uow_factory(db)
+        uow.agent_repo.record_revocation(sid, "agent-x", "suspected compromise")
+        uow.commit()
+
+    with pytest.raises(PolicyDeniedError):
+        gateway.handle_tool_call(ToolCallContext(tool_name="status", session_id=sid, agent_id="agent-x"))
+
+    # A different, non-revoked agent is unaffected.
+    result = gateway.handle_tool_call(ToolCallContext(tool_name="status", session_id=sid, agent_id="agent-y"))
+    assert result.ok is True
+    cp.close()
+
+
 def test_failed_tool_call_does_not_export_as_applied(tmp_path: Path):
     cp = _new_cp(tmp_path, "mcp_fail_outcome")
     sid = cp.create_session("mcp-fail-outcome")
