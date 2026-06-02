@@ -44,6 +44,11 @@ class DelegationGuard:
     async def propose_delegation(self, proposal: DelegationProposal) -> bool:
         """Check if a delegation request is allowed and record it.
 
+        Delegation is an advisory/audit record: it does NOT elevate trust. The target agent
+        is always authorized against its own registered capabilities (see
+        ``AgentMetadata.is_capable``); it never inherits the source's authority. Do not treat
+        a recorded delegation as a capability grant.
+
         Rules:
         1. Both source and target agents must exist in the registry.
         2. (Future) Apply policy-based delegation rules.

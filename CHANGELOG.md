@@ -5,6 +5,7 @@
 ### Added
 
 - **Approval grant-rate telemetry (approval-fatigue signal)** — the operational scorecard now tracks `approvals_granted`, `approvals_denied`, and a derived `approval_grant_rate`. A grant rate near 1.0 across many approvals is the classic rubber-stamp / approval-fatigue signal (operators approving without scrutiny), so surfacing it lets hosts alert on it. `export_scorecard()` emits `cp.approvals_granted`, `cp.approvals_denied`, and `cp.approval_grant_rate` metrics. Computed from existing `APPROVAL_GRANTED`/`APPROVAL_DENIED` events — no new event kinds or storage.
+- **`AgentMetadata.is_capable(action)`** — single source of truth for an agent's *effective* authority: its own registered capabilities only. `ProposalRouter` now resolves capability through it. Establishes and documents the "delegation does not elevate trust" invariant — delegation (`DelegationGuard`) and handoff (`request_handoff`) are advisory/audit records that never widen a target agent's capabilities, so a sub-agent can't inherit a source's authority. Documented in `security_model.md`-adjacent `integration_identity.md` (new "Delegation and handoff trust" section).
 
 ## [0.17.1] - 2026-06-01
 

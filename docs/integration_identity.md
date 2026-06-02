@@ -59,9 +59,23 @@ identity = IdentityContext(
 )
 ```
 
+## Delegation and handoff trust
+
+Delegation (`DelegationGuard.propose_delegation`) and handoff (`request_handoff`) are
+**advisory/audit records — they do not elevate trust**. An agent's effective authority is
+always its own registered capabilities, resolved through `AgentMetadata.is_capable`; a target
+agent never inherits the source's capabilities by being delegated to or handed off work.
+
+This matters in multi-agent systems: do not treat a sub-agent's output (or a delegation/
+handoff record) as higher-trust than any other input. Authorize every action against the
+acting agent's own capabilities, and screen sub-agent output the same way you screen any tool
+result. Wiring a handoff's `allowed_actions` into authorization would re-introduce the
+trust-escalation vector this invariant exists to prevent.
+
 ## Quick checklist
 
 - [ ] Authn at edge implemented and validated.
+- [ ] Delegation/handoff treated as audit only — authorization uses the agent's own capabilities (`AgentMetadata.is_capable`), never inherited from a source agent.
 - [ ] Authz at edge implemented for governed operations.
 - [ ] `agent_id` propagation implemented.
 - [ ] Correlation/idempotency propagation implemented.

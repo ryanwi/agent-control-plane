@@ -64,3 +64,38 @@ class TestDelegationGuard:
 
         allowed = await guard.propose_delegation(proposal)
         assert allowed is False
+
+
+class TestEffectiveCapabilities:
+    """Effective capabilities = the agent's own registered capabilities only.
+
+    Delegation (and handoff) are advisory/audit and must never elevate the target's trust.
+    """
+
+    def test_is_capable_for_registered_action(self):
+        agent = AgentMetadata(id="a", name="A", capabilities=[AgentCapability(action=ActionName.STATUS)])
+        assert agent.is_capable(ActionName.STATUS) is True
+
+    def test_not_capable_for_unregistered_action(self):
+        agent = AgentMetadata(id="a", name="A", capabilities=[AgentCapability(action=ActionName.STATUS)])
+        assert agent.is_capable(ActionName.WIRE_TRANSFER) is False
+
+    @pytest.mark.asyncio
+    async def test_delegation_does_not_elevate_target_capabilities(self, registry, guard):
+        # Source can wire_transfer; target cannot.
+        await registry.register(
+            AgentMetadata(id="src", name="Src", capabilities=[AgentCapability(action=ActionName.WIRE_TRANSFER)])
+        )
+        await registry.register(
+            AgentMetadata(id="tgt", name="Tgt", capabilities=[AgentCapability(action=ActionName.STATUS)])
+        )
+
+        ok = await guard.propose_delegation(
+            DelegationProposal(source_agent_id="src", target_agent_id="tgt", task_description="wire some money")
+        )
+        assert ok is True
+
+        # Delegation is audit-only: the target's effective capabilities are unchanged.
+        target = await registry.get_agent("tgt")
+        assert target.is_capable(ActionName.WIRE_TRANSFER) is False
+        assert target.is_capable(ActionName.STATUS) is True

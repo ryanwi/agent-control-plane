@@ -34,6 +34,18 @@ class AgentMetadata(BaseModel):
     capabilities: list[AgentCapability] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
+    def is_capable(self, action: ActionValue) -> bool:
+        """Whether this agent is authorized for ``action``.
+
+        This is the single source of truth for an agent's *effective* capabilities: its own
+        registered capabilities, and nothing else. Delegation and handoff are advisory/audit
+        records — they never widen this set, so a target agent can never gain the source's
+        authority. Keeping authorization anchored here is what enforces "delegation does not
+        elevate trust"; do not consult delegation/handoff records when deciding authority.
+        """
+        target = parse_action_name(action)
+        return any(c.action == target for c in self.capabilities)
+
 
 class DelegationProposal(BaseModel):
     """A request from one agent to delegate a task to another."""

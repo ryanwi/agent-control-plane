@@ -847,6 +847,12 @@ class AsyncAgenticGateway(_AsyncGatewayBase):
         lease_seconds: int = 900,
         metadata: dict[str, object] | None = None,
     ) -> HandoffResult:
+        """Record a handoff between agents (advisory/audit only).
+
+        ``allowed_actions`` is descriptive metadata for the audit trail; it does NOT grant the
+        target any authority. The target is always authorized against its own registered
+        capabilities (``AgentMetadata.is_capable``) — handoff does not elevate trust.
+        """
         expires_at = datetime.now(UTC) + timedelta(seconds=lease_seconds)
         result = HandoffResult(
             session_id=session_id,

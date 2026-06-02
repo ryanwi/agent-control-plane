@@ -43,8 +43,9 @@ class ProposalRouter:
             if not agent:
                 logger.warning("Proposal from unregistered agent: %s", proposal.agent_id)
             else:
-                # Validate capabilities
-                capable = any(c.action == proposal.decision for c in agent.capabilities)
+                # Validate against the agent's own capabilities only (delegation/handoff
+                # records never elevate this — see AgentMetadata.is_capable).
+                capable = agent.is_capable(proposal.decision)
                 if not capable:
                     logger.warning(
                         "Agent %s is not registered for action %s",
