@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from agent_control_plane.engine.event_store import EventStore
 from agent_control_plane.engine.session_manager import SessionManager
+from agent_control_plane.engine.state_integrity import SessionStateIntegrityError, validate_session_integrity
 from agent_control_plane.types.enums import AbortReason, EventKind, SessionStatus
 from agent_control_plane.types.sessions import SessionState
 
@@ -48,7 +49,7 @@ class CrashRecovery:
             try:
                 await self._recover_session(cs)
                 recovered += 1
-            except (RuntimeError, ValueError) as e:
+            except (RuntimeError, ValueError, SessionStateIntegrityError) as e:
                 logger.error("Failed to recover session %s: %s", cs.id, e)
                 await self.session_manager.abort_session(
                     cs.id,
@@ -72,7 +73,17 @@ class CrashRecovery:
         }
 
     async def _recover_session(self, cs: SessionState) -> None:
-        """Attempt to recover a single session."""
+        """Attempt to recover a single session, aborting if state invariants are violated."""
+        violations = validate_session_integrity(cs)
+        if violations:
+            await self.event_store.append(
+                session_id=cs.id,
+                event_kind=EventKind.SESSION_STATE_INVALID,
+                payload={"violations": [{"code": v.code, "message": v.message} for v in violations]},
+                state_bearing=True,
+            )
+            raise SessionStateIntegrityError(violations)
+
         last_event = await self._event_repo.get_last_event(cs.id)
 
         if last_event is None:

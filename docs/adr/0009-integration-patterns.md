@@ -62,10 +62,12 @@ A single configuration object that replaces the multi-step bootstrap ceremony:
 ```python
 cp = ControlPlaneSetup(
     database_url=db_url,
-    alias_profile=MY_ALIASES,
-    risk_patterns=MY_RISK_PATTERNS,
-    model_governance=MY_MODEL_POLICY,
-    resilience_mode=ResilienceMode.MIXED,
+    governance=GovernanceConfig(
+        alias_profile=MY_ALIASES,
+        risk_patterns=MY_RISK_PATTERNS,
+        model_governance=MY_MODEL_POLICY,
+    ),
+    resilience=ResilienceConfig(mode=ResilienceMode.MIXED),
 ).build()
 ```
 

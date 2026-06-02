@@ -128,6 +128,7 @@ class EventKind(StrEnum):
     EXECUTION_STARTED = "execution_started"
     EXECUTION_COMPLETED = "execution_completed"
     SESSION_ABORTED = "session_aborted"
+    SESSION_STATE_INVALID = "session_state_invalid"
     KILL_SWITCH_TRIGGERED = "kill_switch_triggered"
     BUDGET_EXHAUSTED = "budget_exhausted"
     CHECKPOINT_CREATED = "checkpoint_created"

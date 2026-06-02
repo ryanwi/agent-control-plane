@@ -8,10 +8,12 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from agent_control_plane.types.enums import AbortReason, AssetScope, ExecutionMode, SessionStatus
+from agent_control_plane.engine.state_integrity import SessionStateIntegrityError, validate_session_integrity
+from agent_control_plane.types.enums import AbortReason, AssetScope, EventKind, ExecutionMode, SessionStatus
 from agent_control_plane.types.sessions import SessionState
 
 if TYPE_CHECKING:
+    from agent_control_plane.engine.event_store import EventStore
     from agent_control_plane.storage.protocols import AsyncSessionRepository
 
 logger = logging.getLogger(__name__)
@@ -20,8 +22,9 @@ logger = logging.getLogger(__name__)
 class SessionManager:
     """Manages ControlSession CRUD and lifecycle transitions."""
 
-    def __init__(self, session_repo: AsyncSessionRepository) -> None:
+    def __init__(self, session_repo: AsyncSessionRepository, event_store: EventStore | None = None) -> None:
         self._repo = session_repo
+        self._event_store = event_store
 
     async def create_session(
         self,
@@ -81,10 +84,20 @@ class SessionManager:
         return cs
 
     async def resume_session(self, session_id: UUID) -> SessionState:
-        """Resume a paused session."""
+        """Resume a paused session, failing closed if persisted state violates invariants."""
         cs = await self._get_session_or_raise(session_id)
         if cs.status != SessionStatus.PAUSED:
             raise ValueError(f"Cannot resume session in state {cs.status}")
+        violations = validate_session_integrity(cs)
+        if violations:
+            if self._event_store is not None:
+                await self._event_store.append(
+                    session_id=session_id,
+                    event_kind=EventKind.SESSION_STATE_INVALID,
+                    payload={"violations": [{"code": v.code, "message": v.message} for v in violations]},
+                    state_bearing=True,
+                )
+            raise SessionStateIntegrityError(violations)
         await self._repo.update_session(session_id, status=SessionStatus.ACTIVE, updated_at=datetime.now(UTC))
         cs.status = SessionStatus.ACTIVE
         return cs

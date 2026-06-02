@@ -137,9 +137,9 @@ Replaces ~200–400 lines of wrapper code in each consumer with ~10 lines:
 ```python
 cp = ControlPlaneSetup(
     database_url="sqlite:///./cp.db",
-    event_map={"job_started": EventKind.CYCLE_STARTED},
-    action_names=["place_order", "cancel_order"],
-    resilience_mode=ResilienceMode.MIXED,
+    governance=GovernanceConfig(action_names=["place_order", "cancel_order"]),
+    events=EventConfig(event_map={"job_started": EventKind.CYCLE_STARTED}),
+    resilience=ResilienceConfig(mode=ResilienceMode.MIXED),
 ).build()
 # cp is a ResilientControlPlane — no try/except needed
 ```

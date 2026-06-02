@@ -96,10 +96,10 @@ Identity-scoped, persistent token/cost budgets — useful as a first integration
 
 ```python
 from agent_control_plane import (
-    ControlPlaneSetup, IdentityContext, OrgId, ModelId, TokenUsage,
+    ControlPlaneSetup, GovernanceConfig, IdentityContext, OrgId, ModelId, TokenUsage,
 )
 
-cp = ControlPlaneSetup(database_url, token_budget_configs=[...]).build_async()
+cp = ControlPlaneSetup(database_url, governance=GovernanceConfig(token_budget_configs=[...])).build_async()
 
 async with cp.token_budget_tracker() as tracker:
     identity = IdentityContext(org_id=OrgId("tenant-acme"))

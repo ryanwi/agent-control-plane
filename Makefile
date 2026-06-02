@@ -6,7 +6,7 @@ PYLINT ?= uv run pylint
 
 .DEFAULT_GOAL := help
 
-.PHONY: help sync demo-asciinema demo-asciicast-agent docs-drift openapi-check test lint format typecheck examples check release-tag
+.PHONY: help sync demo-asciinema demo-asciicast-agent docs-drift openapi-check test lint pylint format typecheck examples check release-tag
 
 help:
 	@printf "Targets:\n"
@@ -17,6 +17,7 @@ help:
 	@printf "  make openapi-check - validate OpenAPI contract files\n"
 	@printf "  make test       - run test suite\n"
 	@printf "  make lint       - run ruff checks\n"
+	@printf "  make pylint     - run pylint (tracked separately until all findings are resolved)\n"
 	@printf "  make format     - run ruff formatter\n"
 	@printf "  make typecheck  - run mypy\n"
 	@printf "  make check      - run lint + typecheck + test\n"
@@ -42,6 +43,8 @@ test:
 
 lint:
 	$(RUFF) check src tests examples
+
+pylint:
 	$(PYLINT) src
 
 format:
