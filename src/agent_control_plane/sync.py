@@ -336,6 +336,9 @@ class SyncControlPlane:
     def activate_session(self, session_id: UUID) -> SessionLifecycleResult:
         with self.session_scope() as db:
             uow = self._uow_factory(db)
+            cs = uow.session_repo.get_session(session_id)
+            if cs is not None and cs.killed_at is not None:
+                raise ValueError(f"Cannot activate a killed session (killed_at={cs.killed_at})")
             now = datetime.now(UTC)
             uow.session_repo.update_session(session_id, status=SessionStatus.ACTIVE, started_at=now, updated_at=now)
             uow.commit()

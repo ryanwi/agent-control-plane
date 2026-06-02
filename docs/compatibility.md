@@ -30,7 +30,7 @@ The task-oriented "how do I move my code" companion to `CHANGELOG.md`.
 
 ## Quick path
 
-1. Bump the pin (e.g. `agent-control-plane>=0.21.0,<0.22`) and sync.
+1. Bump the pin (e.g. `agent-control-plane>=0.24.0,<0.25`) and sync.
 2. Apply the breaking migrations below for the versions you actually cross. Let `mypy` and
    your test suite drive — most breaks surface as import/attribute/type errors.
 3. Optionally adopt the new security capabilities (last section).
@@ -41,6 +41,20 @@ The import package is `agent_control_plane` (underscores); the distribution is
 an `import agent_control_plane`.
 
 ## Breaking changes
+
+### 0.24.0 — new nullable columns on `agent_runs`
+
+Two nullable columns were added to the session table. Existing deployments must migrate:
+
+```sql
+-- SQLite and PostgreSQL
+ALTER TABLE agent_runs ADD COLUMN killed_at  TIMESTAMPTZ;
+ALTER TABLE agent_runs ADD COLUMN started_at TIMESTAMPTZ;
+```
+
+New deployments (`create_tables()`) get the columns automatically.
+
+---
 
 ### 0.24.0 — ActionName enum stripped to UNKNOWN sentinel
 

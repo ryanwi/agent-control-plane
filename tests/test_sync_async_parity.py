@@ -72,6 +72,7 @@ ASYNC_ONLY: frozenset[str] = frozenset(
         "resume_session",
         "session_scope",
         "set_active_cycle",
+        "unkill_session",
         "token_budget_tracker",  # async-only convenience context manager for token budgets
     }
 )

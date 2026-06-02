@@ -424,6 +424,8 @@ class AsyncLifecycleGateway(_AsyncGatewayBase):
             cs = await uow.session_repo.get_session_for_update(session_id)
             if cs.status != SessionStatus.CREATED:
                 raise ValueError(f"Cannot activate session in state {cs.status}")
+            if cs.killed_at is not None:
+                raise ValueError(f"Cannot activate a killed session (killed_at={cs.killed_at})")
             violations = validate_session_integrity(cs)
             if violations:
                 await uow.event_repo.append(
@@ -463,6 +465,8 @@ class AsyncLifecycleGateway(_AsyncGatewayBase):
             cs = await uow.session_repo.get_session_for_update(session_id)
             if cs.status != SessionStatus.PAUSED:
                 raise ValueError(f"Cannot resume session in state {cs.status}")
+            if cs.killed_at is not None:
+                raise ValueError(f"Cannot resume a killed session (killed_at={cs.killed_at})")
             violations = validate_session_integrity(cs)
             if violations:
                 await uow.event_repo.append(
@@ -478,6 +482,17 @@ class AsyncLifecycleGateway(_AsyncGatewayBase):
             session = await uow.session_repo.get_session(session_id)
             if session is None:
                 raise ValueError(f"Session not found after resume: {session_id}")
+            return SessionLifecycleResult(session=session)
+
+    async def unkill_session(self, session_id: UUID) -> SessionLifecycleResult:
+        """Clear the killed_at flag, re-enabling resume/activate for an operator-reviewed session."""
+        async with self._session_scope() as db:
+            uow = self._uow_factory(db)
+            await uow.session_repo.update_session(session_id, killed_at=None, updated_at=datetime.now(UTC))
+            await uow.commit()
+            session = await uow.session_repo.get_session(session_id)
+            if session is None:
+                raise ValueError(f"Session not found: {session_id}")
             return SessionLifecycleResult(session=session)
 
     async def set_active_cycle(self, session_id: UUID, cycle_id: UUID | None) -> None:
