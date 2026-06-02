@@ -1082,8 +1082,47 @@ class AsyncMaintenanceGateway(_AsyncGatewayBase):
         return {"checked": checked, "escalated": escalated}
 
 
+class AsyncAgentGateway(_AsyncGatewayBase):
+    """Per-session agent revocation: revoke / reinstate / is_revoked."""
+
+    async def revoke(self, session_id: UUID, agent_id: str, *, reason: str = "") -> None:
+        """Revoke an agent's authority for one session; records a state-bearing audit event."""
+        async with self._session_scope() as db:
+            uow = self._uow_factory(db)
+            await uow.agent_repo.record_revocation(session_id, agent_id, reason)
+            await uow.event_repo.append(
+                session_id=session_id,
+                event_kind=EventKind.AGENT_REVOKED,
+                payload={"agent_id": agent_id, "reason": reason},
+                state_bearing=True,
+            )
+            await uow.commit()
+
+    async def reinstate(self, session_id: UUID, agent_id: str) -> None:
+        """Clear a prior revocation, restoring the agent's authority for the session."""
+        async with self._session_scope() as db:
+            uow = self._uow_factory(db)
+            await uow.agent_repo.clear_revocation(session_id, agent_id)
+            await uow.event_repo.append(
+                session_id=session_id,
+                event_kind=EventKind.AGENT_REINSTATED,
+                payload={"agent_id": agent_id},
+                state_bearing=True,
+            )
+            await uow.commit()
+
+    async def is_revoked(self, session_id: UUID, agent_id: str) -> bool:
+        """Whether ``agent_id`` is currently revoked for ``session_id``."""
+        async with self._session_scope() as db:
+            uow = self._uow_factory(db)
+            return await uow.agent_repo.is_agent_revoked(session_id, agent_id)
+
+
 class AsyncControlPlaneFacade:
     """Async entry point — composes focused async gateway objects."""
+
+    # A composition root: one attribute per focused gateway, plus engine/schema state.
+    # pylint: disable=too-many-instance-attributes
 
     def __init__(
         self,
@@ -1112,6 +1151,7 @@ class AsyncControlPlaneFacade:
         self.agentic: AsyncAgenticGateway = AsyncAgenticGateway(self.session_scope, self._uow_factory)
         self.observer: AsyncControlPlaneObserver = AsyncControlPlaneObserver(self.session_scope, self._uow_factory)
         self.maintenance: AsyncMaintenanceGateway = AsyncMaintenanceGateway(self.session_scope, self._uow_factory)
+        self.agents: AsyncAgentGateway = AsyncAgentGateway(self.session_scope, self._uow_factory)
 
     @classmethod
     def from_database_url(

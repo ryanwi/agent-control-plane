@@ -213,6 +213,32 @@ class SyncControlPlane:
             uow = self._uow_factory(db)
             return uow.agent_repo.is_agent_revoked(session_id, agent_id)
 
+    def revoke_agent(self, session_id: UUID, agent_id: str, *, reason: str = "") -> None:
+        """Revoke an agent's authority for one session; records a state-bearing audit event."""
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
+            uow.agent_repo.record_revocation(session_id, agent_id, reason)
+            uow.event_repo.append(
+                session_id=session_id,
+                event_kind=EventKind.AGENT_REVOKED,
+                payload={"agent_id": agent_id, "reason": reason},
+                state_bearing=True,
+            )
+            uow.commit()
+
+    def reinstate_agent(self, session_id: UUID, agent_id: str) -> None:
+        """Clear a prior revocation, restoring the agent's authority for the session."""
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
+            uow.agent_repo.clear_revocation(session_id, agent_id)
+            uow.event_repo.append(
+                session_id=session_id,
+                event_kind=EventKind.AGENT_REINSTATED,
+                payload={"agent_id": agent_id},
+                state_bearing=True,
+            )
+            uow.commit()
+
     def list_sessions(
         self,
         *,
@@ -789,6 +815,19 @@ class BudgetGateway(_SyncGatewayBase):
         return self._cp.get_remaining_budget(session_id)
 
 
+class AgentGateway(_SyncGatewayBase):
+    """Per-session agent revocation: revoke / reinstate / is_revoked."""
+
+    def revoke(self, session_id: UUID, agent_id: str, *, reason: str = "") -> None:
+        self._cp.revoke_agent(session_id, agent_id, reason=reason)
+
+    def reinstate(self, session_id: UUID, agent_id: str) -> None:
+        self._cp.reinstate_agent(session_id, agent_id)
+
+    def is_revoked(self, session_id: UUID, agent_id: str) -> bool:
+        return self._cp.is_agent_revoked(session_id, agent_id)
+
+
 class AgenticGateway(_SyncGatewayBase):
     """Agentic planning, evaluation, guardrails, and checkpoints."""
 
@@ -1116,6 +1155,7 @@ class ControlPlaneFacade:
         self.approvals: ApprovalGateway = ApprovalGateway(control_plane)
         self.budget: BudgetGateway = BudgetGateway(control_plane)
         self.agentic: AgenticGateway = AgenticGateway(control_plane)
+        self.agents: AgentGateway = AgentGateway(control_plane)
         self.observer: ControlPlaneObserver = ControlPlaneObserver(control_plane)
         self._cp = control_plane
 

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Per-session agent revocation is now enforced and facade-exposed** — completes the revocation feature whose primitive shipped in 0.19.0 (the 0.19.0 note called built-in enforcement a follow-up; this is it).
+  - **Enforcement (fail-closed):** `McpGateway.handle_tool_call` blocks a revoked agent before tool resolution (emits `TOOL_CALL_BLOCKED` with `reason=agent_revoked`, raises `PolicyDeniedError`), and `ProposalRouter.route()` short-circuits to a `BLOCKED` decision for a revoked agent regardless of its capabilities.
+  - **Facade exposure:** `revoke` / `reinstate` / `is_revoked` are surfaced on a new `agents` gateway on both `ControlPlaneFacade` (sync) and `AsyncControlPlaneFacade` (async), plus `revoke_agent` / `reinstate_agent` / `is_agent_revoked` directly on `SyncControlPlane`. Consumers no longer need to reach into the engine to revoke. `AgentRegistry.is_revoked` was added as the async read-side gate.
+
 ## [0.19.1] - 2026-06-01
 
 ### Changed
