@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`SessionState.started_at` and `SessionSummary.started_at`** — timestamp set when a
+  session first transitions to `ACTIVE`. `None` until activation; preserved through
+  pause/resume cycles so it always reflects the first start time. Enables duration
+  computation: `completed_at - started_at` (use `updated_at` as a proxy for
+  `completed_at`).
+
+  ```python
+  session = await cp.sessions.get_session(session_id)
+  if session.started_at and session.updated_at:
+      duration = session.updated_at - session.started_at
+  ```
+
+- **`ControlPlaneObserver.list_sessions()`** — the sync facade's observer gateway now
+  exposes `list_sessions(statuses=..., limit=...)`, matching the async counterpart that
+  was already present.
+
+  ```python
+  # list recent runs
+  sessions = facade.observer.list_sessions(limit=10)
+  for s in sessions:
+      print(s.session_name, s.status, s.used_cost, s.started_at)
+  ```
+
 ## [0.24.0] - 2026-06-01
 
 ### Changed (breaking)

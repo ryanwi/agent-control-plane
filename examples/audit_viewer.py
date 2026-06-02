@@ -1,70 +1,101 @@
 """
-Audit Viewer Example: Formatted Flight Recorder for Control Sessions.
+Audit Viewer: list recent runs or replay the event trail for a specific session.
 
-Demonstrates:
-- Replaying the EventStore for a specific session.
-- Formatting the audit trail into a readable timeline.
-- Highlighting state-bearing transitions and routing decisions.
+Usage:
+    # list the 20 most recent sessions
+    uv run python examples/audit_viewer.py
+
+    # show the full event trail for one session
+    uv run python examples/audit_viewer.py <session_id>
 """
+
+from __future__ import annotations
 
 import asyncio
 import sys
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import create_async_engine
+from agent_control_plane import AsyncControlPlaneFacade
 
-from agent_control_plane import (
-    AsyncSqlAlchemyEventRepo,
-    EventStore,
-    register_models,
-)
-
-DATABASE_URL = "sqlite+aiosqlite:///./audit_example.db"
+DATABASE_URL = "sqlite+aiosqlite:///./control_plane.db"
 
 
-async def view_audit(session_id: UUID):
-    register_models()
-    engine = create_async_engine(DATABASE_URL)
+async def list_recent(facade: AsyncControlPlaneFacade, limit: int = 20) -> None:
+    sessions = await facade.observer.list_sessions(limit=limit)
+    if not sessions:
+        print("No sessions found.")
+        return
 
-    async with engine.connect() as conn:
-        repo = AsyncSqlAlchemyEventRepo(conn)
-        store = EventStore(repo)
+    header = f"{'ID':<36}  {'NAME':<30}  {'STATUS':<10}  {'COST':>8}  {'DURATION':>10}"
+    print(f"\n{header}")
+    print("-" * len(header))
 
-        events = await store.sessions.replay(session_id)
+    for s in sessions:
+        if s.started_at and s.updated_at:
+            secs = (s.updated_at - s.started_at).total_seconds()
+            duration = f"{secs:.1f}s"
+        elif s.started_at:
+            duration = "running"
+        else:
+            duration = "—"
 
-        print(f"\n{'=' * 80}")
-        print(f"AUDIT TRAIL FOR SESSION: {session_id}")
-        print(f"{'=' * 80}\n")
+        print(f"{s.id!s:<36}  {s.session_name:<30}  {s.status.value:<10}  {float(s.used_cost):>8.4f}  {duration:>10}")
+    print()
 
-        if not events:
-            print("No events found for this session.")
-            return
 
-        for e in events:
-            timestamp = e.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            state_marker = " [STATE] " if e.state_bearing else "         "
-            print(f"{timestamp}{state_marker}{e.event_kind.upper():<25} | {e.payload}")
+async def show_trail(facade: AsyncControlPlaneFacade, session_id: UUID) -> None:
+    session = await facade.sessions.get_session(session_id)
+    if session is None:
+        print(f"Session {session_id} not found.")
+        return
 
-            if e.routing_decision:
-                print(f"    └─ ROUTING: Tier={e.routing_decision.get('tier')} | Step={e.routing_step or 'unknown'}")
-                print(f"    └─ REASON:  {e.routing_reason}")
+    events = await facade.sessions.replay(session_id)
 
-        print(f"\n{'=' * 80}")
-        print(f"END OF REPORT ({len(events)} events)")
-        print(f"{'=' * 80}\n")
+    print(f"\n{'=' * 80}")
+    print(f"SESSION: {session.session_name}  ({session_id})")
+    print(
+        f"  status={session.status.value}  mode={session.execution_mode.value}"
+        f"  cost={session.used_cost}/{session.max_cost}"
+        f"  actions={session.used_action_count}/{session.max_action_count}"
+    )
+    if session.started_at:
+        print(f"  started={session.started_at.strftime('%Y-%m-%d %H:%M:%S')}", end="")
+        if session.updated_at:
+            secs = (session.updated_at - session.started_at).total_seconds()
+            print(f"  duration={secs:.1f}s", end="")
+        print()
+    print(f"{'=' * 80}\n")
 
-    await engine.dispose()
+    if not events:
+        print("No events recorded.")
+        return
+
+    for e in events:
+        ts = e.created_at.strftime("%H:%M:%S")
+        marker = " [STATE]" if e.state_bearing else "        "
+        agent = f" agent={e.agent_id}" if e.agent_id else ""
+        print(f"  {ts}{marker}  seq={e.seq:<4}  {e.kind.value}{agent}")
+        if e.payload:
+            print(f"           {e.payload}")
+
+    print(f"\n{len(events)} event(s)\n")
+
+
+async def main() -> None:
+    facade = AsyncControlPlaneFacade.from_database_url(DATABASE_URL)
+    try:
+        if len(sys.argv) < 2:
+            await list_recent(facade)
+        else:
+            try:
+                sid = UUID(sys.argv[1])
+            except ValueError:
+                print(f"Invalid UUID: {sys.argv[1]!r}")
+                sys.exit(1)
+            await show_trail(facade, sid)
+    finally:
+        await facade.close()
 
 
 if __name__ == "__main__":
-    # This example requires a valid session_id from one of the other examples
-    # Usage: uv run python examples/audit_viewer.py <session_id>
-    if len(sys.argv) < 2:
-        print("Usage: uv run python examples/audit_viewer.py <session_id>")
-        sys.exit(1)
-
-    try:
-        sid = UUID(sys.argv[1])
-        asyncio.run(view_audit(sid))
-    except ValueError:
-        print("Invalid UUID format.")
+    asyncio.run(main())
