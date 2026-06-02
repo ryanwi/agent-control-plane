@@ -36,7 +36,7 @@ from agent_control_plane.types.conditions import (
     ScoreCondition,
     WeightCondition,
 )
-from agent_control_plane.types.enums import ActionName, ExecutionMode, RiskLevel
+from agent_control_plane.types.enums import ExecutionMode, RiskLevel
 from agent_control_plane.types.policies import PolicySnapshot
 from agent_control_plane.types.proposals import ActionProposal
 
@@ -44,7 +44,7 @@ POLICY = PolicySnapshot(
     action_tiers={
         "blocked": [],
         "always_approve": [],
-        "auto_approve": [ActionName.STATUS],
+        "auto_approve": ["status"],
         "unrestricted": [],
     },
     execution_mode=ExecutionMode.DRY_RUN,
@@ -56,7 +56,7 @@ def _proposal(**overrides) -> ActionProposal:
         "session_id": uuid4(),
         "resource_id": "res-001",
         "resource_type": "task",
-        "decision": ActionName.STATUS,
+        "decision": "status",
         "reasoning": "demo",
         "weight": Decimal("1.0"),
         "score": Decimal("0.85"),
@@ -98,8 +98,8 @@ async def demo_basic_trees() -> None:
     print(f"  {'OR(fail, pass)':15s} → {result}")
 
     # Not
-    not_banned = NotCondition(condition=ActionCondition(actions=[ActionName.BAN], mode="allow"))
-    result = await ev.evaluate(not_banned, _proposal(decision=ActionName.STATUS), RiskLevel.LOW, POLICY)
+    not_banned = NotCondition(condition=ActionCondition(actions=["ban"], mode="allow"))
+    result = await ev.evaluate(not_banned, _proposal(decision="status"), RiskLevel.LOW, POLICY)
     print(f"  {'NOT(is_ban)':15s} → {result}")
     print()
 
@@ -128,9 +128,9 @@ async def demo_evaluator_plugins() -> None:
 
     # Test against different proposals
     test_cases = [
-        ("safe resource + allowed action", _proposal(resource_id="user-42", decision=ActionName.STATUS)),
-        ("PII resource", _proposal(resource_id="pii-customer-data", decision=ActionName.STATUS)),
-        ("disallowed action", _proposal(resource_id="user-42", decision=ActionName.WIRE_TRANSFER)),
+        ("safe resource + allowed action", _proposal(resource_id="user-42", decision="status")),
+        ("PII resource", _proposal(resource_id="pii-customer-data", decision="status")),
+        ("disallowed action", _proposal(resource_id="user-42", decision="wire_transfer")),
     ]
 
     for label, proposal in test_cases:
@@ -172,10 +172,10 @@ async def demo_evaluator_in_tree() -> None:
     ev = ConditionEvaluator(evaluator_registry=registry)
 
     test_cases = [
-        ("safe + allowed", _proposal(resource_id="user-42", decision=ActionName.STATUS), RiskLevel.LOW),
-        ("PII resource", _proposal(resource_id="pii-data", decision=ActionName.STATUS), RiskLevel.LOW),
-        ("high risk", _proposal(resource_id="user-42", decision=ActionName.STATUS), RiskLevel.HIGH),
-        ("blocked action", _proposal(resource_id="user-42", decision=ActionName.WIRE_TRANSFER), RiskLevel.LOW),
+        ("safe + allowed", _proposal(resource_id="user-42", decision="status"), RiskLevel.LOW),
+        ("PII resource", _proposal(resource_id="pii-data", decision="status"), RiskLevel.LOW),
+        ("high risk", _proposal(resource_id="user-42", decision="status"), RiskLevel.HIGH),
+        ("blocked action", _proposal(resource_id="user-42", decision="wire_transfer"), RiskLevel.LOW),
     ]
 
     for label, proposal, risk in test_cases:
@@ -199,7 +199,7 @@ async def demo_parallel_evaluation() -> None:
     parallel = ParallelPolicyEvaluator(max_concurrent=2)
 
     # Safe proposal — all evaluators allow
-    safe = _proposal(resource_id="user-42", decision=ActionName.STATUS)
+    safe = _proposal(resource_id="user-42", decision="status")
     result = await parallel.evaluate_all([lambda ev=ev: ev.evaluate(safe, POLICY) for ev in registry.all()])
     print("  Safe proposal:")
     print(f"    overall: {'ALLOW' if result.overall_allow else 'DENY'}")
@@ -207,7 +207,7 @@ async def demo_parallel_evaluation() -> None:
     print(f"    elapsed: {result.elapsed_ms:.1f}ms")
 
     # Unsafe proposal — first evaluator denies, rest should cancel
-    unsafe = _proposal(resource_id="pii-customer", decision=ActionName.WIRE_TRANSFER)
+    unsafe = _proposal(resource_id="pii-customer", decision="wire_transfer")
     result = await parallel.evaluate_all([lambda ev=ev: ev.evaluate(unsafe, POLICY) for ev in registry.all()])
     print("\n  Unsafe proposal:")
     print(f"    overall: {'ALLOW' if result.overall_allow else 'DENY'}")

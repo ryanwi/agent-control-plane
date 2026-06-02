@@ -17,7 +17,7 @@ from agent_control_plane.mcp import (
     ToolResultRejectedError,
 )
 from agent_control_plane.sync import SyncControlPlane
-from agent_control_plane.types.enums import ActionName, EventKind
+from agent_control_plane.types.enums import EventKind
 from agent_control_plane.types.policies import ActionTiers, PolicySnapshot
 
 
@@ -36,11 +36,11 @@ def _new_cp(tmp_path: Path, suffix: str) -> SyncControlPlane:
 
 
 def _auto_approve_gateway(cp, executor, evaluators):
-    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=["status"]))
     return McpGateway(
         cp,
         executor,
-        ToolPolicyMap({"status": ActionName.STATUS}),
+        ToolPolicyMap({"status": "status"}),
         config=McpGatewayConfig(policy_snapshot=policy),
         response_evaluators=evaluators,
     )

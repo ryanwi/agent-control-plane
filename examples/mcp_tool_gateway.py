@@ -17,7 +17,6 @@ from agent_control_plane.mcp import (
     ToolPolicyMap,
 )
 from agent_control_plane.sync import SyncControlPlane
-from agent_control_plane.types.enums import ActionName
 from agent_control_plane.types.policies import ActionTiers, PolicySnapshot
 
 
@@ -31,11 +30,11 @@ def main() -> None:
     cp = SyncControlPlane("sqlite:///./control_plane_mcp_example.db")
     cp.setup()
 
-    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=["status"]))
     gateway = McpGateway(
         cp,
         DemoExecutor(),
-        ToolPolicyMap({"status": ActionName.STATUS}),
+        ToolPolicyMap({"status": "status"}),
         config=McpGatewayConfig(policy_snapshot=policy),
     )
 

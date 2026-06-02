@@ -20,7 +20,7 @@ from agent_control_plane.mcp import (
 )
 from agent_control_plane.sync import SyncControlPlane
 from agent_control_plane.telemetry import export_event
-from agent_control_plane.types.enums import ActionName, EventKind, GovernanceOutcome
+from agent_control_plane.types.enums import EventKind, GovernanceOutcome
 from agent_control_plane.types.policies import ActionTiers, PolicySnapshot
 
 
@@ -66,11 +66,11 @@ def test_manual_approval_creates_ticket_and_blocks(tmp_path: Path):
     cp = _new_cp(tmp_path, "mcp_approval")
     sid = cp.create_session("mcp-approval")
 
-    policy = PolicySnapshot(action_tiers=ActionTiers(always_approve=[ActionName.REFUND]))
+    policy = PolicySnapshot(action_tiers=ActionTiers(always_approve=["refund"]))
     gateway = McpGateway(
         cp,
         _OkExecutor(),
-        ToolPolicyMap({"issue_refund": ActionName.REFUND}),
+        ToolPolicyMap({"issue_refund": "refund"}),
         config=McpGatewayConfig(policy_snapshot=policy),
     )
 
@@ -87,11 +87,11 @@ def test_auto_approved_tool_executes_and_consumes_budget(tmp_path: Path):
     cp = _new_cp(tmp_path, "mcp_execute")
     sid = cp.create_session("mcp-execute", max_cost=Decimal("5"), max_action_count=5)
 
-    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=["status"]))
     gateway = McpGateway(
         cp,
         _OkExecutor(),
-        ToolPolicyMap({"status": ActionName.STATUS}),
+        ToolPolicyMap({"status": "status"}),
         config=McpGatewayConfig(policy_snapshot=policy),
     )
 
@@ -111,11 +111,11 @@ def test_correlation_id_is_propagated_to_emitted_events(tmp_path: Path):
     cp = _new_cp(tmp_path, "mcp_corr")
     sid = cp.create_session("mcp-corr")
 
-    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=["status"]))
     gateway = McpGateway(
         cp,
         _OkExecutor(),
-        ToolPolicyMap({"status": ActionName.STATUS}),
+        ToolPolicyMap({"status": "status"}),
         config=McpGatewayConfig(policy_snapshot=policy),
     )
 
@@ -131,11 +131,11 @@ def test_revoked_agent_is_blocked(tmp_path: Path):
     cp = _new_cp(tmp_path, "mcp_revoked")
     sid = cp.create_session("mcp-revoked")
 
-    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=["status"]))
     gateway = McpGateway(
         cp,
         _OkExecutor(),
-        ToolPolicyMap({"status": ActionName.STATUS}),
+        ToolPolicyMap({"status": "status"}),
         config=McpGatewayConfig(policy_snapshot=policy),
     )
 
@@ -157,11 +157,11 @@ def test_revoked_agent_is_blocked(tmp_path: Path):
 def test_no_session_id_raises_by_default(tmp_path: Path):
     """McpGatewayConfig.auto_create_sessions must default to False."""
     cp = _new_cp(tmp_path, "mcp_no_session")
-    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=["status"]))
     gateway = McpGateway(
         cp,
         _OkExecutor(),
-        ToolPolicyMap({"status": ActionName.STATUS}),
+        ToolPolicyMap({"status": "status"}),
         config=McpGatewayConfig(policy_snapshot=policy),
     )
     with pytest.raises(PolicyDeniedError):
@@ -171,11 +171,11 @@ def test_no_session_id_raises_by_default(tmp_path: Path):
 def test_auto_create_sessions_opt_in_still_works(tmp_path: Path):
     """Hosts that explicitly enable auto_create_sessions still get sessions created."""
     cp = _new_cp(tmp_path, "mcp_autocreate")
-    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=["status"]))
     gateway = McpGateway(
         cp,
         _OkExecutor(),
-        ToolPolicyMap({"status": ActionName.STATUS}),
+        ToolPolicyMap({"status": "status"}),
         config=McpGatewayConfig(policy_snapshot=policy, auto_create_sessions=True),
     )
     result = gateway.handle_tool_call(ToolCallContext(tool_name="status"))
@@ -187,11 +187,11 @@ def test_failed_tool_call_does_not_export_as_applied(tmp_path: Path):
     cp = _new_cp(tmp_path, "mcp_fail_outcome")
     sid = cp.create_session("mcp-fail-outcome")
 
-    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=["status"]))
     gateway = McpGateway(
         cp,
         _FailingExecutor(),
-        ToolPolicyMap({"status": ActionName.STATUS}),
+        ToolPolicyMap({"status": "status"}),
         config=McpGatewayConfig(policy_snapshot=policy),
     )
 

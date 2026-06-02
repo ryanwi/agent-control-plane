@@ -27,7 +27,6 @@ from agent_control_plane.models.reference import ActionProposalRow, Base, regist
 from agent_control_plane.storage.sqlalchemy_async import AsyncSqlAlchemyUnitOfWork
 from agent_control_plane.types.approvals import ApprovalScope
 from agent_control_plane.types.enums import (
-    ActionName,
     ActionTier,
     ApprovalDecisionType,
     EventKind,
@@ -44,9 +43,9 @@ DATABASE_URL = "sqlite+aiosqlite:///./agent_control_plane_example.db"
 def _seed_policy() -> PolicySnapshot:
     return PolicySnapshot(
         action_tiers={
-            "blocked": [ActionName.BAN],
-            "always_approve": [ActionName.REFUND],
-            "auto_approve": [ActionName.STATUS],
+            "blocked": ["ban"],
+            "always_approve": ["refund"],
+            "auto_approve": ["status"],
             "unrestricted": [],
         },
         risk_limits={"max_risk_score": "10000", "max_weight_pct": "5.0", "custom": {}},
@@ -90,7 +89,7 @@ async def run_control_flow(uow: AsyncSqlAlchemyUnitOfWork) -> None:
         session_id=session.id,
         resource_id="ticket-123",
         resource_type="support_ticket",
-        decision=ActionName.REFUND,
+        decision="refund",
         reasoning="Customer request under policy",
         metadata={"customer": "alice"},
         weight=Decimal("1.5"),

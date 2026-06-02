@@ -4,7 +4,6 @@ import pytest
 
 from agent_control_plane.engine.agent_registry import AgentRegistry, DelegationGuard
 from agent_control_plane.types.agents import AgentCapability, AgentMetadata, DelegationProposal
-from agent_control_plane.types.enums import ActionName
 
 from .fakes import InMemoryAgentRepository
 
@@ -27,12 +26,12 @@ def guard(registry, agent_repo):
 class TestAgentRegistry:
     @pytest.mark.asyncio
     async def test_register_and_get_agent(self, registry):
-        agent = AgentMetadata(id="agent-1", name="Test Agent", capabilities=[AgentCapability(action=ActionName.STATUS)])
+        agent = AgentMetadata(id="agent-1", name="Test Agent", capabilities=[AgentCapability(action="status")])
         await registry.register(agent)
 
         retrieved = await registry.get_agent("agent-1")
         assert retrieved.name == "Test Agent"
-        assert retrieved.capabilities[0].action == ActionName.STATUS
+        assert retrieved.capabilities[0].action == "status"
 
     @pytest.mark.asyncio
     async def test_list_agents_by_tags(self, registry):
@@ -73,22 +72,20 @@ class TestEffectiveCapabilities:
     """
 
     def test_is_capable_for_registered_action(self):
-        agent = AgentMetadata(id="a", name="A", capabilities=[AgentCapability(action=ActionName.STATUS)])
-        assert agent.is_capable(ActionName.STATUS) is True
+        agent = AgentMetadata(id="a", name="A", capabilities=[AgentCapability(action="status")])
+        assert agent.is_capable("status") is True
 
     def test_not_capable_for_unregistered_action(self):
-        agent = AgentMetadata(id="a", name="A", capabilities=[AgentCapability(action=ActionName.STATUS)])
-        assert agent.is_capable(ActionName.WIRE_TRANSFER) is False
+        agent = AgentMetadata(id="a", name="A", capabilities=[AgentCapability(action="status")])
+        assert agent.is_capable("wire_transfer") is False
 
     @pytest.mark.asyncio
     async def test_delegation_does_not_elevate_target_capabilities(self, registry, guard):
         # Source can wire_transfer; target cannot.
         await registry.register(
-            AgentMetadata(id="src", name="Src", capabilities=[AgentCapability(action=ActionName.WIRE_TRANSFER)])
+            AgentMetadata(id="src", name="Src", capabilities=[AgentCapability(action="wire_transfer")])
         )
-        await registry.register(
-            AgentMetadata(id="tgt", name="Tgt", capabilities=[AgentCapability(action=ActionName.STATUS)])
-        )
+        await registry.register(AgentMetadata(id="tgt", name="Tgt", capabilities=[AgentCapability(action="status")]))
 
         ok = await guard.propose_delegation(
             DelegationProposal(source_agent_id="src", target_agent_id="tgt", task_description="wire some money")
@@ -97,5 +94,5 @@ class TestEffectiveCapabilities:
 
         # Delegation is audit-only: the target's effective capabilities are unchanged.
         target = await registry.get_agent("tgt")
-        assert target.is_capable(ActionName.WIRE_TRANSFER) is False
-        assert target.is_capable(ActionName.STATUS) is True
+        assert target.is_capable("wire_transfer") is False
+        assert target.is_capable("status") is True

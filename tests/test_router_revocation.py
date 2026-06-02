@@ -11,7 +11,7 @@ from agent_control_plane.engine.agent_registry import AgentRegistry
 from agent_control_plane.engine.policy_engine import PolicyEngine
 from agent_control_plane.engine.router import ProposalRouter
 from agent_control_plane.types.agents import AgentCapability, AgentMetadata
-from agent_control_plane.types.enums import ActionName, ActionTier
+from agent_control_plane.types.enums import ActionTier
 from agent_control_plane.types.policies import ActionTiers, PolicySnapshot
 from agent_control_plane.types.proposals import ActionProposal
 
@@ -19,7 +19,7 @@ from .fakes import InMemoryAgentRepository
 
 
 def _policy() -> PolicySnapshot:
-    return PolicySnapshot(action_tiers=ActionTiers(auto_approve=[ActionName.STATUS]))
+    return PolicySnapshot(action_tiers=ActionTiers(auto_approve=["status"]))
 
 
 def _proposal(session_id: UUID, **overrides) -> ActionProposal:
@@ -28,7 +28,7 @@ def _proposal(session_id: UUID, **overrides) -> ActionProposal:
         "agent_id": "agent-x",
         "resource_id": "res-1",
         "resource_type": "task",
-        "decision": ActionName.STATUS,
+        "decision": "status",
         "reasoning": "test",
         "weight": Decimal("1.0"),
         "score": Decimal("0.9"),
@@ -40,9 +40,7 @@ def _proposal(session_id: UUID, **overrides) -> ActionProposal:
 async def _registry(session_id: UUID, *, revoked: bool) -> AgentRegistry:
     repo = InMemoryAgentRepository()
     registry = AgentRegistry(repo)
-    await registry.register(
-        AgentMetadata(id="agent-x", name="X", capabilities=[AgentCapability(action=ActionName.STATUS)])
-    )
+    await registry.register(AgentMetadata(id="agent-x", name="X", capabilities=[AgentCapability(action="status")]))
     if revoked:
         await repo.record_revocation(session_id, "agent-x", "suspected compromise")
     return registry

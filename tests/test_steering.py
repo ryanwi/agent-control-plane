@@ -9,7 +9,6 @@ from agent_control_plane.engine.action_policy import SteeringActionHandler
 from agent_control_plane.engine.policy_engine import PolicyEngine
 from agent_control_plane.engine.router import ProposalRouter
 from agent_control_plane.types.enums import (
-    ActionName,
     ActionTier,
     ExecutionMode,
     RiskLevel,
@@ -23,11 +22,11 @@ from agent_control_plane.types.steering import SteeringContext
 def _policy(**overrides) -> PolicySnapshot:
     defaults = {
         "action_tiers": {
-            "blocked": [ActionName.BAN],
-            "always_approve": [ActionName.REFUND],
-            "auto_approve": [ActionName.STATUS],
-            "steer": [ActionName.CHANGE_ADDRESS],
-            "unrestricted": [ActionName.CHECK_BALANCE],
+            "blocked": ["ban"],
+            "always_approve": ["refund"],
+            "auto_approve": ["status"],
+            "steer": ["change_address"],
+            "unrestricted": ["check_balance"],
         },
         "risk_limits": {"max_risk_score": "10000", "max_weight_pct": "5.0", "custom": {}},
         "execution_mode": ExecutionMode.DRY_RUN,
@@ -48,7 +47,7 @@ def _proposal(**overrides) -> ActionProposal:
         "session_id": uuid4(),
         "resource_id": "res-001",
         "resource_type": "task",
-        "decision": ActionName.CHANGE_ADDRESS,
+        "decision": "change_address",
         "reasoning": "test",
     }
     defaults.update(overrides)
@@ -66,7 +65,7 @@ class TestSteeringContext:
     def test_dto_with_all_fields(self):
         ctx = SteeringContext(
             guidance="Use status instead",
-            suggested_actions=[ActionName.STATUS, ActionName.CHECK_BALANCE],
+            suggested_actions=["status", "check_balance"],
             max_retries=5,
             metadata={"source": "policy"},
         )
@@ -93,8 +92,8 @@ class TestSteeringActionHandler:
         policy = _policy()
         proposal = _proposal()
         ctx = handler.build_steering_context(proposal, RiskLevel.LOW, policy)
-        assert ActionName.STATUS in ctx.suggested_actions
-        assert ActionName.CHECK_BALANCE in ctx.suggested_actions
+        assert "status" in ctx.suggested_actions
+        assert "check_balance" in ctx.suggested_actions
         assert "change_address" in ctx.guidance.lower()
 
     def test_build_steering_context_no_alternatives(self):
@@ -103,7 +102,7 @@ class TestSteeringActionHandler:
                 "blocked": [],
                 "always_approve": [],
                 "auto_approve": [],
-                "steer": [ActionName.CHANGE_ADDRESS],
+                "steer": ["change_address"],
                 "unrestricted": [],
             }
         )
@@ -117,12 +116,12 @@ class TestSteeringActionHandler:
 class TestPolicyEngineSteer:
     def test_steer_tier_classification(self):
         engine = PolicyEngine(_policy())
-        proposal = _proposal(decision=ActionName.CHANGE_ADDRESS)
+        proposal = _proposal(decision="change_address")
         assert engine.classify_action_tier(proposal, RiskLevel.LOW) == ActionTier.STEER
 
     def test_steer_routing_reason(self):
         engine = PolicyEngine(_policy())
-        proposal = _proposal(decision=ActionName.CHANGE_ADDRESS)
+        proposal = _proposal(decision="change_address")
         routing = engine.build_routing_reason(proposal, RiskLevel.LOW, ActionTier.STEER)
         assert "steered" in routing.reason.lower()
         assert routing.resolution_step == RoutingResolutionStep.POLICY_LIST_MATCH
@@ -131,15 +130,15 @@ class TestPolicyEngineSteer:
         """If an action is in both blocked and steer lists, blocked wins."""
         policy = _policy(
             action_tiers={
-                "blocked": [ActionName.CHANGE_ADDRESS],
+                "blocked": ["change_address"],
                 "always_approve": [],
                 "auto_approve": [],
-                "steer": [ActionName.CHANGE_ADDRESS],
+                "steer": ["change_address"],
                 "unrestricted": [],
             }
         )
         engine = PolicyEngine(policy)
-        proposal = _proposal(decision=ActionName.CHANGE_ADDRESS)
+        proposal = _proposal(decision="change_address")
         assert engine.classify_action_tier(proposal, RiskLevel.LOW) == ActionTier.BLOCKED
 
 
@@ -148,7 +147,7 @@ class TestProposalRouterSteer:
     async def test_route_steer_populates_steering_context(self):
         router = ProposalRouter(PolicyEngine(_policy()))
         proposal = _proposal(
-            decision=ActionName.CHANGE_ADDRESS,
+            decision="change_address",
             weight=Decimal("1.0"),
             score=Decimal("0.9"),
         )
@@ -162,7 +161,7 @@ class TestProposalRouterSteer:
     async def test_route_non_steer_has_no_steering_context(self):
         router = ProposalRouter(PolicyEngine(_policy()))
         proposal = _proposal(
-            decision=ActionName.STATUS,
+            decision="status",
             weight=Decimal("1.0"),
             score=Decimal("0.9"),
         )

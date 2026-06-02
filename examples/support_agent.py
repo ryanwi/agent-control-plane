@@ -14,7 +14,6 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
-    ActionName,
     ActionProposal,
     ActionTier,
     ApprovalGate,
@@ -51,9 +50,9 @@ async def main():
         # 1. Define Policy
         policy = PolicySnapshot(
             action_tiers={
-                "always_approve": [ActionName.CHECK_ORDER_STATUS],
+                "always_approve": ["check_order_status"],
                 "auto_approve": [],
-                "unrestricted": [ActionName.REFUND, ActionName.CHANGE_ADDRESS],
+                "unrestricted": ["refund", "change_address"],
             },
             risk_limits={"max_weight_pct": Decimal("100.0")},  # High limit for total refund
             auto_approve_conditions={
@@ -75,9 +74,9 @@ async def main():
 
         # 3. Scenarios
         tasks = [
-            (ActionName.REFUND, "order-99", 45.0, 0.9),  # Auto (Low Risk < 50)
-            (ActionName.REFUND, "order-101", 150.0, 0.5),  # Gate (High Risk > 100)
-            (ActionName.CHANGE_ADDRESS, "user-ryan", 1.0, 0.5),  # Gate (Medium Risk)
+            ("refund", "order-99", 45.0, 0.9),  # Auto (Low Risk < 50)
+            ("refund", "order-101", 150.0, 0.5),  # Gate (High Risk > 100)
+            ("change_address", "user-ryan", 1.0, 0.5),  # Gate (Medium Risk)
         ]
 
         for action, res, weight, score in tasks:

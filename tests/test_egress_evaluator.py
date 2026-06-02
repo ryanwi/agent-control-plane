@@ -11,7 +11,7 @@ from uuid import uuid4
 import pytest
 
 from agent_control_plane.evaluators import EgressEvaluator, EgressEvaluatorConfig, EgressGrant
-from agent_control_plane.types.enums import ActionName, ExecutionMode
+from agent_control_plane.types.enums import ExecutionMode
 from agent_control_plane.types.policies import PolicySnapshot
 from agent_control_plane.types.proposals import ActionProposal
 
@@ -25,7 +25,7 @@ def _proposal(**overrides) -> ActionProposal:
         "session_id": uuid4(),
         "resource_id": "api.anthropic.com",
         "resource_type": "egress",
-        "decision": ActionName.STATUS,
+        "decision": "status",
         "reasoning": "test",
     }
     defaults.update(overrides)
@@ -34,7 +34,7 @@ def _proposal(**overrides) -> ActionProposal:
 
 def _evaluator(**overrides) -> EgressEvaluator:
     config = {
-        "grants": [EgressGrant(destination="api.anthropic.com", capabilities=[ActionName.STATUS.value])],
+        "grants": [EgressGrant(destination="api.anthropic.com", capabilities=["status"])],
     }
     config.update(overrides)
     return EgressEvaluator(EgressEvaluatorConfig(**config))
@@ -49,7 +49,7 @@ class TestEgressEvaluator:
     @pytest.mark.asyncio
     async def test_allowed_destination_but_ungranted_capability_denies(self):
         # The Files API lesson: destination is allowlisted, but this capability is not granted.
-        result = await _evaluator().evaluate(_proposal(decision=ActionName.WIRE_TRANSFER), _policy())
+        result = await _evaluator().evaluate(_proposal(decision="wire_transfer"), _policy())
         assert not result.allow
         assert "capability" in result.reason.lower()
 
@@ -74,7 +74,7 @@ class TestEgressEvaluator:
     async def test_url_path_does_not_widen_capability(self):
         # A files upload URL on an allowlisted host is still denied when the capability isn't granted.
         result = await _evaluator().evaluate(
-            _proposal(resource_id="https://api.anthropic.com/v1/files", decision=ActionName.WIRE_TRANSFER),
+            _proposal(resource_id="https://api.anthropic.com/v1/files", decision="wire_transfer"),
             _policy(),
         )
         assert not result.allow
@@ -87,7 +87,7 @@ class TestEgressEvaluator:
                 grants=[
                     EgressGrant(
                         destination="https://api.anthropic.com/v1/messages",
-                        capabilities=[ActionName.STATUS.value],
+                        capabilities=["status"],
                     )
                 ]
             )

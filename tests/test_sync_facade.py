@@ -28,7 +28,6 @@ from agent_control_plane.types.aliases import (
     apply_outbound_aliases,
 )
 from agent_control_plane.types.enums import (
-    ActionName,
     ActionTier,
     ApprovalStatus,
     EventKind,
@@ -49,7 +48,7 @@ def _insert_pending_proposal(facade: ControlPlaneFacade, session_id: UUID, *, re
             cycle_event_seq=None,
             resource_id=resource_id,
             resource_type="task",
-            decision=ActionName.STATUS,
+            decision="status",
             reasoning="sync projection test",
             metadata_json={},
             weight=Decimal("1.0"),
@@ -269,7 +268,7 @@ def test_control_plane_facade_create_proposal_idempotency(tmp_path: Path):
         session_id=sid,
         resource_id="sync-resource-1",
         resource_type="task",
-        decision=ActionName.STATUS,
+        decision="status",
         reasoning="create proposal test",
         weight=Decimal("1.0"),
         score=Decimal("0.8"),

@@ -14,7 +14,6 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
-    ActionName,
     ActionProposal,
     ActionTier,
     ApprovalGate,
@@ -49,9 +48,9 @@ async def main():
         # 1. Define Policy
         policy = PolicySnapshot(
             action_tiers={
-                ActionTier.ALWAYS_APPROVE: [ActionName.SCAN_VULNERABILITY, ActionName.FETCH_LOGS],
+                ActionTier.ALWAYS_APPROVE: ["scan_vulnerability", "fetch_logs"],
                 ActionTier.AUTO_APPROVE: [],
-                ActionTier.UNRESTRICTED: [ActionName.ISOLATE_HOST, ActionName.RESET_CREDENTIALS],
+                ActionTier.UNRESTRICTED: ["isolate_host", "reset_credentials"],
             },
             risk_limits={"max_weight_pct": Decimal("50.0")},
             auto_approve_conditions={
@@ -72,8 +71,8 @@ async def main():
 
         # 3. Scenarios
         tasks = [
-            (ActionName.ISOLATE_HOST, "host-77", 10.0, 0.9),  # Auto (Low Risk < 20)
-            (ActionName.RESET_CREDENTIALS, "admin-01", 5.0, 0.3),  # Gate (High Risk / Low Confidence)
+            ("isolate_host", "host-77", 10.0, 0.9),  # Auto (Low Risk < 20)
+            ("reset_credentials", "admin-01", 5.0, 0.3),  # Gate (High Risk / Low Confidence)
         ]
 
         for action, res, weight, score in tasks:

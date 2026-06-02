@@ -14,7 +14,6 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
-    ActionName,
     ActionProposal,
     ApprovalGate,
     AsyncSqlAlchemyUnitOfWork,
@@ -65,7 +64,7 @@ async def main():
                 session_id=cs.id,
                 resource_id=f"res-{i}",
                 resource_type="sys",
-                decision=ActionName.REBOOT_INSTANCE,
+                decision="reboot_instance",
                 reasoning="Pending reboot",
                 weight=Decimal("1.0"),
                 score=Decimal("0.5"),

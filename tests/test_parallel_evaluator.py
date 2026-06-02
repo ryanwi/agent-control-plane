@@ -107,7 +107,7 @@ class TestParallelPolicyEvaluator:
             RegexEvaluator,
             RegexEvaluatorConfig,
         )
-        from agent_control_plane.types.enums import ActionName, ExecutionMode
+        from agent_control_plane.types.enums import ExecutionMode
         from agent_control_plane.types.policies import PolicySnapshot
         from agent_control_plane.types.proposals import ActionProposal
 
@@ -122,7 +122,7 @@ class TestParallelPolicyEvaluator:
             session_id=uuid4(),
             resource_id="safe-001",
             resource_type="task",
-            decision=ActionName.STATUS,
+            decision="status",
             reasoning="test",
         )
 
