@@ -42,6 +42,41 @@ an `import agent_control_plane`.
 
 ## Breaking changes
 
+### 0.22.0 — table renames
+
+Four tables were renamed to remove implementation-noise prefixes. The Python class names
+(`ControlSession`, `ControlEvent`, `ActionProposalRow`, `CommandLedger`) are unchanged —
+only the SQL table names changed.
+
+| Old table | New table |
+|---|---|
+| `control_sessions` | `agent_runs` |
+| `control_events` | `audit_events` |
+| `action_proposals` | `proposals` |
+| `command_ledger` | `idempotency_ledger` |
+
+**New deployments** (`create_tables()` / `Base.metadata.create_all`) get the new names automatically.
+
+**Existing deployments** must run the following migrations before upgrading:
+
+```sql
+-- SQLite
+ALTER TABLE control_sessions RENAME TO agent_runs;
+ALTER TABLE control_events   RENAME TO audit_events;
+ALTER TABLE action_proposals RENAME TO proposals;
+ALTER TABLE command_ledger   RENAME TO idempotency_ledger;
+```
+
+```sql
+-- PostgreSQL (same syntax)
+ALTER TABLE control_sessions RENAME TO agent_runs;
+ALTER TABLE control_events   RENAME TO audit_events;
+ALTER TABLE action_proposals RENAME TO proposals;
+ALTER TABLE command_ledger   RENAME TO idempotency_ledger;
+```
+
+---
+
 ### 0.21.0 — security defaults tightened (three breaking changes)
 
 **`McpGatewayConfig.auto_create_sessions` is now `False`.**

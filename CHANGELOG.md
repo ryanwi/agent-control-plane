@@ -2,6 +2,44 @@
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-06-01
+
+### Added
+
+- **`cp.run()` context manager** — new `RunHandle`-yielding context manager on
+  `AsyncControlPlaneFacade`, `AsyncResilientControlPlane`, `ControlPlaneFacade`, and
+  `ResilientControlPlane`. Opens a session, activates it, and closes it on exit.
+  Tags accumulated via `handle.tag(**metadata)` are written into the session's close
+  payload. On exception: closes with `SESSION_ABORTED` (error repr in payload) and
+  re-raises. Mirrors `token_budget_tracker()` ergonomics for the audit-trail use case.
+- **`SyncControlPlane.activate_session()`** — explicit session activation for the sync
+  path, used internally by `ControlPlaneFacade.run()`.
+- **`RunHandle`** exported from the top-level `agent_control_plane` package.
+- **`examples/audit_trail.py`** — runnable Tier 2 example showing `cp.run()` with cost
+  recording, tagging, and the error/abort path.
+
+### Changed (breaking)
+
+- **Table renames** — four SQL table names changed to remove implementation-noise prefixes.
+  Python class names are unchanged; only the `__tablename__` values differ.
+
+  | Old | New |
+  |---|---|
+  | `control_sessions` | `agent_runs` |
+  | `control_events` | `audit_events` |
+  | `action_proposals` | `proposals` |
+  | `command_ledger` | `idempotency_ledger` |
+
+  New deployments (`create_tables()`) get the new names automatically. Existing deployments
+  must run `ALTER TABLE … RENAME TO …` before upgrading — see
+  [docs/compatibility.md](docs/compatibility.md) for the exact SQL.
+
+### Docs
+
+- README: new **Adoption tiers** section (Tier 1: cost tracking, Tier 2: audit trail,
+  Tier 3: full governance) with runnable example pointers for each tier.
+- `docs/compatibility.md`: 0.22.0 migration section with SQLite + Postgres rename SQL.
+
 ## [0.21.0] - 2026-06-01
 
 ### Security

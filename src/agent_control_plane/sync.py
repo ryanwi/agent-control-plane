@@ -53,6 +53,7 @@ from agent_control_plane.types.frames import EmitMetadata, EventFrame, EventMeta
 from agent_control_plane.types.ids import AgentId, IdempotencyKey, ResourceId
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import Page, SessionHealth, StateChange, StateChangePage
+from agent_control_plane.types.run_handle import RunHandle
 from agent_control_plane.types.sessions import SessionState
 
 CMD_OPEN_SESSION: Final[str] = "open_session"
@@ -331,6 +332,16 @@ class SyncControlPlane:
             state_bearing=mapped.state_bearing if state_bearing is None else state_bearing,
             metadata=merged,
         )
+
+    def activate_session(self, session_id: UUID) -> SessionLifecycleResult:
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
+            uow.session_repo.update_session(session_id, status=SessionStatus.ACTIVE, updated_at=datetime.now(UTC))
+            uow.commit()
+            session = uow.session_repo.get_session(session_id)
+            if session is None:
+                raise ValueError(f"Session not found after activation: {session_id}")
+            return SessionLifecycleResult(session=session)
 
     def complete_session(self, session_id: UUID) -> SessionLifecycleResult:
         with self.session_scope() as db:
@@ -1185,3 +1196,41 @@ class ControlPlaneFacade:
 
     def close(self) -> None:
         self._cp.close()
+
+    @contextmanager
+    def run(
+        self,
+        name: str,
+        *,
+        max_cost: Decimal = Decimal("10000"),
+        max_action_count: int = 50,
+        execution_mode: ExecutionMode = ExecutionMode.DRY_RUN,
+    ) -> Iterator[RunHandle]:
+        """Open a tracked agent run and yield a handle for tagging.
+
+        Opens a session, activates it, and closes it on exit. Tags accumulated
+        via ``handle.tag()`` are written into the session's close payload.
+        On exception: closes the session with SESSION_ABORTED and re-raises.
+        """
+        session_id = self.sessions.open_session(
+            name,
+            max_cost=max_cost,
+            max_action_count=max_action_count,
+            execution_mode=execution_mode,
+        )
+        self._cp.activate_session(session_id)
+        handle = RunHandle(session_id=session_id)
+        try:
+            yield handle
+            self.sessions.close_session(
+                session_id,
+                final_event_kind=EventKind.EXECUTION_COMPLETED,
+                payload=handle._tags or None,
+            )
+        except Exception as exc:
+            self.sessions.close_session(
+                session_id,
+                final_event_kind=EventKind.SESSION_ABORTED,
+                payload={"abort_reason": repr(exc), **handle._tags},
+            )
+            raise

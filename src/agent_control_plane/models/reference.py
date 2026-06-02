@@ -45,7 +45,7 @@ class PolicySnapshotRow(Base, PolicySnapshotMixin):
 
 
 class ControlSession(Base, ControlSessionMixin):
-    __tablename__ = "control_sessions"
+    __tablename__ = "agent_runs"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
 
@@ -54,29 +54,29 @@ class SessionSeqCounter(Base, SessionSeqCounterMixin):
     __tablename__ = "session_seq_counters"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
+    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("agent_runs.id"), nullable=False)
 
 
 class ControlEvent(Base, ControlEventMixin):
-    __tablename__ = "control_events"
+    __tablename__ = "audit_events"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
+    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("agent_runs.id"), nullable=False)
 
 
 class ActionProposalRow(Base, ActionProposalMixin):
-    __tablename__ = "action_proposals"
+    __tablename__ = "proposals"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
+    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("agent_runs.id"), nullable=False)
 
 
 class ApprovalTicketRow(Base, ApprovalTicketMixin):
     __tablename__ = "approval_tickets"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=False)
-    proposal_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("action_proposals.id"), nullable=False)
+    session_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("agent_runs.id"), nullable=False)
+    proposal_id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("proposals.id"), nullable=False)
 
 
 class AgentRecord(Base, AgentMixin):
@@ -99,13 +99,13 @@ class AgentSessionRevocationRow(Base, AgentSessionRevocationMixin):
 
 
 class CommandLedger(Base, CommandLedgerMixin):
-    __tablename__ = "command_ledger"
+    __tablename__ = "idempotency_ledger"
     __table_args__ = (UniqueConstraint("command_id", "operation", name="uq_command_ledger_command_operation"),)
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     session_id: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True),
-        ForeignKey("control_sessions.id"),
+        ForeignKey("agent_runs.id"),
         nullable=True,
     )
 
@@ -120,9 +120,7 @@ class TokenUsageLedgerRow(Base, TokenUsageLedgerMixin):
     __tablename__ = "token_usage_ledger"
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
-    session_id: Mapped[UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("control_sessions.id"), nullable=True
-    )
+    session_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("agent_runs.id"), nullable=True)
 
 
 class TokenBudgetStateRow(Base, TokenBudgetStateMixin):

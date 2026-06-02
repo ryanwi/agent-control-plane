@@ -68,6 +68,7 @@ from agent_control_plane.types.frames import EmitMetadata, EventFrame, EventMeta
 from agent_control_plane.types.ids import AgentId, IdempotencyKey
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import Page, SessionHealth, StateChange, StateChangePage
+from agent_control_plane.types.run_handle import RunHandle
 from agent_control_plane.types.sessions import SessionState
 
 
@@ -1238,6 +1239,44 @@ class AsyncControlPlaneFacade:
             except Exception:
                 await db.rollback()
                 raise
+
+    @asynccontextmanager
+    async def run(
+        self,
+        name: str,
+        *,
+        max_cost: Decimal = Decimal("10000"),
+        max_action_count: int = 50,
+        execution_mode: ExecutionMode = ExecutionMode.DRY_RUN,
+    ) -> AsyncIterator[RunHandle]:
+        """Open a tracked agent run and yield a handle for tagging.
+
+        Opens a session, activates it, and closes it on exit. Tags accumulated
+        via ``handle.tag()`` are written into the session's close payload.
+        On exception: aborts the session with the error as the abort reason.
+        """
+        session_id = await self.sessions.open_session(
+            name,
+            max_cost=max_cost,
+            max_action_count=max_action_count,
+            execution_mode=execution_mode,
+        )
+        await self.lifecycle.activate_session(session_id)
+        handle = RunHandle(session_id=session_id)
+        try:
+            yield handle
+            await self.sessions.close_session(
+                session_id,
+                final_event_kind=EventKind.EXECUTION_COMPLETED,
+                payload=handle._tags or None,
+            )
+        except Exception as exc:
+            await self.sessions.close_session(
+                session_id,
+                final_event_kind=EventKind.SESSION_ABORTED,
+                payload={"abort_reason": repr(exc), **handle._tags},
+            )
+            raise
 
     async def create_policy(self, **fields: Any) -> UUID:
         async with self.session_scope() as db:

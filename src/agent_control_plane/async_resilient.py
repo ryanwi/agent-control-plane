@@ -57,6 +57,7 @@ from agent_control_plane.types.frames import EmitMetadata, EventFrame
 from agent_control_plane.types.ids import AgentId, IdempotencyKey
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import Page, SessionHealth, StateChangePage
+from agent_control_plane.types.run_handle import RunHandle
 from agent_control_plane.types.sessions import SessionState
 
 T = TypeVar("T")
@@ -649,6 +650,23 @@ class AsyncResilientControlPlane:
     async def token_budget_tracker(self) -> AsyncIterator[Any]:
         async with self._facade.token_budget_tracker() as tracker:
             yield tracker
+
+    @asynccontextmanager
+    async def run(
+        self,
+        name: str,
+        *,
+        max_cost: Decimal = Decimal("10000"),
+        max_action_count: int = 50,
+        execution_mode: ExecutionMode = ExecutionMode.DRY_RUN,
+    ) -> AsyncIterator[RunHandle]:
+        async with self._facade.run(
+            name,
+            max_cost=max_cost,
+            max_action_count=max_action_count,
+            execution_mode=execution_mode,
+        ) as handle:
+            yield handle
 
     async def create_policy(self, **fields: Any) -> UUID:
         return await self._facade.create_policy(**fields)

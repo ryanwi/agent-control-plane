@@ -8,7 +8,8 @@ around every control-plane call. See ADR-0009 for design rationale.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, TypeVar
@@ -53,6 +54,7 @@ from agent_control_plane.types.frames import EmitMetadata, EventFrame
 from agent_control_plane.types.ids import AgentId, IdempotencyKey
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import Page, SessionHealth, StateChangePage
+from agent_control_plane.types.run_handle import RunHandle
 from agent_control_plane.types.sessions import SessionState
 
 T = TypeVar("T")
@@ -572,3 +574,20 @@ class ResilientControlPlane:
 
     def close(self) -> None:
         self._facade.close()
+
+    @contextmanager
+    def run(
+        self,
+        name: str,
+        *,
+        max_cost: Decimal = Decimal("10000"),
+        max_action_count: int = 50,
+        execution_mode: ExecutionMode = ExecutionMode.DRY_RUN,
+    ) -> Iterator[RunHandle]:
+        with self._facade.run(
+            name,
+            max_cost=max_cost,
+            max_action_count=max_action_count,
+            execution_mode=execution_mode,
+        ) as handle:
+            yield handle

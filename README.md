@@ -32,6 +32,36 @@ Less useful:
 - One-off demos with no side effects.
 - Prompt/tooling projects that do not need governance.
 
+## Adoption tiers
+
+Pick the tier that matches your use case — each builds on the previous one.
+
+### Tier 1 — Cost tracking only (5 minutes)
+
+Token budget enforcement and per-call usage ledger. No sessions, no governance. Works standalone.
+
+```bash
+uv run python examples/tenant_budget_tracking.py
+```
+
+### Tier 2 — Audit trail (add sessions)
+
+Wrap agent runs in a tracked session. Records cost, duration, and outcome without any approval gates.
+
+```bash
+uv run python examples/audit_trail.py
+```
+
+### Tier 3 — Full governance
+
+Policy enforcement, human approval gates, kill switch, multi-agent revocation.
+
+```bash
+uv run python examples/quickstart_sync.py
+```
+
+---
+
 ## Install
 
 ```bash
@@ -146,6 +176,7 @@ Notes:
 
 ## Examples
 
+- Audit trail (Tier 2): [examples/audit_trail.py](examples/audit_trail.py)
 - Sync quickstart: [examples/quickstart_sync.py](examples/quickstart_sync.py)
 - Async quickstart: [examples/quickstart.py](examples/quickstart.py)
 - Single-agent continuous loop: [examples/single_agent_continuous_loop.py](examples/single_agent_continuous_loop.py)

@@ -285,6 +285,7 @@ from agent_control_plane.types.query import (
     StateChangePage,
 )
 from agent_control_plane.types.risk import RiskPattern, SessionRiskEscalation, SessionRiskState
+from agent_control_plane.types.run_handle import RunHandle
 from agent_control_plane.types.sessions import BudgetInfo, KillSwitchResult, SessionCreate, SessionState, SessionSummary
 from agent_control_plane.types.steering import SteeringContext
 from agent_control_plane.types.token_governance import (
@@ -529,6 +530,7 @@ __all__ = [
     "SessionCheckpoint",
     "SessionEventBudgetServices",
     "SessionLifecycleResult",
+    "RunHandle",
     "SessionManager",
     "SessionHealth",
     "SessionRepository",
