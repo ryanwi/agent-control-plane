@@ -36,6 +36,10 @@ class AgentRegistry:
         """List registered agents, optionally filtered by tags."""
         return await self._repo.list_agents(tags=tags)
 
+    async def is_revoked(self, session_id: UUID, agent_id: str) -> bool:
+        """Whether ``agent_id`` is currently revoked for ``session_id`` (fail-closed gate)."""
+        return await self._repo.is_agent_revoked(session_id, agent_id)
+
 
 class AgentSessionGuard:
     """Per-session revocation of an agent's authority.

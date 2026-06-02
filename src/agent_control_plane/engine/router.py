@@ -42,6 +42,16 @@ class ProposalRouter:
             agent = await self.agent_registry.get_agent(proposal.agent_id)
             if not agent:
                 logger.warning("Proposal from unregistered agent: %s", proposal.agent_id)
+            elif await self.agent_registry.is_revoked(proposal.session_id, proposal.agent_id):
+                # Per-session revocation fails closed, regardless of the agent's capabilities.
+                logger.warning("Agent %s is revoked for session %s — blocking", proposal.agent_id, proposal.session_id)
+                return RoutingDecision(
+                    tier=ActionTier.BLOCKED,
+                    risk_level=self.policy_engine.classify_risk_level(proposal),
+                    reason=f"Agent {proposal.agent_id} is revoked for session {proposal.session_id}",
+                    resolution_step=RoutingResolutionStep.CAPABILITY_MATCH,
+                    steering=None,
+                )
             else:
                 # Validate against the agent's own capabilities only (delegation/handoff
                 # records never elevate this — see AgentMetadata.is_capable).
