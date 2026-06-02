@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Fixed (security)
+
+- **Killed sessions can no longer be reactivated** — `SessionManager.activate_session()`
+  and `resume_session()` now raise when `killed_at` is set on the session. Previously a
+  session paused by the kill switch could be silently resumed. `unkill_session()` added
+  for explicit operator recovery. `KillSwitch._abort_agent` stamps `killed_at` on every
+  affected session. (`SessionState.killed_at` and `SessionSummary.killed_at` are new
+  fields — existing rows default to `NULL`.)
+
+- **Event sequence monotonicity enforced on replay** — `EventStore.replay()` now raises
+  `SessionStateIntegrityError` if the returned sequence contains gaps or duplicates,
+  guarding against tampered or racy event logs.
+
 ### Added
 
 - **`SessionState.started_at` and `SessionSummary.started_at`** — timestamp set when a
@@ -26,8 +39,6 @@
   for s in sessions:
       print(s.session_name, s.status, s.used_cost, s.started_at)
   ```
-
-## [0.24.0] - 2026-06-01
 
 ### Changed (breaking)
 
