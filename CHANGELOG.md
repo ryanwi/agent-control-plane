@@ -7,6 +7,18 @@
 - **Approval grant-rate telemetry (approval-fatigue signal)** — the operational scorecard now tracks `approvals_granted`, `approvals_denied`, and a derived `approval_grant_rate`. A grant rate near 1.0 across many approvals is the classic rubber-stamp / approval-fatigue signal (operators approving without scrutiny), so surfacing it lets hosts alert on it. `export_scorecard()` emits `cp.approvals_granted`, `cp.approvals_denied`, and `cp.approval_grant_rate` metrics. Computed from existing `APPROVAL_GRANTED`/`APPROVAL_DENIED` events — no new event kinds or storage.
 - **`AgentMetadata.is_capable(action)`** — single source of truth for an agent's *effective* authority: its own registered capabilities only. `ProposalRouter` now resolves capability through it. Establishes and documents the "delegation does not elevate trust" invariant — delegation (`DelegationGuard`) and handoff (`request_handoff`) are advisory/audit records that never widen a target agent's capabilities, so a sub-agent can't inherit a source's authority. Documented in `security_model.md`-adjacent `integration_identity.md` (new "Delegation and handoff trust" section).
 
+## [0.18.0] - 2026-06-01
+
+### Changed
+
+- **Focused facade gateways** — `ControlPlaneFacade` and `AsyncControlPlaneFacade` no longer expose every operation as a flat method. They are split into focused gateway sub-objects: `.sessions` (open/close/emit/replay/get), `.lifecycle` (activate/pause/resume + cycle locks), `.approvals` (tickets/proposals), `.budget`, `.agentic` (goals/plans/evaluations/guardrails/handoff/checkpoints), `.observer` (list/health/scorecard), and `.maintenance`. Calls move accordingly — e.g. `facade.open_session(...)` → `facade.sessions.open_session(...)`, `facade.activate_session(...)` → `facade.lifecycle.activate_session(...)`.
+- **`EventMetadata` for event append** — `EventStore.append` and the event-repository `append` now take a single `EventMetadata` frozen dataclass (`agent_id`, `correlation_id`, `routing_decision`, `routing_reason`, `idempotency_key`) instead of individual keyword arguments.
+
+### Breaking (pre-1.0)
+
+- Facade operations reorganized onto gateway sub-objects (see Changed). Flat `facade.<op>()` calls must move to `facade.<gateway>.<op>()`.
+- `EventStore.append` / event-repository `append` signature: individual attribution kwargs → a single `EventMetadata` dataclass.
+
 ## [0.17.1] - 2026-06-01
 
 ### Fixed
