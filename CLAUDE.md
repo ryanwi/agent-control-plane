@@ -66,3 +66,4 @@ Higher-level entry points: `McpGateway` (MCP tool calls) and `SyncControlPlane` 
 - `docs/security_model.md` — Trust boundaries and security posture
 - `docs/integration_identity.md` — Identity integration guide
 - `docs/operations_runbook.md` — Production operations workflow
+- `docs/upgrading.md` — Cross-version upgrade/migration guide

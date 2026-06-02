@@ -140,6 +140,7 @@ Notes:
 - Continuous operation playbook (1h/day/week/month): [docs/continuous_operation_playbook.md](docs/continuous_operation_playbook.md)
 - Security model: [docs/security_model.md](docs/security_model.md)
 - Identity integration: [docs/integration_identity.md](docs/integration_identity.md)
+- Upgrading / migration guide: [docs/upgrading.md](docs/upgrading.md)
 - Compatibility posture: [docs/compatibility.md](docs/compatibility.md)
 - OpenAPI contract (companion gateway): [docs/openapi/control-plane-v1.yml](docs/openapi/control-plane-v1.yml)
 - Public API exports: [src/agent_control_plane/__init__.py](src/agent_control_plane/__init__.py)
