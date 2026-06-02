@@ -83,12 +83,20 @@ def _sc_approval_requested(
     acc.approval_requested_at = event_at
 
 
-def _sc_approval_resolved(
-    event_at: datetime, _event: EventFrame, _sc: ControlPlaneScorecard, acc: ScorecardAcc
-) -> None:
+def _record_approval_latency(event_at: datetime, acc: ScorecardAcc) -> None:
     if acc.approval_requested_at is not None:
         acc.approval_latencies.append((event_at - acc.approval_requested_at).total_seconds() * 1000.0)
         acc.approval_requested_at = None
+
+
+def _sc_approval_granted(event_at: datetime, _event: EventFrame, sc: ControlPlaneScorecard, acc: ScorecardAcc) -> None:
+    sc.approvals_granted += 1
+    _record_approval_latency(event_at, acc)
+
+
+def _sc_approval_denied(event_at: datetime, _event: EventFrame, sc: ControlPlaneScorecard, acc: ScorecardAcc) -> None:
+    sc.approvals_denied += 1
+    _record_approval_latency(event_at, acc)
 
 
 def _sc_budget_exhausted(_at: datetime, _event: EventFrame, sc: ControlPlaneScorecard, _acc: ScorecardAcc) -> None:
@@ -115,8 +123,8 @@ SCORECARD_HANDLERS: dict[EventKind, ScorecardHandler] = {
     EventKind.HANDOFF_ACCEPTED: _sc_handoff_accepted,
     EventKind.HANDOFF_REJECTED: _sc_handoff_rejected,
     EventKind.APPROVAL_REQUESTED: _sc_approval_requested,
-    EventKind.APPROVAL_GRANTED: _sc_approval_resolved,
-    EventKind.APPROVAL_DENIED: _sc_approval_resolved,
+    EventKind.APPROVAL_GRANTED: _sc_approval_granted,
+    EventKind.APPROVAL_DENIED: _sc_approval_denied,
     EventKind.BUDGET_EXHAUSTED: _sc_budget_exhausted,
     EventKind.EXECUTION_COMPLETED: _sc_execution_completed,
 }

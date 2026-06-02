@@ -110,6 +110,8 @@ class ControlPlaneScorecard(BaseModel):
     guardrail_allows: int = 0
     handoffs_accepted: int = 0
     handoffs_rejected: int = 0
+    approvals_granted: int = 0
+    approvals_denied: int = 0
     budget_denied_count: int = 0
     budget_exhausted_count: int = 0
     evaluation_block_reasons: dict[str, int] = Field(default_factory=dict)
@@ -120,4 +122,6 @@ class ControlPlaneScorecard(BaseModel):
     checkpoint_rollback_latency_ms_p95: float | None = None
     avg_cost_per_successful_action: float | None = None
     handoff_accept_rate: float | None = None
+    # High grant rate across many approvals is an approval-fatigue / rubber-stamp signal.
+    approval_grant_rate: float | None = None
     generated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

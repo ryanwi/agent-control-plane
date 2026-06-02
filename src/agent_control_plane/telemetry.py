@@ -129,3 +129,8 @@ def export_scorecard(scorecard: ControlPlaneScorecard, *, meter: MeterLike) -> N
     meter.record("cp.handoffs_rejected", float(scorecard.handoffs_rejected), base_attrs)
     meter.record("cp.budget_denied", float(scorecard.budget_denied_count), base_attrs)
     meter.record("cp.budget_exhausted", float(scorecard.budget_exhausted_count), base_attrs)
+    meter.record("cp.approvals_granted", float(scorecard.approvals_granted), base_attrs)
+    meter.record("cp.approvals_denied", float(scorecard.approvals_denied), base_attrs)
+    # Approval-fatigue signal: a grant rate near 1.0 across many approvals suggests rubber-stamping.
+    if scorecard.approval_grant_rate is not None:
+        meter.record("cp.approval_grant_rate", scorecard.approval_grant_rate, base_attrs)

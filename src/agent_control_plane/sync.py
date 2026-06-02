@@ -1101,6 +1101,8 @@ class ControlPlaneObserver(_SyncGatewayBase):
         )
         handoff_total = scorecard.handoffs_accepted + scorecard.handoffs_rejected
         scorecard.handoff_accept_rate = (scorecard.handoffs_accepted / handoff_total) if handoff_total > 0 else None
+        approval_total = scorecard.approvals_granted + scorecard.approvals_denied
+        scorecard.approval_grant_rate = (scorecard.approvals_granted / approval_total) if approval_total > 0 else None
         return scorecard
 
 

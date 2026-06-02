@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Approval grant-rate telemetry (approval-fatigue signal)** — the operational scorecard now tracks `approvals_granted`, `approvals_denied`, and a derived `approval_grant_rate`. A grant rate near 1.0 across many approvals is the classic rubber-stamp / approval-fatigue signal (operators approving without scrutiny), so surfacing it lets hosts alert on it. `export_scorecard()` emits `cp.approvals_granted`, `cp.approvals_denied`, and `cp.approval_grant_rate` metrics. Computed from existing `APPROVAL_GRANTED`/`APPROVAL_DENIED` events — no new event kinds or storage.
+
 ## [0.17.1] - 2026-06-01
 
 ### Fixed

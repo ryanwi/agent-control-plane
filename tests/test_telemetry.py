@@ -207,6 +207,9 @@ def test_export_scorecard_records_expected_metrics() -> None:
         handoffs_rejected=6,
         budget_denied_count=7,
         budget_exhausted_count=8,
+        approvals_granted=9,
+        approvals_denied=1,
+        approval_grant_rate=0.9,
     )
 
     export_scorecard(scorecard, meter=meter)
@@ -215,4 +218,8 @@ def test_export_scorecard_records_expected_metrics() -> None:
     assert "cp.total_events" in names
     assert "cp.budget_denied" in names
     assert "cp.budget_exhausted" in names
-    assert len(meter.records) == 9
+    assert "cp.approvals_granted" in names
+    assert "cp.approval_grant_rate" in names
+    grant_rate = next(value for name, value, _ in meter.records if name == "cp.approval_grant_rate")
+    assert grant_rate == 0.9
+    assert len(meter.records) == 12

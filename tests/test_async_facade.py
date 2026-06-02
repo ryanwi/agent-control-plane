@@ -352,6 +352,7 @@ async def test_async_facade_operational_scorecard_enriched_fields(tmp_path: Path
 
     await facade.sessions.emit(sid, EventKind.APPROVAL_REQUESTED, {}, state_bearing=False)
     await facade.sessions.emit(sid, EventKind.APPROVAL_GRANTED, {}, state_bearing=False)
+    await facade.sessions.emit(sid, EventKind.APPROVAL_DENIED, {}, state_bearing=False)
     await facade.sessions.emit(sid, EventKind.CHECKPOINT_CREATED, {}, state_bearing=False)
     await facade.sessions.emit(sid, EventKind.ROLLBACK_COMPLETED, {}, state_bearing=False)
     await facade.sessions.emit(sid, EventKind.EXECUTION_COMPLETED, {"cost": 2.5}, state_bearing=False)
@@ -375,6 +376,10 @@ async def test_async_facade_operational_scorecard_enriched_fields(tmp_path: Path
     assert scorecard.checkpoint_rollback_latency_ms_p50 is not None
     assert scorecard.checkpoint_rollback_latency_ms_p95 is not None
     assert scorecard.avg_cost_per_successful_action == 2.5
+    # Approval-fatigue signal: grant/deny counts and the derived grant rate.
+    assert scorecard.approvals_granted == 1
+    assert scorecard.approvals_denied == 1
+    assert scorecard.approval_grant_rate == 0.5
 
     await facade.close()
 
