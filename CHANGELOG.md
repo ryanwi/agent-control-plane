@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-06-01
+
 ### Added
 
 - **Per-session agent revocation is now enforced and facade-exposed** — completes the revocation feature whose primitive shipped in 0.19.0 (the 0.19.0 note called built-in enforcement a follow-up; this is it).
