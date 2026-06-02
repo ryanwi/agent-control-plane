@@ -42,6 +42,42 @@ an `import agent_control_plane`.
 
 ## Breaking changes
 
+### 0.23.0 — ID aliases and experimental agentic types
+
+**ID type wrappers dropped.**
+
+`AgentId`, `OrgId`, `UserId`, `TeamId`, `ModelId`, `ResourceId`, and `IdempotencyKey` are
+now `TypeAlias = str` rather than `NewType` wrappers. If you called them as constructors
+or used `cast()`, remove the wrapping:
+
+```python
+# before
+from agent_control_plane import OrgId
+identity = IdentityContext(org_id=OrgId(tenant_id))
+
+# after — plain str assigns directly
+identity = IdentityContext(org_id=tenant_id)
+```
+
+**Agentic types moved to `agent_control_plane.experimental`.**
+
+`Goal`, `GoalStatus`, `Plan`, `PlanStep`, `PlanStepStatus`, `PlanProgress`,
+`EvaluationResult`, `EvaluationDecision`, `GuardrailDecision`, `GuardrailPhase`, and
+`HandoffResult` are no longer importable from the top-level package. Update imports:
+
+```python
+# before
+from agent_control_plane import Goal, Plan, PlanStep, GoalStatus
+
+# after
+from agent_control_plane.experimental import Goal, Plan, PlanStep, GoalStatus
+```
+
+`SessionCheckpoint`, `RollbackResult`, and `ControlPlaneScorecard` are unchanged and
+remain in the top-level namespace.
+
+---
+
 ### 0.22.0 — table renames
 
 Four tables were renamed to remove implementation-noise prefixes. The Python class names

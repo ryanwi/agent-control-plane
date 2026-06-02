@@ -28,4 +28,4 @@ def proposal_command_id(
         decision_value,
     ]
     digest = sha256("|".join(str(part) for part in parts).encode("utf-8")).hexdigest()[:24]
-    return IdempotencyKey(f"{namespace}:{digest}")
+    return f"{namespace}:{digest}"

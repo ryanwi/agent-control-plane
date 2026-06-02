@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-06-01
+
+### Changed (breaking)
+
+- **ID type aliases are now plain `str`** — `AgentId`, `OrgId`, `UserId`, `TeamId`,
+  `ModelId`, `ResourceId`, and `IdempotencyKey` were `NewType` wrappers over `str` with no
+  added behavior. They are now `TypeAlias = str`. Any call site that explicitly wrapped a
+  value (e.g. `OrgId(my_str)`, `cast(AgentId, x)`) can drop the wrapping — plain strings
+  assign directly to these annotated fields without a type error.
+
+- **Agentic planning and guardrail types moved to `agent_control_plane.experimental`** —
+  `Goal`, `GoalStatus`, `Plan`, `PlanStep`, `PlanStepStatus`, `PlanProgress`,
+  `EvaluationResult`, `EvaluationDecision`, `GuardrailDecision`, `GuardrailPhase`, and
+  `HandoffResult` are no longer exported from the top-level `agent_control_plane` package.
+  Import them from `agent_control_plane.experimental` instead. The types themselves are
+  unchanged; only the import path moves.
+
+  `SessionCheckpoint`, `RollbackResult`, and `ControlPlaneScorecard` remain in the stable
+  top-level namespace.
+
 ## [0.22.0] - 2026-06-01
 
 ### Added

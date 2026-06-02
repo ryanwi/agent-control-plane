@@ -36,7 +36,6 @@ from agent_control_plane.types.enums import (
     parse_action_name,
 )
 from agent_control_plane.types.frames import EventMetadata
-from agent_control_plane.types.ids import AgentId, IdempotencyKey, ResourceId
 from agent_control_plane.types.policies import PolicySnapshot
 from agent_control_plane.types.proposals import ActionProposal
 
@@ -450,8 +449,8 @@ class McpGateway:
         score = Decimal(str(raw_score))
         return ActionProposal(
             session_id=session_id,
-            agent_id=AgentId(context.agent_id) if context.agent_id is not None else None,
-            resource_id=ResourceId(resource_id),
+            agent_id=context.agent_id,
+            resource_id=resource_id,
             resource_type=resource_type,
             decision=action,
             reasoning=f"MCP tool call: {context.tool_name}",
@@ -529,6 +528,6 @@ class McpGateway:
             state_bearing=state_bearing,
             metadata=EventMetadata(
                 correlation_id=correlation_id,
-                idempotency_key=IdempotencyKey(idempotency_key) if idempotency_key is not None else None,
+                idempotency_key=idempotency_key,
             ),
         )

@@ -53,9 +53,9 @@ from agent_control_plane import IdentityContext, UserId, OrgId, TeamId
 
 # Map from your auth layer
 identity = IdentityContext(
-    user_id=UserId(authn_principal.user_id),
-    org_id=OrgId(authn_principal.org_id),
-    team_id=TeamId(authn_principal.team_id),
+    user_id=authn_principal.user_id,
+    org_id=authn_principal.org_id,
+    team_id=authn_principal.team_id,
 )
 ```
 
