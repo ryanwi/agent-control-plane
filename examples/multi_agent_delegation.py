@@ -14,7 +14,6 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
-    ActionName,
     ActionProposal,
     AgentCapability,
     AgentMetadata,
@@ -59,13 +58,13 @@ async def main():
             id="dispatcher-01",
             name="Request Dispatcher",
             tags=["router"],
-            capabilities=[AgentCapability(action=ActionName.STATUS)],
+            capabilities=[AgentCapability(action="status")],
         )
         worker = AgentMetadata(
             id="worker-01",
             name="Infrastructure Worker",
             tags=["execution"],
-            capabilities=[AgentCapability(action=ActionName.REBOOT_INSTANCE)],
+            capabilities=[AgentCapability(action="reboot_instance")],
         )
 
         await registry.register(dispatcher)
@@ -86,7 +85,7 @@ async def main():
 
         # 4. Propose Action with Identity Check
         policy = PolicySnapshot(
-            action_tiers={"unrestricted": [ActionName.REBOOT_INSTANCE]},
+            action_tiers={"unrestricted": ["reboot_instance"]},
             execution_mode=ExecutionMode.LIVE,
             auto_approve_conditions={
                 "max_risk_tier": RiskLevel.LOW,
@@ -106,7 +105,7 @@ async def main():
             agent_id=worker.id,
             resource_id="srv-99",
             resource_type="server",
-            decision=ActionName.REBOOT_INSTANCE,
+            decision="reboot_instance",
             reasoning="Executing delegated task",
             weight=Decimal("1.0"),
             score=Decimal("0.9"),
@@ -123,7 +122,7 @@ async def main():
             agent_id=dispatcher.id,
             resource_id="srv-99",
             resource_type="server",
-            decision=ActionName.REBOOT_INSTANCE,
+            decision="reboot_instance",
             reasoning="I'm not authorized but I'll try anyway",
             weight=Decimal("1.0"),
             score=Decimal("0.9"),

@@ -55,8 +55,8 @@ def create_security_policy() -> PolicySnapshot:
     return PolicySnapshot(
         action_tiers={
             "blocked": [ActionName.UNKNOWN],  # Strictly forbidden (demonstrating unknown mapping)
-            "always_approve": [ActionName.LOG_INCIDENT],  # Low risk, always allowed
-            "auto_approve": [ActionName.RESET_PASSWORD],  # Can be auto-approved based on conditions
+            "always_approve": ["log_incident"],  # Low risk, always allowed
+            "auto_approve": ["reset_password"],  # Can be auto-approved based on conditions
             "unrestricted": [],
         },
         risk_limits={
@@ -257,7 +257,7 @@ async def main():
         await agent.propose_action(
             resource_id="login-log-001",
             resource_type="audit_log",
-            action_name=ActionName.LOG_INCIDENT,
+            action_name="log_incident",
             reason="Detected multiple failed login attempts from IP 1.2.3.4",
             risk_score=0.1,
             weight=0.1,
@@ -267,7 +267,7 @@ async def main():
         await agent.propose_action(
             resource_id="user-ryan",
             resource_type="user_account",
-            action_name=ActionName.RESET_PASSWORD,
+            action_name="reset_password",
             reason="Suspicious login patterns, resetting password as precaution",
             risk_score=0.75,  # High score but we'll see how policy handles it
             weight=1.0,
@@ -278,7 +278,7 @@ async def main():
         await agent.propose_action(
             resource_id="ip-1.2.3.4",
             resource_type="firewall_rule",
-            action_name=ActionName.BLOCK_IP,
+            action_name="block_ip",
             reason="IP 1.2.3.4 confirmed brute force source",
             risk_score=0.9,
             weight=5.0,
@@ -300,7 +300,7 @@ async def main():
             await agent.propose_action(
                 resource_id=f"ip-10.0.0.{i}",
                 resource_type="firewall_rule",
-                action_name=ActionName.BLOCK_IP,
+                action_name="block_ip",
                 reason="Brute force attack",
                 risk_score=0.9,
                 weight=5.0,  # Total 11 * 5.0 = 55.0 > 50.0

@@ -15,7 +15,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
-    ActionName,
     ActionProposal,
     ApprovalGate,
     AsyncSqlAlchemyUnitOfWork,
@@ -55,7 +54,7 @@ async def main():
         # Policy with a very short timeout (2 seconds)
         policy = PolicySnapshot(
             action_tiers={
-                "unrestricted": [ActionName.TERMINATE_INSTANCE],
+                "unrestricted": ["terminate_instance"],
                 "blocked": [],
                 "always_approve": [],
                 "auto_approve": [],
@@ -79,7 +78,7 @@ async def main():
             session_id=cs.id,
             resource_id="i-123",
             resource_type="ec2",
-            decision=ActionName.TERMINATE_INSTANCE,
+            decision="terminate_instance",
             reasoning="Routine termination",
             weight=Decimal("50.0"),
             score=Decimal("0.5"),

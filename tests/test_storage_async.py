@@ -20,7 +20,6 @@ from agent_control_plane.storage.sqlalchemy_async import (
     AsyncSqlAlchemyUnitOfWork,
 )
 from agent_control_plane.types.enums import (
-    ActionName,
     ActionTier,
     ApprovalDecisionType,
     ApprovalStatus,
@@ -206,7 +205,7 @@ async def test_proposal_repo(db_session: AsyncSession):
         session_id=cs.id,
         resource_id="res-1",
         resource_type="task",
-        decision=ActionName.STATUS,
+        decision="status",
         reasoning="test",
         metadata={},
         weight=Decimal("1"),

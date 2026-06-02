@@ -14,7 +14,6 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
-    ActionName,
     ActionProposal,
     ActionTier,
     ApprovalGate,
@@ -50,10 +49,10 @@ async def main():
         # 1. Define Policy
         policy = PolicySnapshot(
             action_tiers={
-                ActionTier.BLOCKED: [ActionName.CLOSE_ACCOUNT],
-                ActionTier.ALWAYS_APPROVE: [ActionName.CHECK_BALANCE],
+                ActionTier.BLOCKED: ["close_account"],
+                ActionTier.ALWAYS_APPROVE: ["check_balance"],
                 ActionTier.AUTO_APPROVE: [],  # We'll use risk-based routing
-                ActionTier.UNRESTRICTED: [ActionName.EXECUTE_TRADE, ActionName.WIRE_TRANSFER],
+                ActionTier.UNRESTRICTED: ["execute_trade", "wire_transfer"],
             },
             risk_limits={"max_weight_pct": Decimal("2000.0")},
             auto_approve_conditions={
@@ -75,9 +74,9 @@ async def main():
 
         # 3. Scenarios
         tasks = [
-            (ActionName.CHECK_BALANCE, "acc-123", 1.0, 0.5),  # Always Approved (List)
-            (ActionName.EXECUTE_TRADE, "stock-AAPL", 500.0, 0.95),  # Auto Approved (Low Risk)
-            (ActionName.WIRE_TRANSFER, "bank-xyz", 2500.0, 0.1),  # Manual Gate (High Risk)
+            ("check_balance", "acc-123", 1.0, 0.5),  # Always Approved (List)
+            ("execute_trade", "stock-AAPL", 500.0, 0.95),  # Auto Approved (Low Risk)
+            ("wire_transfer", "bank-xyz", 2500.0, 0.1),  # Manual Gate (High Risk)
         ]
 
         for action, res, weight, score in tasks:
@@ -113,7 +112,7 @@ async def main():
             uow._session.add(prop)
             await uow._session.flush()
 
-            if route.tier == ActionTier.AUTO_APPROVE or action == ActionName.CHECK_BALANCE:
+            if route.tier == ActionTier.AUTO_APPROVE or action == "check_balance":
                 logger.info(f"  Result: AUTO-APPROVED ({route.tier})")
                 await budget.increment(cs.id, cost=dto.weight)
                 prop.status = ProposalStatus.EXECUTED.value

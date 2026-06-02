@@ -15,7 +15,6 @@ from uuid import UUID, uuid4
 from agent_control_plane.async_facade import AsyncControlPlaneFacade
 from agent_control_plane.models.registry import ModelRegistry
 from agent_control_plane.types.enums import (
-    ActionName,
     ActionTier,
     ApprovalStatus,
     EventKind,
@@ -76,7 +75,7 @@ async def main() -> None:
             cycle_event_seq=None,
             resource_id="demo-asset-1",
             resource_type="asset",
-            decision=ActionName.STATUS,
+            decision="status",
             reasoning="manual review needed",
             metadata_json={},
             weight=Decimal("1.0"),

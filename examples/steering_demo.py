@@ -27,7 +27,7 @@ from agent_control_plane.mcp import (
     ToolPolicyMap,
 )
 from agent_control_plane.sync import SyncControlPlane
-from agent_control_plane.types.enums import ActionName, ActionTier
+from agent_control_plane.types.enums import ActionTier
 from agent_control_plane.types.policies import ActionTiers, PolicySnapshot
 from agent_control_plane.types.proposals import ActionProposal
 
@@ -35,10 +35,10 @@ from agent_control_plane.types.proposals import ActionProposal
 
 POLICY = PolicySnapshot(
     action_tiers=ActionTiers(
-        blocked=[ActionName.WIPE_DATABASE],
-        always_approve=[ActionName.WIRE_TRANSFER],
-        auto_approve=[ActionName.STATUS, ActionName.CHECK_BALANCE],
-        steer=[ActionName.CHANGE_ADDRESS, ActionName.RESET_PASSWORD],
+        blocked=["wipe_database"],
+        always_approve=["wire_transfer"],
+        auto_approve=["status", "check_balance"],
+        steer=["change_address", "reset_password"],
     ),
 )
 
@@ -52,7 +52,7 @@ async def demo_routing() -> None:
     engine = PolicyEngine(POLICY)
     router = ProposalRouter(engine)
 
-    for action in [ActionName.STATUS, ActionName.CHANGE_ADDRESS, ActionName.WIPE_DATABASE]:
+    for action in ["status", "change_address", "wipe_database"]:
         proposal = ActionProposal(
             session_id="00000000-0000-0000-0000-000000000001",
             resource_id="user-42",
@@ -94,9 +94,9 @@ def demo_mcp_gateway() -> None:
         EchoExecutor(),
         ToolPolicyMap(
             {
-                "get_status": ActionName.STATUS,
-                "change_address": ActionName.CHANGE_ADDRESS,
-                "reset_password": ActionName.RESET_PASSWORD,
+                "get_status": "status",
+                "change_address": "change_address",
+                "reset_password": "reset_password",
             }
         ),
         config=McpGatewayConfig(policy_snapshot=POLICY),

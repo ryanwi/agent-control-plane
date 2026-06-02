@@ -21,7 +21,6 @@ from agent_control_plane.storage.sqlalchemy_sync import (
     SyncSqlAlchemyUnitOfWork,
 )
 from agent_control_plane.types.enums import (
-    ActionName,
     ActionTier,
     ApprovalDecisionType,
     ApprovalStatus,
@@ -222,7 +221,7 @@ def test_proposal_repo_create_and_query(db_session: Session):
         session_id=cs.id,
         resource_id="res-1",
         resource_type="task",
-        decision=ActionName.STATUS,
+        decision="status",
         reasoning="storage sync create proposal",
         metadata={},
         weight=Decimal("1"),

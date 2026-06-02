@@ -15,7 +15,6 @@ from agent_control_plane.types.aliases import (
     apply_outbound_aliases,
 )
 from agent_control_plane.types.enums import (
-    ActionName,
     ActionTier,
     ExecutionMode,
     RiskLevel,
@@ -97,7 +96,7 @@ def test_alias_profile_round_trip_on_action_proposal_and_session():
 def test_register_custom_action_name_with_fail_closed_unknown():
     register_action_names(["buy"])
     assert parse_action_name("buy") == "buy"
-    assert parse_action_name("completely_unknown") == ActionName.UNKNOWN
+    assert parse_action_name("completely_unknown") == "completely_unknown"
 
     policy = PolicySnapshot(
         action_tiers={
@@ -133,7 +132,7 @@ def test_action_proposal_metadata_schema_validation():
         session_id=uuid4(),
         resource_id="AAPL",
         resource_type="equity",
-        decision=ActionName.STATUS,
+        decision="status",
         reasoning="check",
         metadata={"target_price": "250", "time_horizon": "30d"},
     )
@@ -145,7 +144,7 @@ def test_action_proposal_metadata_schema_validation():
         session_id=uuid4(),
         resource_id="AAPL",
         resource_type="equity",
-        decision=ActionName.STATUS,
+        decision="status",
         reasoning="check",
         metadata={"time_horizon": "30d"},
     )

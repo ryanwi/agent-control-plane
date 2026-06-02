@@ -15,7 +15,6 @@ from uuid import uuid4
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
-    ActionName,
     ActionProposal,
     ActionTier,
     AsyncSqlAlchemyUnitOfWork,
@@ -48,10 +47,10 @@ async def main():
         # 1. Define Policy
         policy = PolicySnapshot(
             action_tiers={
-                ActionTier.BLOCKED: [ActionName.DELETE_CLUSTER, ActionName.WIPE_DISK],
-                ActionTier.ALWAYS_APPROVE: [ActionName.FETCH_METRICS, ActionName.GET_LOGS],
+                ActionTier.BLOCKED: ["delete_cluster", "wipe_disk"],
+                ActionTier.ALWAYS_APPROVE: ["fetch_metrics", "get_logs"],
                 ActionTier.AUTO_APPROVE: [],
-                ActionTier.UNRESTRICTED: [ActionName.RESTART_POD, ActionName.SCALE_UP],
+                ActionTier.UNRESTRICTED: ["restart_pod", "scale_up"],
             },
             risk_limits={"max_weight_pct": Decimal("50.0")},
             auto_approve_conditions={
@@ -72,8 +71,8 @@ async def main():
 
         # 3. Scenarios
         tasks = [
-            (ActionName.RESTART_POD, "pod-web-01", 1.0, 0.9),  # Auto (Low Risk)
-            (ActionName.DELETE_CLUSTER, "prod-db-cluster", 1.0, 0.5),  # BLOCKED
+            ("restart_pod", "pod-web-01", 1.0, 0.9),  # Auto (Low Risk)
+            ("delete_cluster", "prod-db-cluster", 1.0, 0.5),  # BLOCKED
         ]
 
         for action, res, weight, score in tasks:

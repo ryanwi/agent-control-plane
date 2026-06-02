@@ -12,7 +12,6 @@ from agent_control_plane.engine.policy_engine import (
 )
 from agent_control_plane.engine.router import ProposalRouter
 from agent_control_plane.types.enums import (
-    ActionName,
     ActionTier,
     AssetScope,
     ExecutionMode,
@@ -26,9 +25,9 @@ from agent_control_plane.types.proposals import ActionProposal
 def _policy(**overrides) -> PolicySnapshot:
     defaults = {
         "action_tiers": {
-            "blocked": [ActionName.BAN],
-            "always_approve": [ActionName.REFUND],
-            "auto_approve": [ActionName.STATUS],
+            "blocked": ["ban"],
+            "always_approve": ["refund"],
+            "auto_approve": ["status"],
             "unrestricted": [],
         },
         "risk_limits": {"max_risk_score": "10000", "max_weight_pct": "5.0", "custom": {}},
@@ -50,7 +49,7 @@ def _proposal(**overrides) -> ActionProposal:
         "session_id": uuid4(),
         "resource_id": "res-001",
         "resource_type": "task",
-        "decision": ActionName.REFUND,
+        "decision": "refund",
         "reasoning": "test",
     }
     defaults.update(overrides)
@@ -110,7 +109,7 @@ class TestDefaultRiskClassifier:
 class TestPolicyEngine:
     def test_decision_parses_to_enum(self):
         proposal = _proposal(decision="refund")
-        assert proposal.decision == ActionName.REFUND
+        assert proposal.decision == "refund"
 
     def test_policy_action_tiers_parse_to_enums(self):
         policy = _policy(
@@ -121,11 +120,11 @@ class TestPolicyEngine:
                 "unrestricted": [],
             }
         )
-        assert policy.action_tiers.blocked == [ActionName.BAN]
+        assert policy.action_tiers.blocked == ["ban"]
 
     def test_blocked_action(self):
         engine = PolicyEngine(_policy())
-        proposal = _proposal(decision=ActionName.BAN)
+        proposal = _proposal(decision="ban")
         assert engine.classify_action_tier(proposal, RiskLevel.LOW) == ActionTier.BLOCKED
 
     def test_blocked_action_case_insensitive(self):
@@ -133,37 +132,38 @@ class TestPolicyEngine:
         proposal = _proposal(decision="BAN")
         assert engine.classify_action_tier(proposal, RiskLevel.LOW) == ActionTier.BLOCKED
 
-    def test_unknown_action_fails_closed(self):
+    def test_unlisted_action_passes_through_to_default_tier(self):
         engine = PolicyEngine(_policy())
         proposal = _proposal(decision="totally_new_action")
-        assert proposal.decision == ActionName.UNKNOWN
-        assert engine.classify_action_tier(proposal, RiskLevel.LOW) == ActionTier.BLOCKED
+        assert proposal.decision == "totally_new_action"
+        # Action not in any explicit tier gets the engine's default (AUTO_APPROVE when conditions pass).
+        assert engine.classify_action_tier(proposal, RiskLevel.LOW) == ActionTier.AUTO_APPROVE
 
     def test_exact_matching_no_substring_block(self):
         engine = PolicyEngine(_policy())
-        proposal = _proposal(decision=ActionName.UNBAN)
-        assert proposal.decision == ActionName.UNBAN
+        proposal = _proposal(decision="unban")
+        assert proposal.decision == "unban"
         assert engine.classify_action_tier(proposal, RiskLevel.LOW) == ActionTier.AUTO_APPROVE
 
     def test_auto_approve_low_risk_dry_run(self):
         engine = PolicyEngine(_policy())
-        proposal = _proposal(decision=ActionName.STATUS)
+        proposal = _proposal(decision="status")
         assert engine.classify_action_tier(proposal, RiskLevel.LOW) == ActionTier.AUTO_APPROVE
 
     def test_no_auto_approve_in_live_mode_when_dry_run_only(self):
         policy = _policy(execution_mode=ExecutionMode.LIVE)
         engine = PolicyEngine(policy)
-        proposal = _proposal(decision=ActionName.STATUS)
+        proposal = _proposal(decision="status")
         assert engine.classify_action_tier(proposal, RiskLevel.LOW) == ActionTier.ALWAYS_APPROVE
 
     def test_medium_risk_always_approve(self):
         engine = PolicyEngine(_policy())
-        proposal = _proposal(decision=ActionName.REFUND)
+        proposal = _proposal(decision="refund")
         assert engine.classify_action_tier(proposal, RiskLevel.MEDIUM) == ActionTier.ALWAYS_APPROVE
 
     def test_high_risk_always_approve(self):
         engine = PolicyEngine(_policy())
-        proposal = _proposal(decision=ActionName.REFUND)
+        proposal = _proposal(decision="refund")
         assert engine.classify_action_tier(proposal, RiskLevel.HIGH) == ActionTier.ALWAYS_APPROVE
 
     def test_asset_scope_blocks_unmatched(self):
@@ -193,7 +193,7 @@ class TestProposalRouter:
     @pytest.mark.asyncio
     async def test_route_blocked(self):
         router = ProposalRouter(PolicyEngine(_policy()))
-        proposal = _proposal(decision=ActionName.BAN)
+        proposal = _proposal(decision="ban")
         decision = await router.route(proposal)
         assert decision.tier == ActionTier.BLOCKED
         assert decision.resolution_step == RoutingResolutionStep.EXPLICIT_ASSIGNMENT
@@ -201,7 +201,7 @@ class TestProposalRouter:
     @pytest.mark.asyncio
     async def test_route_auto_approve(self):
         router = ProposalRouter(PolicyEngine(_policy()))
-        proposal = _proposal(decision=ActionName.STATUS, weight=Decimal("1.0"), score=Decimal("0.9"))
+        proposal = _proposal(decision="status", weight=Decimal("1.0"), score=Decimal("0.9"))
         decision = await router.route(proposal)
         assert decision.tier == ActionTier.AUTO_APPROVE
         assert decision.risk_level == RiskLevel.LOW
@@ -210,7 +210,7 @@ class TestProposalRouter:
     @pytest.mark.asyncio
     async def test_route_always_approve_medium(self):
         router = ProposalRouter(PolicyEngine(_policy()))
-        proposal = _proposal(decision=ActionName.REFUND, weight=Decimal("3.0"), score=Decimal("0.8"))
+        proposal = _proposal(decision="refund", weight=Decimal("3.0"), score=Decimal("0.8"))
         decision = await router.route(proposal)
         assert decision.tier == ActionTier.ALWAYS_APPROVE
         assert decision.risk_level == RiskLevel.MEDIUM
@@ -218,7 +218,7 @@ class TestProposalRouter:
     @pytest.mark.asyncio
     async def test_route_always_approve_high(self):
         router = ProposalRouter(PolicyEngine(_policy()))
-        proposal = _proposal(decision=ActionName.REFUND, weight=Decimal("6.0"), score=Decimal("0.9"))
+        proposal = _proposal(decision="refund", weight=Decimal("6.0"), score=Decimal("0.9"))
         decision = await router.route(proposal)
         assert decision.tier == ActionTier.ALWAYS_APPROVE
         assert decision.risk_level == RiskLevel.HIGH

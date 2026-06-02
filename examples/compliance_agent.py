@@ -14,7 +14,6 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from agent_control_plane import (
-    ActionName,
     ActionProposal,
     ActionTier,
     AsyncSqlAlchemyUnitOfWork,
@@ -52,7 +51,7 @@ async def main():
         asset_classifier = DefaultAssetClassifier(patterns=frozenset(["PUBLIC"]))
 
         policy = PolicySnapshot(
-            action_tiers={"unrestricted": [ActionName.REBOOT_INSTANCE]},
+            action_tiers={"unrestricted": ["reboot_instance"]},
             execution_mode=ExecutionMode.LIVE,
             auto_approve_conditions={
                 "max_risk_tier": RiskLevel.LOW,
@@ -81,7 +80,7 @@ async def main():
                 session_id=cs.id,
                 resource_id=res,
                 resource_type="server",
-                decision=ActionName.REBOOT_INSTANCE,
+                decision="reboot_instance",
                 weight=Decimal("1.0"),
                 score=Decimal("0.9"),
                 reasoning="Patching",

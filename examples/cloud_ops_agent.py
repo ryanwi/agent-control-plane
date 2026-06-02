@@ -58,9 +58,9 @@ def create_cloud_policy() -> PolicySnapshot:
     """Define a governance policy for cloud operations."""
     return PolicySnapshot(
         action_tiers={
-            ActionTier.BLOCKED: [ActionName.WIPE_DATABASE, ActionName.DELETE_VBC],
-            ActionTier.ALWAYS_APPROVE: [ActionName.DESCRIBE_RESOURCES, ActionName.LIST_INSTANCES],
-            ActionTier.AUTO_APPROVE: [ActionName.STOP_INSTANCE, ActionName.START_INSTANCE, ActionName.REBOOT_INSTANCE],
+            ActionTier.BLOCKED: ["wipe_database", "delete_vbc"],
+            ActionTier.ALWAYS_APPROVE: ["describe_resources", "list_instances"],
+            ActionTier.AUTO_APPROVE: ["stop_instance", "start_instance", "reboot_instance"],
             ActionTier.UNRESTRICTED: [],  # Actions not listed here fall to risk-based routing
         },
         risk_limits={
@@ -157,8 +157,8 @@ class CloudOpsAgent:
             logger.info("Auto-approving low-risk reversible action.")
             is_approved = True
         elif route.tier == ActionTier.ALWAYS_APPROVE and action_name in [
-            ActionName.DESCRIBE_RESOURCES,
-            ActionName.LIST_INSTANCES,
+            "describe_resources",
+            "list_instances",
         ]:
             logger.info("Auto-approving read-only action from policy list.")
             is_approved = True
@@ -233,24 +233,24 @@ async def main():
         await agent.initialize(create_cloud_policy())
 
         # 1. Read-only (Always Approved)
-        await agent.run_task(ActionName.DESCRIBE_RESOURCES, "region-us-east-1")
+        await agent.run_task("describe_resources", "region-us-east-1")
 
         # 2. Reversible Low Risk (Auto Approved)
-        await agent.run_task(ActionName.STOP_INSTANCE, "i-0987654321", risk_score=0.95, weight=2.0)
+        await agent.run_task("stop_instance", "i-0987654321", risk_score=0.95, weight=2.0)
 
         # 3. Destructive High Risk (Manual Approval Required)
-        await agent.run_task(ActionName.TERMINATE_INSTANCE, "i-1234567890", risk_score=0.1, weight=50.0)
+        await agent.run_task("terminate_instance", "i-1234567890", risk_score=0.1, weight=50.0)
 
         # 4. Blocked Action
-        await agent.run_task(ActionName.WIPE_DATABASE, "db-prod-01")
+        await agent.run_task("wipe_database", "db-prod-01")
 
         # 5. Resource Lock Test (Propose same resource again before commit)
         # Note: In this sequential example it won't trigger lock error because we release cycle each time.
         # But we can demonstrate budget pressure.
-        await agent.run_task(ActionName.TERMINATE_INSTANCE, "i-9999999999", risk_score=0.1, weight=40.0)
+        await agent.run_task("terminate_instance", "i-9999999999", risk_score=0.1, weight=40.0)
 
         # 6. Budget Exhaustion
-        await agent.run_task(ActionName.TERMINATE_INSTANCE, "i-excessive", risk_score=0.1, weight=20.0)
+        await agent.run_task("terminate_instance", "i-excessive", risk_score=0.1, weight=20.0)
 
         await uow.commit()
 

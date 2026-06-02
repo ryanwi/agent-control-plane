@@ -23,7 +23,7 @@ from agent_control_plane.types.conditions import (
     ScoreCondition,
     WeightCondition,
 )
-from agent_control_plane.types.enums import ActionName, ExecutionMode, RiskLevel
+from agent_control_plane.types.enums import ExecutionMode, RiskLevel
 from agent_control_plane.types.policies import PolicySnapshot
 from agent_control_plane.types.proposals import ActionProposal
 
@@ -40,7 +40,7 @@ def _proposal(**overrides) -> ActionProposal:
         "session_id": uuid4(),
         "resource_id": "res-001",
         "resource_type": "task",
-        "decision": ActionName.STATUS,
+        "decision": "status",
         "reasoning": "test",
         "weight": Decimal("1.0"),
         "score": Decimal("0.9"),
@@ -108,27 +108,27 @@ class TestScoreCondition:
 class TestActionCondition:
     @pytest.mark.asyncio
     async def test_allow_mode_in_list(self):
-        node = ActionCondition(actions=[ActionName.STATUS], mode="allow")
+        node = ActionCondition(actions=["status"], mode="allow")
         ev = ConditionEvaluator()
-        assert await ev.evaluate(node, _proposal(decision=ActionName.STATUS), RiskLevel.LOW, _policy()) is True
+        assert await ev.evaluate(node, _proposal(decision="status"), RiskLevel.LOW, _policy()) is True
 
     @pytest.mark.asyncio
     async def test_allow_mode_not_in_list(self):
-        node = ActionCondition(actions=[ActionName.REFUND], mode="allow")
+        node = ActionCondition(actions=["refund"], mode="allow")
         ev = ConditionEvaluator()
-        assert await ev.evaluate(node, _proposal(decision=ActionName.STATUS), RiskLevel.LOW, _policy()) is False
+        assert await ev.evaluate(node, _proposal(decision="status"), RiskLevel.LOW, _policy()) is False
 
     @pytest.mark.asyncio
     async def test_deny_mode_in_list(self):
-        node = ActionCondition(actions=[ActionName.BAN], mode="deny")
+        node = ActionCondition(actions=["ban"], mode="deny")
         ev = ConditionEvaluator()
-        assert await ev.evaluate(node, _proposal(decision=ActionName.BAN), RiskLevel.LOW, _policy()) is False
+        assert await ev.evaluate(node, _proposal(decision="ban"), RiskLevel.LOW, _policy()) is False
 
     @pytest.mark.asyncio
     async def test_deny_mode_not_in_list(self):
-        node = ActionCondition(actions=[ActionName.BAN], mode="deny")
+        node = ActionCondition(actions=["ban"], mode="deny")
         ev = ConditionEvaluator()
-        assert await ev.evaluate(node, _proposal(decision=ActionName.STATUS), RiskLevel.LOW, _policy()) is True
+        assert await ev.evaluate(node, _proposal(decision="status"), RiskLevel.LOW, _policy()) is True
 
 
 class TestAssetCondition:
@@ -220,14 +220,14 @@ class TestNestedTree:
                         ScoreCondition(min_score=Decimal("0.9")),
                     ]
                 ),
-                NotCondition(condition=ActionCondition(actions=[ActionName.BAN], mode="allow")),
+                NotCondition(condition=ActionCondition(actions=["ban"], mode="allow")),
             ]
         )
         ev = ConditionEvaluator()
         # Low risk, not ban → True
-        assert await ev.evaluate(node, _proposal(decision=ActionName.STATUS), RiskLevel.LOW, _policy()) is True
+        assert await ev.evaluate(node, _proposal(decision="status"), RiskLevel.LOW, _policy()) is True
         # Ban action → False (not condition fails)
-        assert await ev.evaluate(node, _proposal(decision=ActionName.BAN), RiskLevel.LOW, _policy()) is False
+        assert await ev.evaluate(node, _proposal(decision="ban"), RiskLevel.LOW, _policy()) is False
 
 
 class TestMaxDepth:
@@ -284,7 +284,7 @@ class TestConditionTreeRouting:
             action_tiers={
                 "blocked": [],
                 "always_approve": [],
-                "auto_approve": [ActionName.STATUS],
+                "auto_approve": ["status"],
                 "unrestricted": [],
             },
             execution_mode=ExecutionMode.DRY_RUN,
@@ -302,7 +302,7 @@ class TestConditionTreeRouting:
 
         # MEDIUM risk: flat checks would deny (max_risk_tier=LOW), tree allows (<=MEDIUM)
         proposal = _proposal(
-            decision=ActionName.STATUS,
+            decision="status",
             weight=Decimal("3.0"),
             score=Decimal("0.8"),
         )
@@ -320,7 +320,7 @@ class TestConditionTreeRouting:
             action_tiers={
                 "blocked": [],
                 "always_approve": [],
-                "auto_approve": [ActionName.STATUS],
+                "auto_approve": ["status"],
                 "unrestricted": [],
             },
             execution_mode=ExecutionMode.DRY_RUN,
@@ -337,7 +337,7 @@ class TestConditionTreeRouting:
 
         # MEDIUM risk: flat checks deny (max_risk_tier=LOW), no tree to override
         proposal = _proposal(
-            decision=ActionName.STATUS,
+            decision="status",
             weight=Decimal("3.0"),
             score=Decimal("0.8"),
         )
@@ -357,7 +357,7 @@ class TestConditionTreeOnPolicy:
             ]
         )
         policy = PolicySnapshot(
-            action_tiers={"blocked": [], "always_approve": [], "auto_approve": [ActionName.STATUS], "unrestricted": []},
+            action_tiers={"blocked": [], "always_approve": [], "auto_approve": ["status"], "unrestricted": []},
             execution_mode=ExecutionMode.DRY_RUN,
             auto_approve_conditions={
                 "max_risk_tier": "low",

@@ -3,7 +3,6 @@ from __future__ import annotations
 from uuid import uuid4
 
 from agent_control_plane import proposal_command_id
-from agent_control_plane.types.enums import ActionName
 
 
 def test_proposal_command_id_is_stable() -> None:
@@ -12,13 +11,13 @@ def test_proposal_command_id_is_stable() -> None:
         session_id=session_id,
         resource_id="res-1",
         resource_type="task",
-        decision=ActionName.STATUS,
+        decision="status",
     )
     second = proposal_command_id(
         session_id=session_id,
         resource_id="res-1",
         resource_type="task",
-        decision=ActionName.STATUS,
+        decision="status",
     )
     assert first == second
 
@@ -29,12 +28,12 @@ def test_proposal_command_id_changes_with_inputs() -> None:
         session_id=session_id,
         resource_id="res-1",
         resource_type="task",
-        decision=ActionName.STATUS,
+        decision="status",
     )
     changed = proposal_command_id(
         session_id=session_id,
         resource_id="res-2",
         resource_type="task",
-        decision=ActionName.STATUS,
+        decision="status",
     )
     assert base != changed

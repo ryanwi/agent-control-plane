@@ -11,7 +11,7 @@ from agent_control_plane.evaluators import (
     RegexEvaluator,
     RegexEvaluatorConfig,
 )
-from agent_control_plane.types.enums import ActionName, ExecutionMode
+from agent_control_plane.types.enums import ExecutionMode
 from agent_control_plane.types.policies import PolicySnapshot
 from agent_control_plane.types.proposals import ActionProposal
 
@@ -28,7 +28,7 @@ def _proposal(**overrides) -> ActionProposal:
         "session_id": uuid4(),
         "resource_id": "res-001",
         "resource_type": "task",
-        "decision": ActionName.STATUS,
+        "decision": "status",
         "reasoning": "test",
     }
     defaults.update(overrides)
