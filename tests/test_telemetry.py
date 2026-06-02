@@ -28,7 +28,7 @@ def _make_event(kind: EventKind, payload: dict | None = None, **kwargs) -> Event
     return EventFrame(
         session_id=uuid4(),
         seq=1,
-        event_kind=kind,
+        kind=kind,
         payload=payload or {},
         state_bearing=False,
         **kwargs,
@@ -52,7 +52,7 @@ def test_export_event_maps_core_attributes() -> None:
     event = EventFrame(
         session_id=uuid4(),
         seq=3,
-        event_kind=EventKind.GUARDRAIL_INPUT,
+        kind=EventKind.GUARDRAIL_INPUT,
         payload={"policy_code": "CP-GR-1", "decision": "deny"},
         state_bearing=False,
         agent_id="agent-1",

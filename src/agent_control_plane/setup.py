@@ -10,6 +10,7 @@ See ADR-0009 for design rationale.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -37,6 +38,35 @@ from agent_control_plane.types.token_governance import (
 )
 
 
+@dataclass(frozen=True)
+class GovernanceConfig:
+    """Domain-level governance configuration — vocabulary, actions, risk, budgets, policy."""
+
+    alias_profile: AliasProfile | None = None
+    action_names: list[str] = field(default_factory=list)
+    risk_patterns: list[RiskPattern] | None = None
+    model_governance: ModelGovernancePolicy | None = None
+    token_budget_configs: list[TokenBudgetConfig] | None = None
+    policy: PolicySnapshot | None = None
+
+
+@dataclass(frozen=True)
+class EventConfig:
+    """Event mapping configuration — how app events translate to control-plane EventKind values."""
+
+    event_map: dict[str, EventKind] = field(default_factory=dict)
+    mapper: AppEventMapper | None = None
+    unknown_event_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.IGNORE
+
+
+@dataclass(frozen=True)
+class ResilienceConfig:
+    """Resilience configuration — fail-open/fail-closed mode and per-category overrides."""
+
+    mode: ResilienceMode = ResilienceMode.MIXED
+    category_overrides: dict[OperationCategory, ResilienceMode] = field(default_factory=dict)
+
+
 class ControlPlaneSetup:
     """One-stop configuration for control plane initialization.
 
@@ -48,11 +78,15 @@ class ControlPlaneSetup:
 
         cp = ControlPlaneSetup(
             database_url="sqlite:///./cp.db",
-            alias_profile=MY_ALIASES,
-            action_names=["place_order", "cancel_order"],
-            event_map={"order_placed": EventKind.EXECUTION_COMPLETED},
-            risk_patterns=MY_RISK_PATTERNS,
-            resilience_mode=ResilienceMode.MIXED,
+            governance=GovernanceConfig(
+                alias_profile=MY_ALIASES,
+                action_names=["place_order", "cancel_order"],
+                risk_patterns=MY_RISK_PATTERNS,
+            ),
+            events=EventConfig(
+                event_map={"order_placed": EventKind.EXECUTION_COMPLETED},
+            ),
+            resilience=ResilienceConfig(mode=ResilienceMode.MIXED),
         ).build()
     """
 
@@ -60,70 +94,32 @@ class ControlPlaneSetup:
         self,
         database_url: str = "sqlite:///./control_plane.db",
         *,
-        # Domain vocabulary
-        alias_profile: AliasProfile | None = None,
-        # Action classification
-        action_names: list[str] | None = None,
-        # Event mapping
-        event_map: dict[str, EventKind] | None = None,
-        mapper: AppEventMapper | None = None,
-        unknown_event_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.IGNORE,
-        # Risk patterns (for SessionRiskAccumulator)
-        risk_patterns: list[RiskPattern] | None = None,
-        # Model governance (for ModelGovernor)
-        model_governance: ModelGovernancePolicy | None = None,
-        # Token budgets (for TokenBudgetTracker)
-        token_budget_configs: list[TokenBudgetConfig] | None = None,
-        # Policy snapshot
-        policy: PolicySnapshot | None = None,
-        # Resilience
-        resilience_mode: ResilienceMode = ResilienceMode.MIXED,
-        category_overrides: dict[OperationCategory, ResilienceMode] | None = None,
+        governance: GovernanceConfig | None = None,
+        events: EventConfig | None = None,
+        resilience: ResilienceConfig | None = None,
         logger: logging.Logger | None = None,
     ) -> None:
         self._database_url = database_url
-        self._alias_profile = alias_profile
-        self._action_names = action_names
-        self._event_map = event_map
-        self._mapper = mapper
-        self._unknown_event_policy = unknown_event_policy
-        self._risk_patterns = risk_patterns
-        self._model_governance = model_governance
-        self._token_budget_configs = token_budget_configs
-        self._policy = policy
-        self._resilience_mode = resilience_mode
-        self._category_overrides = category_overrides
+        self._governance = governance or GovernanceConfig()
+        self._events = events or EventConfig()
+        self._resilience = resilience or ResilienceConfig()
         self._logger = logger
 
     def build(self) -> ResilientControlPlane:
         """Create tables, register models, configure engines, return ready-to-use CP."""
-        # Register alias profile
-        if self._alias_profile is not None:
-            AliasRegistry.register_profile(self._alias_profile)
-
-        # Register action names
-        if self._action_names:
-            register_action_names(self._action_names)
-
-        # Build event mapper
-        resolved_mapper = self._mapper
-        if resolved_mapper is None and self._event_map is not None:
-            resolved_mapper = DictEventMapper(self._event_map)
-
-        # Create facade
+        self._register_common()
+        resolved_mapper = self._resolve_mapper()
         facade = ControlPlaneFacade.from_database_url(
             self._database_url,
             mapper=resolved_mapper,
-            unknown_policy=self._unknown_event_policy,
+            unknown_policy=self._events.unknown_event_policy,
         )
         facade.setup()
-
-        # Wrap with resilience
         return ResilientControlPlane(
             facade,
-            mode=self._resilience_mode,
+            mode=self._resilience.mode,
             logger=self._logger,
-            category_overrides=self._category_overrides,
+            category_overrides=self._resilience.category_overrides or None,
         )
 
     def build_async(self) -> AsyncResilientControlPlane:
@@ -136,43 +132,42 @@ class ControlPlaneSetup:
         from agent_control_plane.async_facade import AsyncControlPlaneFacade
         from agent_control_plane.async_resilient import AsyncResilientControlPlane
 
-        # Register alias profile
-        if self._alias_profile is not None:
-            AliasRegistry.register_profile(self._alias_profile)
-
-        # Register action names
-        if self._action_names:
-            register_action_names(self._action_names)
-
-        # Build event mapper
-        resolved_mapper = self._mapper
-        if resolved_mapper is None and self._event_map is not None:
-            resolved_mapper = DictEventMapper(self._event_map)
-
-        # Create async facade
+        self._register_common()
+        resolved_mapper = self._resolve_mapper()
         facade = AsyncControlPlaneFacade.from_database_url(
             self._database_url,
             mapper=resolved_mapper,
-            unknown_policy=self._unknown_event_policy,
+            unknown_policy=self._events.unknown_event_policy,
         )
-
-        # Wrap with resilience
         return AsyncResilientControlPlane(
             facade,
-            mode=self._resilience_mode,
+            mode=self._resilience.mode,
             logger=self._logger,
-            category_overrides=self._category_overrides,
+            category_overrides=self._resilience.category_overrides or None,
         )
+
+    def _register_common(self) -> None:
+        if self._governance.alias_profile is not None:
+            AliasRegistry.register_profile(self._governance.alias_profile)
+        if self._governance.action_names:
+            register_action_names(self._governance.action_names)
+
+    def _resolve_mapper(self) -> AppEventMapper | None:
+        if self._events.mapper is not None:
+            return self._events.mapper
+        if self._events.event_map:
+            return DictEventMapper(self._events.event_map)
+        return None
 
     @property
     def risk_patterns(self) -> list[RiskPattern] | None:
         """Risk patterns for SessionRiskAccumulator (caller creates the engine)."""
-        return self._risk_patterns
+        return self._governance.risk_patterns
 
     @property
     def model_governance(self) -> ModelGovernancePolicy | None:
         """Model governance policy for ModelGovernor (caller creates the engine)."""
-        return self._model_governance
+        return self._governance.model_governance
 
     @property
     def token_budget_configs(self) -> list[TokenBudgetConfig] | None:
@@ -182,9 +177,9 @@ class ControlPlaneSetup:
         context manager) to obtain a session-bound tracker without manual
         ``AsyncSqlAlchemyTokenBudgetRepo(session)`` construction.
         """
-        return self._token_budget_configs
+        return self._governance.token_budget_configs
 
     @property
     def policy(self) -> PolicySnapshot | None:
         """Policy snapshot for PolicyEngine (caller creates the engine)."""
-        return self._policy
+        return self._governance.policy

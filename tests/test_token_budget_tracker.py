@@ -240,7 +240,7 @@ class TestRecordUsage:
 
         events = await event_repo.replay(session_id)
         assert len(events) == 1
-        assert events[0].event_kind == EventKind.TOKEN_USAGE_RECORDED
+        assert events[0].kind == EventKind.TOKEN_USAGE_RECORDED
 
     async def test_record_increments_state(
         self, tracker: TokenBudgetTracker, repo: InMemoryTokenBudgetRepository
@@ -280,7 +280,7 @@ class TestRecordUsage:
 
         events = await event_repo.replay(session_id)
         assert len(events) == 1
-        assert events[0].event_kind == EventKind.TOKEN_USAGE_RECORDED
+        assert events[0].kind == EventKind.TOKEN_USAGE_RECORDED
 
     async def test_float_cost_coerces_to_decimal(self) -> None:
         """TokenUsage.estimated_cost_usd accepts float without precision loss."""

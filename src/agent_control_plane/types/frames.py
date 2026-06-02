@@ -1,5 +1,6 @@
 """Wire protocol frame definitions for control plane communication."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID, uuid4
@@ -7,7 +8,19 @@ from uuid import UUID, uuid4
 from pydantic import BaseModel, Field, field_validator
 
 from .enums import ActionValue, EventKind, parse_action_name
-from .ids import AgentId
+from .ids import AgentId, IdempotencyKey
+
+
+@dataclass(frozen=True)
+class EmitMetadata:
+    """Optional metadata for an emit() call — correlation, routing, and idempotency fields."""
+
+    agent_id: AgentId | None = None
+    correlation_id: UUID | None = None
+    routing_decision: dict[str, Any] | None = None
+    routing_reason: str | None = None
+    idempotency_key: IdempotencyKey | None = None
+    command_id: IdempotencyKey | None = None
 
 
 class RequestFrame(BaseModel):
@@ -45,7 +58,7 @@ class EventFrame(BaseModel):
     event_id: UUID = Field(default_factory=uuid4)
     session_id: UUID
     seq: int
-    event_kind: EventKind
+    kind: EventKind
     agent_id: AgentId | None = None
     correlation_id: UUID | None = None
     payload: dict[str, Any] = Field(default_factory=dict)

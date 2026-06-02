@@ -276,7 +276,7 @@ class AsyncSqlAlchemyEventRepo:
             event_id=row.id,
             session_id=row.session_id,
             seq=row.seq,
-            event_kind=row.event_kind,
+            kind=row.event_kind,
             agent_id=row.agent_id,
             correlation_id=row.correlation_id,
             payload=row.payload,

@@ -139,7 +139,7 @@ class InMemoryEventRepository:
         event = EventFrame(
             session_id=session_id,
             seq=seq,
-            event_kind=event_kind,
+            kind=event_kind,
             agent_id=agent_id,
             correlation_id=correlation_id,
             payload=payload,

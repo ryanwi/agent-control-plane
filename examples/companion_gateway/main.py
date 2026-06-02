@@ -110,7 +110,7 @@ class DemoFacade(FacadeProtocol):
         event = EventFrame(
             session_id=uuid4(),
             seq=1,
-            event_kind=EventKind.CYCLE_STARTED,
+            kind=EventKind.CYCLE_STARTED,
             payload={"source": "demo"},
             state_bearing=True,
         )

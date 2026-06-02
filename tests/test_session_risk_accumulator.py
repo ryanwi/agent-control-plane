@@ -323,7 +323,7 @@ class TestEventEmission:
             await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
         await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
         events = await event_repo.replay(sid)
-        assert any(e.event_kind == EventKind.SESSION_RISK_ESCALATED for e in events)
+        assert any(e.kind == EventKind.SESSION_RISK_ESCALATED for e in events)
 
     @pytest.mark.asyncio
     async def test_no_escalation_emits_nothing(self):
@@ -334,7 +334,7 @@ class TestEventEmission:
         # 1 LOW action — no escalation
         await acc.assess(sid, _proposal(sid), RiskLevel.LOW)
         events = await event_repo.replay(sid)
-        assert not any(e.event_kind == EventKind.SESSION_RISK_ESCALATED for e in events)
+        assert not any(e.kind == EventKind.SESSION_RISK_ESCALATED for e in events)
 
     @pytest.mark.asyncio
     async def test_no_event_store_no_error(self):

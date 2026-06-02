@@ -11,7 +11,7 @@ import pytest
 
 from agent_control_plane.async_facade import AsyncControlPlaneFacade
 from agent_control_plane.async_resilient import AsyncResilientControlPlane
-from agent_control_plane.setup import ControlPlaneSetup
+from agent_control_plane.setup import ControlPlaneSetup, EventConfig, ResilienceConfig
 from agent_control_plane.sync import DictEventMapper
 from agent_control_plane.types.enums import (
     EventKind,
@@ -218,8 +218,8 @@ class TestBuildAsync:
     async def test_build_async_returns_async_rcp(self, db_url: str) -> None:
         cp = ControlPlaneSetup(
             db_url,
-            event_map={"job_started": EventKind.CYCLE_STARTED},
-            resilience_mode=ResilienceMode.MIXED,
+            events=EventConfig(event_map={"job_started": EventKind.CYCLE_STARTED}),
+            resilience=ResilienceConfig(mode=ResilienceMode.MIXED),
         ).build_async()
         assert isinstance(cp, AsyncResilientControlPlane)
         sid = await cp.open_session("test")
@@ -229,7 +229,7 @@ class TestBuildAsync:
     async def test_build_async_fail_open(self, db_url: str) -> None:
         cp = ControlPlaneSetup(
             db_url,
-            resilience_mode=ResilienceMode.FAIL_OPEN,
+            resilience=ResilienceConfig(mode=ResilienceMode.FAIL_OPEN),
         ).build_async()
         result = await cp.check_budget(UUID(int=999))
         assert result is True

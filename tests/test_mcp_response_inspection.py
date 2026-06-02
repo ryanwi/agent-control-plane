@@ -60,7 +60,7 @@ def test_clean_output_passes_and_is_returned(tmp_path: Path):
     )
 
     assert result.output == {"text": "all clear"}
-    kinds = [e.event_kind for e in cp.replay_events(sid)]
+    kinds = [e.kind for e in cp.replay_events(sid)]
     assert EventKind.EXECUTION_COMPLETED in kinds
     assert cp.get_remaining_budget(sid)["used_cost"] == Decimal("1.25")
     cp.close()
@@ -81,7 +81,7 @@ def test_poisoned_output_rejected_and_withheld(tmp_path: Path):
     assert "Ignore all previous" not in str(err.value)
 
     events = cp.replay_events(sid)
-    rejected = [e for e in events if e.event_kind == EventKind.APPROVAL_DENIED]
+    rejected = [e for e in events if e.kind == EventKind.APPROVAL_DENIED]
     assert rejected, "expected a TOOL_RESULT_REJECTED (APPROVAL_DENIED) event"
     event = rejected[-1]
     # The rejection event must be state-bearing (audit cannot silently drop it).
@@ -94,7 +94,7 @@ def test_poisoned_output_rejected_and_withheld(tmp_path: Path):
     assert "credentials" not in str(payload)
     # Cost is still charged: the external call genuinely ran.
     assert cp.get_remaining_budget(sid)["used_cost"] == Decimal("1.25")
-    assert EventKind.EXECUTION_COMPLETED not in [e.event_kind for e in events]
+    assert EventKind.EXECUTION_COMPLETED not in [e.kind for e in events]
     cp.close()
 
 
@@ -109,7 +109,7 @@ def test_no_evaluators_is_unchanged_behavior(tmp_path: Path):
     )
 
     assert result.output == poisoned
-    assert EventKind.EXECUTION_COMPLETED in [e.event_kind for e in cp.replay_events(sid)]
+    assert EventKind.EXECUTION_COMPLETED in [e.kind for e in cp.replay_events(sid)]
     cp.close()
 
 
@@ -138,7 +138,7 @@ def test_malicious_mapping_key_is_screened(tmp_path: Path):
 
     with pytest.raises(ToolResultRejectedError):
         gateway.handle_tool_call(ToolCallContext(tool_name="status", session_id=sid, estimated_cost=Decimal("0.10")))
-    assert EventKind.EXECUTION_COMPLETED not in [e.event_kind for e in cp.replay_events(sid)]
+    assert EventKind.EXECUTION_COMPLETED not in [e.kind for e in cp.replay_events(sid)]
     cp.close()
 
 

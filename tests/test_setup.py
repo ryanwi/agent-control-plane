@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from agent_control_plane.resilient import ResilientControlPlane
-from agent_control_plane.setup import ControlPlaneSetup
+from agent_control_plane.setup import ControlPlaneSetup, EventConfig, GovernanceConfig, ResilienceConfig
 from agent_control_plane.types.enums import (
     EventKind,
     OperationCategory,
@@ -61,7 +61,7 @@ class TestWithEventMap:
     def test_emit_app_works(self, db_url: str) -> None:
         cp = ControlPlaneSetup(
             db_url,
-            event_map={"job_started": EventKind.CYCLE_STARTED},
+            events=EventConfig(event_map={"job_started": EventKind.CYCLE_STARTED}),
         ).build()
         sid = cp.open_session("test")
         seq = cp.emit_app(sid, "job_started", {"job_id": "1"})
@@ -75,7 +75,7 @@ class TestWithActionNames:
     def test_action_names_registered(self, db_url: str) -> None:
         cp = ControlPlaneSetup(
             db_url,
-            action_names=["place_order", "cancel_order"],
+            governance=GovernanceConfig(action_names=["place_order", "cancel_order"]),
         ).build()
         assert is_registered_action_name("place_order")
         assert is_registered_action_name("cancel_order")
@@ -88,7 +88,7 @@ class TestWithResilienceMode:
     def test_fail_closed_mode(self, db_url: str) -> None:
         cp = ControlPlaneSetup(
             db_url,
-            resilience_mode=ResilienceMode.FAIL_CLOSED,
+            resilience=ResilienceConfig(mode=ResilienceMode.FAIL_CLOSED),
         ).build()
         with pytest.raises((ValueError, OSError)):
             cp.check_budget(__import__("uuid").UUID(int=999))
@@ -97,7 +97,7 @@ class TestWithResilienceMode:
     def test_fail_open_mode(self, db_url: str) -> None:
         cp = ControlPlaneSetup(
             db_url,
-            resilience_mode=ResilienceMode.FAIL_OPEN,
+            resilience=ResilienceConfig(mode=ResilienceMode.FAIL_OPEN),
         ).build()
         result = cp.check_budget(__import__("uuid").UUID(int=999))
         assert result is True
@@ -110,7 +110,7 @@ class TestWithCategoryOverrides:
     def test_category_override_applied(self, db_url: str) -> None:
         cp = ControlPlaneSetup(
             db_url,
-            category_overrides={OperationCategory.BUDGET: ResilienceMode.FAIL_CLOSED},
+            resilience=ResilienceConfig(category_overrides={OperationCategory.BUDGET: ResilienceMode.FAIL_CLOSED}),
         ).build()
         with pytest.raises((ValueError, OSError)):
             cp.check_budget(__import__("uuid").UUID(int=999))
@@ -129,16 +129,16 @@ class TestPropertyAccessors:
                 escalate_to="high",
             )
         ]
-        setup = ControlPlaneSetup(db_url, risk_patterns=patterns)
+        setup = ControlPlaneSetup(db_url, governance=GovernanceConfig(risk_patterns=patterns))
         assert setup.risk_patterns == patterns
 
     def test_model_governance_accessible(self, db_url: str) -> None:
         policy = ModelGovernancePolicy(default_model_tier="standard")
-        setup = ControlPlaneSetup(db_url, model_governance=policy)
+        setup = ControlPlaneSetup(db_url, governance=GovernanceConfig(model_governance=policy))
         assert setup.model_governance is policy
 
     def test_token_budget_configs_accessible(self, db_url: str) -> None:
-        setup = ControlPlaneSetup(db_url, token_budget_configs=[])
+        setup = ControlPlaneSetup(db_url, governance=GovernanceConfig(token_budget_configs=[]))
         assert setup.token_budget_configs == []
 
     def test_none_by_default(self, db_url: str) -> None:

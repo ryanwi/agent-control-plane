@@ -36,6 +36,7 @@ from agent_control_plane.types.enums import (
     RiskLevel,
     UnknownAppEventPolicy,
 )
+from agent_control_plane.types.frames import EmitMetadata
 from agent_control_plane.types.proposals import ActionProposal
 
 
@@ -73,7 +74,7 @@ def test_sync_control_plane_emit_and_replay_round_trip(tmp_path: Path):
 
     events = cp.replay_events(sid)
     assert len(events) == 1
-    assert events[0].event_kind == EventKind.CYCLE_STARTED
+    assert events[0].kind == EventKind.CYCLE_STARTED
     assert events[0].payload["phase"] == "begin"
     assert events[0].state_bearing is True
     cp.close()
@@ -163,7 +164,7 @@ def test_control_plane_facade_session_budget_and_replay(tmp_path: Path):
 
     events = facade.replay(sid)
     assert len(events) == 1
-    assert events[0].event_kind == EventKind.CYCLE_STARTED
+    assert events[0].kind == EventKind.CYCLE_STARTED
     assert events[0].state_bearing is True
 
     emitted = facade.emit(
@@ -171,7 +172,7 @@ def test_control_plane_facade_session_budget_and_replay(tmp_path: Path):
         EventKind.CYCLE_COMPLETED,
         {"done": True},
         state_bearing=True,
-        agent_id="sec-agent",
+        metadata=EmitMetadata(agent_id="sec-agent"),
     )
     assert emitted == 2
 
@@ -190,8 +191,8 @@ def test_control_plane_facade_command_id_idempotency(tmp_path: Path):
     sid_again = facade.open_session("ignored-name", command_id="sync-open-1")
     assert sid_again == sid
 
-    seq1 = facade.emit(sid, EventKind.CYCLE_STARTED, {"phase": "one"}, command_id="sync-emit-1")
-    seq2 = facade.emit(sid, EventKind.CYCLE_STARTED, {"phase": "two"}, command_id="sync-emit-1")
+    seq1 = facade.emit(sid, EventKind.CYCLE_STARTED, {"phase": "one"}, metadata=EmitMetadata(command_id="sync-emit-1"))
+    seq2 = facade.emit(sid, EventKind.CYCLE_STARTED, {"phase": "two"}, metadata=EmitMetadata(command_id="sync-emit-1"))
     assert seq2 == seq1
 
     close1 = facade.close_session(sid, command_id="sync-close-1")

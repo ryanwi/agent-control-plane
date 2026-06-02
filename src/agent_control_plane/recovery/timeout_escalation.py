@@ -57,7 +57,7 @@ class TimeoutEscalation:
             if last_event.created_at < timeout_threshold:
                 await self._escalate(
                     cs,
-                    f"Last event ({last_event.event_kind}) at seq={last_event.seq} "
+                    f"Last event ({last_event.kind}) at seq={last_event.seq} "
                     f"was {(now - last_event.created_at).total_seconds():.0f}s ago",
                 )
                 escalated += 1

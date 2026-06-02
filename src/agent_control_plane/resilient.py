@@ -42,7 +42,7 @@ from agent_control_plane.types.enums import (
     ProposalStatus,
     ResilienceMode,
 )
-from agent_control_plane.types.frames import EventFrame
+from agent_control_plane.types.frames import EmitMetadata, EventFrame
 from agent_control_plane.types.ids import AgentId, IdempotencyKey
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import Page, SessionHealth, StateChangePage
@@ -171,12 +171,7 @@ class ResilientControlPlane:
         payload: dict[str, Any],
         *,
         state_bearing: bool = False,
-        agent_id: AgentId | None = None,
-        correlation_id: UUID | None = None,
-        routing_decision: dict[str, Any] | None = None,
-        routing_reason: str | None = None,
-        idempotency_key: IdempotencyKey | None = None,
-        command_id: IdempotencyKey | None = None,
+        metadata: EmitMetadata | None = None,
     ) -> int | None:
         category = OperationCategory.STATE_BEARING if state_bearing else OperationCategory.TELEMETRY
         try:
@@ -185,12 +180,7 @@ class ResilientControlPlane:
                 event_kind,
                 payload,
                 state_bearing=state_bearing,
-                agent_id=agent_id,
-                correlation_id=correlation_id,
-                routing_decision=routing_decision,
-                routing_reason=routing_reason,
-                idempotency_key=idempotency_key,
-                command_id=command_id,
+                metadata=metadata,
             )
         except Exception as exc:
             return self._handle_error(exc, "emit", category, None)

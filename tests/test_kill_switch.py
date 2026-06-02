@@ -74,7 +74,7 @@ class TestSessionAbort:
         cs = await session_repo.get_session(sid)
         assert cs.status == SessionStatus.ABORTED
         events = await event_repo.replay(sid)
-        assert any(e.event_kind == EventKind.SESSION_ABORTED for e in events)
+        assert any(e.kind == EventKind.SESSION_ABORTED for e in events)
 
 
 class TestBudgetHalt:
@@ -86,7 +86,7 @@ class TestBudgetHalt:
 
         assert result.scope == KillSwitchScope.BUDGET_AUTO_HALT
         events = await event_repo.replay(sid)
-        assert any(e.event_kind == EventKind.BUDGET_EXHAUSTED for e in events)
+        assert any(e.kind == EventKind.BUDGET_EXHAUSTED for e in events)
 
 
 class TestSystemHalt:

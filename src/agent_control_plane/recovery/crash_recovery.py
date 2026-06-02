@@ -83,7 +83,7 @@ class CrashRecovery:
         logger.info(
             "Session %s: last event was %s (seq=%d), releasing cycle lock",
             cs.id,
-            last_event.event_kind,
+            last_event.kind,
             last_event.seq,
         )
 
@@ -91,7 +91,7 @@ class CrashRecovery:
             session_id=cs.id,
             event_kind=EventKind.CYCLE_RECOVERED,
             payload={
-                "last_event_kind": last_event.event_kind,
+                "last_event_kind": last_event.kind,
                 "last_event_seq": last_event.seq,
                 "recovered_cycle_id": str(cs.active_cycle_id),
             },

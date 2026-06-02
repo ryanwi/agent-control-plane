@@ -49,14 +49,13 @@ class KillSwitch:
         """Trigger the kill switch at the specified scope."""
         if scope == KillSwitchScope.SESSION_ABORT:
             return await self._abort_session(session_id, reason)
-        elif scope == KillSwitchScope.AGENT_ABORT:
+        if scope == KillSwitchScope.AGENT_ABORT:
             return await self._abort_agent(agent_id, reason)
-        elif scope == KillSwitchScope.SYSTEM_HALT:
+        if scope == KillSwitchScope.SYSTEM_HALT:
             return await self._system_halt(reason)
-        elif scope == KillSwitchScope.BUDGET_AUTO_HALT:
+        if scope == KillSwitchScope.BUDGET_AUTO_HALT:
             return await self._budget_halt(session_id, reason)
-        else:
-            raise ValueError(f"Unknown kill switch scope: {scope}")
+        raise ValueError(f"Unknown kill switch scope: {scope}")
 
     async def _abort_session(self, session_id: UUID | None, reason: str) -> KillSwitchResult:
         """Stop one session and deny all pending tickets."""

@@ -11,7 +11,10 @@ from pathlib import Path
 
 from agent_control_plane import (
     ControlPlaneSetup,
+    EventConfig,
     EventKind,
+    GovernanceConfig,
+    ResilienceConfig,
     ResilienceMode,
 )
 
@@ -22,12 +25,14 @@ def main() -> None:
     # ~10 lines replaces ~100 lines of bootstrap + wrapper code
     cp = ControlPlaneSetup(
         "sqlite:///./resilient_demo.db",
-        event_map={
-            "job_started": EventKind.CYCLE_STARTED,
-            "job_completed": EventKind.CYCLE_COMPLETED,
-        },
-        action_names=["place_order", "cancel_order"],
-        resilience_mode=ResilienceMode.MIXED,
+        governance=GovernanceConfig(action_names=["place_order", "cancel_order"]),
+        events=EventConfig(
+            event_map={
+                "job_started": EventKind.CYCLE_STARTED,
+                "job_completed": EventKind.CYCLE_COMPLETED,
+            }
+        ),
+        resilience=ResilienceConfig(mode=ResilienceMode.MIXED),
     ).build()
 
     sid = cp.open_session("demo", max_cost=Decimal("500"), max_action_count=20)

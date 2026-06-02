@@ -87,7 +87,7 @@ def export_event(event: EventFrame, *, tracer: TracerLike) -> None:
     attrs: dict[str, Any] = {
         "cp.session_id": str(event.session_id),
         "cp.event_id": str(event.event_id),
-        "cp.event_kind": event.event_kind.value,
+        "cp.event_kind": event.kind.value,
         "cp.seq": event.seq,
         "cp.state_bearing": event.state_bearing,
     }
@@ -111,7 +111,7 @@ def export_event(event: EventFrame, *, tracer: TracerLike) -> None:
             attrs[attr_name] = str(payload[payload_key])
             seen_attrs.add(attr_name)
 
-    outcome = _compute_outcome(event.event_kind, payload)
+    outcome = _compute_outcome(event.kind, payload)
     if outcome is not None:
         attrs["cp.outcome"] = outcome.value
 

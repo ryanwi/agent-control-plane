@@ -108,7 +108,7 @@ class _StubFacade:
         event = EventFrame(
             session_id=self.session_id,
             seq=1,
-            event_kind=EventKind.CYCLE_STARTED,
+            kind=EventKind.CYCLE_STARTED,
             payload={"cycle_id": str(uuid4())},
             state_bearing=True,
         )

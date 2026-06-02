@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -61,7 +62,7 @@ from agent_control_plane.types.enums import (
     SessionStatus,
     UnknownAppEventPolicy,
 )
-from agent_control_plane.types.frames import EventFrame
+from agent_control_plane.types.frames import EmitMetadata, EventFrame
 from agent_control_plane.types.ids import AgentId, IdempotencyKey
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import Page, SessionHealth, StateChange, StateChangePage
@@ -78,6 +79,119 @@ def _percentile(values: list[float], percentile: float) -> float | None:
 
 def _normalize_utc(dt: datetime) -> datetime:
     return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt
+
+
+@dataclass
+class _ScorecardAcc:
+    """Mutable per-session state accumulated while scanning events for a scorecard."""
+
+    pending_checkpoint_at: datetime | None = None
+    approval_requested_at: datetime | None = None
+    approval_latencies: list[float] = field(default_factory=list)
+    rollback_latencies: list[float] = field(default_factory=list)
+    total_cost: float = 0.0
+    successful_actions: int = 0
+
+
+def _sc_checkpoint(event_at: datetime, _event: EventFrame, sc: ControlPlaneScorecard, acc: _ScorecardAcc) -> None:
+    sc.checkpoints_created += 1
+    acc.pending_checkpoint_at = event_at
+
+
+def _sc_rollback(event_at: datetime, _event: EventFrame, sc: ControlPlaneScorecard, acc: _ScorecardAcc) -> None:
+    sc.rollbacks_completed += 1
+    if acc.pending_checkpoint_at is not None:
+        acc.rollback_latencies.append((event_at - acc.pending_checkpoint_at).total_seconds() * 1000.0)
+
+
+def _sc_eval_blocked(_at: datetime, event: EventFrame, sc: ControlPlaneScorecard, _acc: _ScorecardAcc) -> None:
+    sc.evaluations_blocked += 1
+    if isinstance(event.payload, dict):
+        for reason in event.payload.get("reasons", []):
+            key = str(reason)
+            sc.evaluation_block_reasons[key] = sc.evaluation_block_reasons.get(key, 0) + 1
+
+
+def _sc_guardrail(_at: datetime, event: EventFrame, sc: ControlPlaneScorecard, _acc: _ScorecardAcc) -> None:
+    if not isinstance(event.payload, dict):
+        return
+    code = str(event.payload.get("policy_code", "unknown"))
+    sc.guardrail_policy_code_counts[code] = sc.guardrail_policy_code_counts.get(code, 0) + 1
+    if event.payload.get("allow") is False:
+        sc.guardrail_denies += 1
+    else:
+        sc.guardrail_allows += 1
+
+
+def _sc_handoff_accepted(_at: datetime, _event: EventFrame, sc: ControlPlaneScorecard, _acc: _ScorecardAcc) -> None:
+    sc.handoffs_accepted += 1
+
+
+def _sc_handoff_rejected(_at: datetime, _event: EventFrame, sc: ControlPlaneScorecard, _acc: _ScorecardAcc) -> None:
+    sc.handoffs_rejected += 1
+
+
+def _sc_approval_requested(
+    event_at: datetime, _event: EventFrame, _sc: ControlPlaneScorecard, acc: _ScorecardAcc
+) -> None:
+    acc.approval_requested_at = event_at
+
+
+def _sc_approval_resolved(
+    event_at: datetime, _event: EventFrame, _sc: ControlPlaneScorecard, acc: _ScorecardAcc
+) -> None:
+    if acc.approval_requested_at is not None:
+        acc.approval_latencies.append((event_at - acc.approval_requested_at).total_seconds() * 1000.0)
+        acc.approval_requested_at = None
+
+
+def _sc_budget_exhausted(_at: datetime, _event: EventFrame, sc: ControlPlaneScorecard, _acc: _ScorecardAcc) -> None:
+    sc.budget_exhausted_count += 1
+
+
+def _sc_execution_completed(_at: datetime, event: EventFrame, _sc: ControlPlaneScorecard, acc: _ScorecardAcc) -> None:
+    acc.successful_actions += 1
+    if isinstance(event.payload, dict):
+        value = event.payload.get("cost")
+        if isinstance(value, int | float):
+            acc.total_cost += float(value)
+
+
+_ScorecardHandler = Callable[[datetime, EventFrame, ControlPlaneScorecard, _ScorecardAcc], None]
+
+_SCORECARD_HANDLERS: dict[EventKind, _ScorecardHandler] = {
+    EventKind.CHECKPOINT_CREATED: _sc_checkpoint,
+    EventKind.ROLLBACK_COMPLETED: _sc_rollback,
+    EventKind.EVALUATION_BLOCKED: _sc_eval_blocked,
+    EventKind.GUARDRAIL_INPUT: _sc_guardrail,
+    EventKind.GUARDRAIL_TOOL: _sc_guardrail,
+    EventKind.GUARDRAIL_OUTPUT: _sc_guardrail,
+    EventKind.HANDOFF_ACCEPTED: _sc_handoff_accepted,
+    EventKind.HANDOFF_REJECTED: _sc_handoff_rejected,
+    EventKind.APPROVAL_REQUESTED: _sc_approval_requested,
+    EventKind.APPROVAL_GRANTED: _sc_approval_resolved,
+    EventKind.APPROVAL_DENIED: _sc_approval_resolved,
+    EventKind.BUDGET_EXHAUSTED: _sc_budget_exhausted,
+    EventKind.EXECUTION_COMPLETED: _sc_execution_completed,
+}
+
+
+def _accumulate_scorecard_event(
+    event: EventFrame,
+    sc: ControlPlaneScorecard,
+    acc: _ScorecardAcc,
+    window_start: datetime | None,
+    window_end: datetime | None,
+) -> None:
+    event_at = _normalize_utc(event.created_at)
+    if window_start and event_at < window_start:
+        return
+    if window_end and event_at > window_end:
+        return
+    sc.total_events += 1
+    handler = _SCORECARD_HANDLERS.get(event.kind)
+    if handler:
+        handler(event_at, event, sc, acc)
 
 
 class AsyncControlPlaneFacade:
@@ -99,7 +213,7 @@ class AsyncControlPlaneFacade:
         self._mapper = mapper
         self._unknown_policy = unknown_policy
         self._registry = registry or ScopedModelRegistry()
-        self._uow_factory = uow_factory or (lambda db: AsyncSqlAlchemyUnitOfWork(db))
+        self._uow_factory = uow_factory or AsyncSqlAlchemyUnitOfWork
         self._schema_lock = asyncio.Lock()
         self._schema_initialized = False
         if register_reference_models:
@@ -505,16 +619,12 @@ class AsyncControlPlaneFacade:
         payload: dict[str, object],
         *,
         state_bearing: bool = False,
-        agent_id: AgentId | None = None,
-        correlation_id: UUID | None = None,
-        routing_decision: dict[str, object] | None = None,
-        routing_reason: str | None = None,
-        idempotency_key: IdempotencyKey | None = None,
-        command_id: IdempotencyKey | None = None,
+        metadata: EmitMetadata | None = None,
     ) -> int:
+        meta = metadata or EmitMetadata()
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
-            cached = await self._get_cached_command_result(uow, command_id, CMD_EMIT)
+            cached = await self._get_cached_command_result(uow, meta.command_id, CMD_EMIT)
             if cached is not None:
                 seq = cached.get("seq")
                 if not isinstance(seq, int):
@@ -525,15 +635,15 @@ class AsyncControlPlaneFacade:
                 event_kind=event_kind,
                 payload=dict(payload),
                 state_bearing=state_bearing,
-                agent_id=agent_id,
-                correlation_id=correlation_id,
-                routing_decision=dict(routing_decision) if routing_decision else None,
-                routing_reason=routing_reason,
-                idempotency_key=idempotency_key,
+                agent_id=meta.agent_id,
+                correlation_id=meta.correlation_id,
+                routing_decision=dict(meta.routing_decision) if meta.routing_decision else None,
+                routing_reason=meta.routing_reason,
+                idempotency_key=meta.idempotency_key,
             )
             await self._record_command_result(
                 uow,
-                command_id,
+                meta.command_id,
                 CMD_EMIT,
                 {"seq": seq},
                 session_id=session_id,
@@ -564,11 +674,13 @@ class AsyncControlPlaneFacade:
             event_kind=mapped.event_kind,
             payload=mapped.payload,
             state_bearing=mapped.state_bearing if state_bearing is None else state_bearing,
-            agent_id=mapped.agent_id if agent_id is None else agent_id,
-            correlation_id=mapped.correlation_id if correlation_id is None else correlation_id,
-            routing_decision=mapped.routing_decision,
-            routing_reason=mapped.routing_reason,
-            idempotency_key=mapped.idempotency_key if idempotency_key is None else idempotency_key,
+            metadata=EmitMetadata(
+                agent_id=mapped.agent_id if agent_id is None else agent_id,
+                correlation_id=mapped.correlation_id if correlation_id is None else correlation_id,
+                routing_decision=mapped.routing_decision,
+                routing_reason=mapped.routing_reason,
+                idempotency_key=mapped.idempotency_key if idempotency_key is None else idempotency_key,
+            ),
         )
 
     async def replay(self, session_id: UUID, *, after_seq: int = 0, limit: int = 100) -> list[EventFrame]:
@@ -653,7 +765,7 @@ class AsyncControlPlaneFacade:
         checkpoints = [
             SessionCheckpoint.model_validate(e.payload)
             for e in rows
-            if e.event_kind == EventKind.CHECKPOINT_CREATED and isinstance(e.payload, dict)
+            if e.kind == EventKind.CHECKPOINT_CREATED and isinstance(e.payload, dict)
         ]
         sliced = checkpoints[offset : offset + limit + 1]
         has_more = len(sliced) > limit
@@ -763,7 +875,7 @@ class AsyncControlPlaneFacade:
                 Goal.model_validate(e.payload)
                 for e in events
                 if (
-                    e.event_kind == EventKind.GOAL_CREATED
+                    e.kind == EventKind.GOAL_CREATED
                     and isinstance(e.payload, dict)
                     and e.payload.get("id") == str(goal_id)
                 )
@@ -777,7 +889,7 @@ class AsyncControlPlaneFacade:
                 Plan.model_validate(e.payload)
                 for e in events
                 if (
-                    e.event_kind == EventKind.PLAN_CREATED
+                    e.kind == EventKind.PLAN_CREATED
                     and isinstance(e.payload, dict)
                     and e.payload.get("goal_id") == str(goal_id)
                 )
@@ -792,11 +904,11 @@ class AsyncControlPlaneFacade:
             for e in events:
                 if not isinstance(e.payload, dict) or e.payload.get("plan_id") != str(plan.id):
                     continue
-                if e.event_kind == EventKind.PLAN_STEP_COMPLETED:
+                if e.kind == EventKind.PLAN_STEP_COMPLETED:
                     completed_steps += 1
-                elif e.event_kind == EventKind.PLAN_STEP_FAILED:
+                elif e.kind == EventKind.PLAN_STEP_FAILED:
                     failed_steps += 1
-                elif e.event_kind == EventKind.PLAN_STEP_STARTED:
+                elif e.kind == EventKind.PLAN_STEP_STARTED:
                     running_steps += 1
         else:
             total_steps = 0
@@ -884,7 +996,7 @@ class AsyncControlPlaneFacade:
         await self.emit(session_id, event_kind, result.model_dump(mode="json"), state_bearing=False)
         return result
 
-    async def get_operational_scorecard(  # noqa: C901
+    async def get_operational_scorecard(
         self,
         *,
         session_id: UUID | None = None,
@@ -893,80 +1005,27 @@ class AsyncControlPlaneFacade:
     ) -> ControlPlaneScorecard:
         sessions = [session_id] if session_id is not None else [s.id for s in await self.list_sessions(limit=10_000)]
         scorecard = ControlPlaneScorecard()
-        normalized_window_start = _normalize_utc(window_start) if window_start is not None else None
-        normalized_window_end = _normalize_utc(window_end) if window_end is not None else None
-        approval_latencies: list[float] = []
-        rollback_latencies: list[float] = []
-        total_cost = 0.0
-        successful_actions = 0
+        ws = _normalize_utc(window_start) if window_start is not None else None
+        we = _normalize_utc(window_end) if window_end is not None else None
+        acc = _ScorecardAcc()
         for sid in sessions:
             events = await self.replay(sid, after_seq=0, limit=10_000)
-            pending_checkpoint_at: datetime | None = None
-            approval_requested_at: datetime | None = None
             for event in events:
-                event_created_at = _normalize_utc(event.created_at)
-                if normalized_window_start and event_created_at < normalized_window_start:
-                    continue
-                if normalized_window_end and event_created_at > normalized_window_end:
-                    continue
-                scorecard.total_events += 1
-                if event.event_kind == EventKind.CHECKPOINT_CREATED:
-                    scorecard.checkpoints_created += 1
-                    pending_checkpoint_at = event_created_at
-                elif event.event_kind == EventKind.ROLLBACK_COMPLETED:
-                    scorecard.rollbacks_completed += 1
-                    if pending_checkpoint_at is not None:
-                        rollback_latencies.append((event_created_at - pending_checkpoint_at).total_seconds() * 1000.0)
-                elif event.event_kind == EventKind.EVALUATION_BLOCKED:
-                    scorecard.evaluations_blocked += 1
-                    if isinstance(event.payload, dict):
-                        for reason in event.payload.get("reasons", []):
-                            key = str(reason)
-                            scorecard.evaluation_block_reasons[key] = scorecard.evaluation_block_reasons.get(key, 0) + 1
-                elif event.event_kind in (
-                    EventKind.GUARDRAIL_INPUT,
-                    EventKind.GUARDRAIL_TOOL,
-                    EventKind.GUARDRAIL_OUTPUT,
-                ):
-                    if isinstance(event.payload, dict):
-                        code = str(event.payload.get("policy_code", "unknown"))
-                        scorecard.guardrail_policy_code_counts[code] = (
-                            scorecard.guardrail_policy_code_counts.get(code, 0) + 1
-                        )
-                        if event.payload.get("allow") is False:
-                            scorecard.guardrail_denies += 1
-                        else:
-                            scorecard.guardrail_allows += 1
-                elif event.event_kind == EventKind.HANDOFF_ACCEPTED:
-                    scorecard.handoffs_accepted += 1
-                elif event.event_kind == EventKind.HANDOFF_REJECTED:
-                    scorecard.handoffs_rejected += 1
-                elif event.event_kind == EventKind.APPROVAL_REQUESTED:
-                    approval_requested_at = event_created_at
-                elif event.event_kind in (EventKind.APPROVAL_GRANTED, EventKind.APPROVAL_DENIED):
-                    if approval_requested_at is not None:
-                        approval_latencies.append((event_created_at - approval_requested_at).total_seconds() * 1000.0)
-                        approval_requested_at = None
-                elif event.event_kind == EventKind.BUDGET_EXHAUSTED:
-                    scorecard.budget_exhausted_count += 1
-                elif event.event_kind == EventKind.EXECUTION_COMPLETED:
-                    successful_actions += 1
-                    if isinstance(event.payload, dict):
-                        value = event.payload.get("cost")
-                        if isinstance(value, int | float):
-                            total_cost += float(value)
+                _accumulate_scorecard_event(event, scorecard, acc, ws, we)
             scorecard.budget_denied_count += sum(
                 1
                 for e in events
-                if e.event_kind == EventKind.KILL_SWITCH_TRIGGERED
+                if e.kind == EventKind.KILL_SWITCH_TRIGGERED
                 and isinstance(e.payload, dict)
                 and e.payload.get("reason") in ("budget_denied", "budget_exhausted")
             )
-        scorecard.approval_latency_ms_p50 = _percentile(approval_latencies, 50)
-        scorecard.approval_latency_ms_p95 = _percentile(approval_latencies, 95)
-        scorecard.checkpoint_rollback_latency_ms_p50 = _percentile(rollback_latencies, 50)
-        scorecard.checkpoint_rollback_latency_ms_p95 = _percentile(rollback_latencies, 95)
-        scorecard.avg_cost_per_successful_action = (total_cost / successful_actions) if successful_actions > 0 else None
+        scorecard.approval_latency_ms_p50 = _percentile(acc.approval_latencies, 50)
+        scorecard.approval_latency_ms_p95 = _percentile(acc.approval_latencies, 95)
+        scorecard.checkpoint_rollback_latency_ms_p50 = _percentile(acc.rollback_latencies, 50)
+        scorecard.checkpoint_rollback_latency_ms_p95 = _percentile(acc.rollback_latencies, 95)
+        scorecard.avg_cost_per_successful_action = (
+            acc.total_cost / acc.successful_actions if acc.successful_actions > 0 else None
+        )
         handoff_total = scorecard.handoffs_accepted + scorecard.handoffs_rejected
         scorecard.handoff_accept_rate = (scorecard.handoffs_accepted / handoff_total) if handoff_total > 0 else None
         return scorecard

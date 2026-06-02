@@ -58,7 +58,7 @@ def test_unknown_tool_fails_closed(tmp_path: Path):
         gateway.handle_tool_call(ToolCallContext(tool_name="dangerous_tool", session_id=sid))
 
     events = cp.replay_events(sid)
-    assert [e.event_kind for e in events] == [EventKind.CYCLE_STARTED, EventKind.APPROVAL_DENIED]
+    assert [e.kind for e in events] == [EventKind.CYCLE_STARTED, EventKind.APPROVAL_DENIED]
     cp.close()
 
 
@@ -79,7 +79,7 @@ def test_manual_approval_creates_ticket_and_blocks(tmp_path: Path):
 
     assert isinstance(err.value.ticket_id, UUID)
     events = cp.replay_events(sid)
-    assert EventKind.APPROVAL_REQUESTED in [e.event_kind for e in events]
+    assert EventKind.APPROVAL_REQUESTED in [e.kind for e in events]
     cp.close()
 
 
@@ -103,7 +103,7 @@ def test_auto_approved_tool_executes_and_consumes_budget(tmp_path: Path):
     budget = cp.get_remaining_budget(sid)
     assert budget["used_cost"] == Decimal("1.25")
     events = cp.replay_events(sid)
-    assert EventKind.EXECUTION_COMPLETED in [e.event_kind for e in events]
+    assert EventKind.EXECUTION_COMPLETED in [e.kind for e in events]
     cp.close()
 
 

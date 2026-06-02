@@ -26,6 +26,7 @@ from agent_control_plane.types.enums import (
     SessionStatus,
     UnknownAppEventPolicy,
 )
+from agent_control_plane.types.frames import EmitMetadata
 from agent_control_plane.types.proposals import ActionProposal
 
 
@@ -380,7 +381,7 @@ async def test_async_facade_read_models_feed_health_and_idempotency(tmp_path: Pa
 
     feed = await facade.get_state_change_feed(session_id=sid, cursor=0, limit=10)
     assert len(feed.items) == 1
-    assert feed.items[0].event.event_kind == EventKind.CYCLE_STARTED
+    assert feed.items[0].event.kind == EventKind.CYCLE_STARTED
 
     health = await facade.get_health_snapshot()
     assert health.active_sessions >= 1
@@ -392,14 +393,14 @@ async def test_async_facade_read_models_feed_health_and_idempotency(tmp_path: Pa
         EventKind.CYCLE_STARTED,
         {"phase": "c"},
         state_bearing=True,
-        command_id=emit_command_id,
+        metadata=EmitMetadata(command_id=emit_command_id),
     )
     seq2 = await facade.emit(
         sid,
         EventKind.CYCLE_STARTED,
         {"phase": "ignored"},
         state_bearing=True,
-        command_id=emit_command_id,
+        metadata=EmitMetadata(command_id=emit_command_id),
     )
     assert seq2 == seq1
 

@@ -154,7 +154,7 @@ class SteeringActionHandler(ActionPolicyHandler):
     def build_steering_context(
         self,
         proposal: ActionProposal,
-        risk_level: RiskLevel,
+        _risk_level: RiskLevel,
         policy: PolicySnapshot,
     ) -> SteeringContext:
         from agent_control_plane.types.steering import SteeringContext

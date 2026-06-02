@@ -742,7 +742,7 @@ components:
         - event_id
         - session_id
         - seq
-        - event_kind
+        - kind
         - payload
         - state_bearing
         - created_at
@@ -758,7 +758,7 @@ components:
           format: uuid
         seq:
           type: integer
-        event_kind:
+        kind:
           $ref: '#/components/schemas/EventKind'
         agent_id:
           anyOf:

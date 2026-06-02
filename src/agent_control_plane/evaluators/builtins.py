@@ -38,7 +38,7 @@ class RegexEvaluator:
     def config_schema(self) -> type[BaseModel] | None:
         return RegexEvaluatorConfig
 
-    async def evaluate(self, proposal: ActionProposal, policy: PolicySnapshot) -> EvaluatorResult:
+    async def evaluate(self, proposal: ActionProposal, _policy: PolicySnapshot) -> EvaluatorResult:
         value = str(getattr(proposal, self._config.field, ""))
         matched = any(p.search(value) for p in self._compiled)
         if matched and self._config.deny_on_match:
@@ -70,7 +70,7 @@ class ListEvaluator:
     def config_schema(self) -> type[BaseModel] | None:
         return ListEvaluatorConfig
 
-    async def evaluate(self, proposal: ActionProposal, policy: PolicySnapshot) -> EvaluatorResult:
+    async def evaluate(self, proposal: ActionProposal, _policy: PolicySnapshot) -> EvaluatorResult:
         value = str(getattr(proposal, self._config.field, ""))
         normalized = value.strip().lower()
 
@@ -143,7 +143,7 @@ class RegexResponseEvaluator:
         return RegexResponseEvaluatorConfig
 
     def evaluate_response(
-        self, proposal: ActionProposal, output: Mapping[str, Any], policy: PolicySnapshot
+        self, _proposal: ActionProposal, output: Mapping[str, Any], _policy: PolicySnapshot
     ) -> EvaluatorResult:
         check_patterns = bool(self._compiled)
         check_urls = bool(self._allowed_hosts)
@@ -225,7 +225,7 @@ class EgressEvaluator:
     def config_schema(self) -> type[BaseModel] | None:
         return EgressEvaluatorConfig
 
-    async def evaluate(self, proposal: ActionProposal, policy: PolicySnapshot) -> EvaluatorResult:
+    async def evaluate(self, proposal: ActionProposal, _policy: PolicySnapshot) -> EvaluatorResult:
         host = _extract_host(str(getattr(proposal, self._config.destination_field, "") or ""))
         capability = str(getattr(proposal, self._config.capability_field, "") or "").strip().lower()
 

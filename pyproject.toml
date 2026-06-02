@@ -36,6 +36,7 @@ dev = [
     "greenlet>=3.0",
     "ruff>=0.4",
     "mypy>=1.10",
+    "pylint>=3.0",
     "pre-commit>=3.7",
     "radon>=6.0",
     "fastapi>=0.111",
@@ -66,6 +67,31 @@ max-complexity = 10
 [tool.mypy]
 python_version = "3.11"
 strict = true
+
+[tool.pylint.main]
+source-roots = ["src"]
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint.design]
+max-args = 10
+max-positional-arguments = 10
+max-public-methods = 55
+max-locals = 15
+max-returns = 8
+
+[tool.pylint.messages_control]
+disable = [
+    "C",       # convention — covered by Ruff
+    "E",       # errors — covered by mypy
+    "R0801",   # duplicate-code — too noisy across modules
+    "R0903",   # too-few-public-methods — false positive for protocols/dataclasses
+    "W0212",   # protected-access — intentional in facade/registry patterns
+    "W0511",   # fixme — TODO comments are fine
+    "W0603",   # global-statement — intentional in extension registry pattern
+    "W0718",   # broad-exception-caught — intentional fail-closed patterns throughout
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

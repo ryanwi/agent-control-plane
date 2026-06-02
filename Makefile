@@ -2,6 +2,7 @@ PYTHON ?= uv run python
 PYTEST ?= uv run pytest
 RUFF ?= uv run ruff
 MYPY ?= uv run mypy
+PYLINT ?= uv run pylint
 
 .DEFAULT_GOAL := help
 
@@ -41,6 +42,7 @@ test:
 
 lint:
 	$(RUFF) check src tests examples
+	$(PYLINT) src
 
 format:
 	$(RUFF) format src tests examples

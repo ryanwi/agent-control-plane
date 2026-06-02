@@ -106,7 +106,7 @@ from agent_control_plane.policies import (
 from agent_control_plane.recovery.crash_recovery import CrashRecovery
 from agent_control_plane.recovery.timeout_escalation import TimeoutEscalation
 from agent_control_plane.resilient import ResilientControlPlane
-from agent_control_plane.setup import ControlPlaneSetup
+from agent_control_plane.setup import ControlPlaneSetup, EventConfig, GovernanceConfig, ResilienceConfig
 from agent_control_plane.storage import (
     ApprovalRepository,
     AsyncApprovalRepository,
@@ -233,7 +233,7 @@ from agent_control_plane.types.extensions import (
     register_metadata_schema,
     register_risk_limits_extension_schema,
 )
-from agent_control_plane.types.frames import EventFrame, RequestFrame, ResponseFrame
+from agent_control_plane.types.frames import EmitMetadata, EventFrame, RequestFrame, ResponseFrame
 from agent_control_plane.types.ids import AgentId, IdempotencyKey, ModelId, OrgId, ResourceId, TeamId, UserId
 from agent_control_plane.types.policies import (
     ActionTiers,
@@ -283,6 +283,9 @@ __all__ = [
     "__version__",
     # ── Start here ────────────────────────────────
     "ControlPlaneSetup",
+    "GovernanceConfig",
+    "EventConfig",
+    "ResilienceConfig",
     "ResilientControlPlane",
     "AsyncResilientControlPlane",
     "ResilienceMode",
@@ -373,6 +376,7 @@ __all__ = [
     "DelegationRecord",
     "DictEventMapper",
     # Frames
+    "EmitMetadata",
     "EventFrame",
     "EventKind",
     "EvaluationDecision",
