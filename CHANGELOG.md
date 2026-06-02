@@ -10,6 +10,10 @@
   - **Enforcement (fail-closed):** `McpGateway.handle_tool_call` blocks a revoked agent before tool resolution (emits `TOOL_CALL_BLOCKED` with `reason=agent_revoked`, raises `PolicyDeniedError`), and `ProposalRouter.route()` short-circuits to a `BLOCKED` decision for a revoked agent regardless of its capabilities.
   - **Facade exposure:** `revoke` / `reinstate` / `is_revoked` are surfaced on a new `agents` gateway on both `ControlPlaneFacade` (sync) and `AsyncControlPlaneFacade` (async), plus `revoke_agent` / `reinstate_agent` / `is_agent_revoked` directly on `SyncControlPlane`. Consumers no longer need to reach into the engine to revoke. `AgentRegistry.is_revoked` was added as the async read-side gate.
 
+### Fixed
+
+- **Example API correctness** — 14 examples had three categories of stale calls: missing `await` on `ProposalRouter.route()` (async method called without await); phantom sub-object accesses on raw engine/repo classes (`gate.approvals.create_ticket`, `budget.budget.check_budget`, `guard.lifecycle.acquire_cycle`, `uow.session_repo.sessions.get_session`, etc. — these methods are direct, not nested); and flat attribution kwargs (`agent_id`, `correlation_id`, `routing_decision`, `routing_reason`) passed directly to `EventStore.append()` instead of wrapped in `EventMetadata`. The `quickstart.py` example now runs end-to-end without error.
+
 ## [0.19.1] - 2026-06-01
 
 ### Changed
