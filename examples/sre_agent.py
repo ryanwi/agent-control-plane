@@ -99,11 +99,11 @@ async def main():
             # Execution
             if route.tier == ActionTier.AUTO_APPROVE:
                 logger.info("  Result: AUTO-APPROVED")
-                await guard.acquire_cycle(cs.id, cycle_id=uuid4())
+                await guard.lifecycle.acquire_cycle(cs.id, cycle_id=uuid4())
                 try:
                     logger.info(f"  Status: SUCCESS (Remediated {res})")
                 finally:
-                    await guard.release_cycle(cs.id)
+                    await guard.lifecycle.release_cycle(cs.id)
 
         await uow.commit()
     logger.info("\nSRE Example Completed.")

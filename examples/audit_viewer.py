@@ -30,7 +30,7 @@ async def view_audit(session_id: UUID):
         repo = AsyncSqlAlchemyEventRepo(conn)
         store = EventStore(repo)
 
-        events = await store.replay(session_id)
+        events = await store.sessions.replay(session_id)
 
         print(f"\n{'=' * 80}")
         print(f"AUDIT TRAIL FOR SESSION: {session_id}")

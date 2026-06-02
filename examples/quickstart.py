@@ -118,7 +118,7 @@ async def run_control_flow(uow: AsyncSqlAlchemyUnitOfWork) -> None:
     uow._session.add(action)
     await uow._session.flush()
 
-    ticket = await approval_gate.create_ticket(session.id, action.id)
+    ticket = await approval_gate.approvals.create_ticket(session.id, action.id)
     await approval_gate.approve(
         ticket.id,
         decision_type=ApprovalDecisionType.ALLOW_FOR_SESSION,
@@ -135,12 +135,12 @@ async def run_control_flow(uow: AsyncSqlAlchemyUnitOfWork) -> None:
         print("No matching session scope approval available.")
         return
 
-    if not await budget.check_budget(session.id, cost=proposal.weight, action_count=1):
+    if not await budget.budget.check_budget(session.id, cost=proposal.weight, action_count=1):
         print("Session budget exceeded.")
         return
     await budget.increment(session.id, cost=proposal.weight, action_count=1)
 
-    await guard.acquire_cycle(session.id, cycle_id=uuid4())
+    await guard.lifecycle.acquire_cycle(session.id, cycle_id=uuid4())
     try:
         await event_store.append(
             session_id=session.id,
@@ -156,7 +156,7 @@ async def run_control_flow(uow: AsyncSqlAlchemyUnitOfWork) -> None:
         await uow._session.flush()
         print(f"Executed proposal {action.id} under session {session.id}")
     finally:
-        await guard.release_cycle(session.id)
+        await guard.lifecycle.release_cycle(session.id)
 
     await uow.commit()
     print("Buffered telemetry events:", event_store.buffer_size)

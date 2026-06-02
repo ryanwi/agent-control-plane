@@ -64,7 +64,7 @@ def main() -> None:
     cp = ControlPlaneFacade.from_database_url(f"sqlite:///{db_path}", mapper=mapper)
     cp.setup()
 
-    session_id = cp.open_session(
+    session_id = cp.sessions.open_session(
         "openai-agents-sdk-demo",
         max_cost=Decimal("15.00"),
         max_action_count=4,
@@ -95,9 +95,9 @@ def main() -> None:
             weight=Decimal("0.50"),
             score=Decimal("0.70"),
         )
-        proposal = cp.create_proposal(proposal, command_id=f"openai-cycle-{idx}-proposal")
+        proposal = cp.approvals.create_proposal(proposal, command_id=f"openai-cycle-{idx}-proposal")
 
-        ticket = cp.create_ticket(
+        ticket = cp.approvals.create_ticket(
             session_id,
             proposal.id,
             timeout_at=datetime.now(UTC) + timedelta(minutes=5),
@@ -118,13 +118,13 @@ def main() -> None:
         )
         print(f"{case.case_id}: {outcome}")
 
-    cp.close_session(
+    cp.sessions.close_session(
         session_id,
         payload={"summary": "openai agents sdk integration demo completed"},
         command_id="openai-demo-close-session",
     )
 
-    print("events_recorded=", len(cp.replay(session_id)))
+    print("events_recorded=", len(cp.sessions.replay(session_id)))
     print("db_path=", db_path)
 
 

@@ -40,21 +40,21 @@ def apply_governance_decision(
     command_prefix: str,
 ) -> str:
     if decision is GovernanceDecision.APPROVE:
-        cp.approve_ticket(
+        cp.approvals.approve_ticket(
             ticket_id,
             decided_by=decided_by,
             reason=reason,
             decision_type=ApprovalDecisionType.ALLOW_ONCE,
             command_id=f"{command_prefix}-approve",
         )
-        cp.emit(
+        cp.sessions.emit(
             session_id,
             EventKind.APPROVAL_GRANTED,
             {"case_id": proposal.resource_id, "decision": decision.value, "provider": provider},
             state_bearing=True,
             command_id=f"{command_prefix}-emit-granted",
         )
-        cp.emit(
+        cp.sessions.emit(
             session_id,
             EventKind.EXECUTION_COMPLETED,
             {"case_id": proposal.resource_id, "result": "status sent"},
@@ -64,12 +64,12 @@ def apply_governance_decision(
         )
         return "APPROVED"
 
-    cp.deny_ticket(
+    cp.approvals.deny_ticket(
         ticket_id,
         reason=reason,
         command_id=f"{command_prefix}-deny",
     )
-    cp.emit(
+    cp.sessions.emit(
         session_id,
         EventKind.APPROVAL_DENIED,
         {"case_id": proposal.resource_id, "decision": decision.value, "provider": provider},

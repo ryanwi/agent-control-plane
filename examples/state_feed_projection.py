@@ -40,17 +40,17 @@ async def sync_projection_once(
     limit: int = 100,
 ) -> int:
     """Consume new state-bearing events and project canonical read models."""
-    feed = await facade.get_state_change_feed(cursor=store.last_cursor, limit=limit)
+    feed = await facade.observer.get_state_change_feed(cursor=store.last_cursor, limit=limit)
     if not feed.items:
         return 0
 
     for item in feed.items:
         session_id = item.event.session_id
-        ticket_page = await facade.list_tickets(session_id=session_id, limit=200, offset=0)
+        ticket_page = await facade.approvals.list_tickets(session_id=session_id, limit=200, offset=0)
         for ticket in ticket_page.items:
             store.tickets[ticket.id] = ticket.status
 
-        proposal_page = await facade.list_proposals(session_id=session_id, limit=200, offset=0)
+        proposal_page = await facade.approvals.list_proposals(session_id=session_id, limit=200, offset=0)
         for proposal in proposal_page.items:
             store.proposals[proposal.id] = proposal.status
 
@@ -65,8 +65,8 @@ async def main() -> None:
 
     facade = AsyncControlPlaneFacade.from_database_url(f"sqlite+aiosqlite:///{db_path}")
 
-    session_id = await facade.open_session("projection-demo")
-    await facade.activate_session(session_id)
+    session_id = await facade.sessions.open_session("projection-demo")
+    await facade.lifecycle.activate_session(session_id)
 
     async with facade.session_scope() as db:
         proposal_model = ModelRegistry.get("ActionProposal")
@@ -89,20 +89,20 @@ async def main() -> None:
         await db.commit()
         proposal_id = proposal.id
 
-    ticket = await facade.create_ticket(
+    ticket = await facade.approvals.create_ticket(
         session_id,
         proposal_id,
         datetime.now(UTC) + timedelta(minutes=15),
     )
-    await facade.emit(session_id, EventKind.CYCLE_STARTED, {"phase": "pre-approval"}, state_bearing=True)
-    await facade.approve_ticket(ticket.id, reason="operator approved")
-    await facade.emit(session_id, EventKind.CYCLE_COMPLETED, {"phase": "post-approval"}, state_bearing=True)
+    await facade.sessions.emit(session_id, EventKind.CYCLE_STARTED, {"phase": "pre-approval"}, state_bearing=True)
+    await facade.approvals.approve_ticket(ticket.id, reason="operator approved")
+    await facade.sessions.emit(session_id, EventKind.CYCLE_COMPLETED, {"phase": "post-approval"}, state_bearing=True)
 
     projection = InMemoryProjectionStore()
     processed = await sync_projection_once(facade, projection)
 
-    canonical_ticket = await facade.get_ticket(ticket.id)
-    canonical_proposal = await facade.get_proposal(proposal_id)
+    canonical_ticket = await facade.approvals.get_ticket(ticket.id)
+    canonical_proposal = await facade.approvals.get_proposal(proposal_id)
 
     if canonical_ticket is None or canonical_proposal is None:
         raise RuntimeError("Canonical state missing")

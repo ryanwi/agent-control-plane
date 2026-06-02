@@ -35,22 +35,22 @@ def main() -> None:
         resilience=ResilienceConfig(mode=ResilienceMode.MIXED),
     ).build()
 
-    sid = cp.open_session("demo", max_cost=Decimal("500"), max_action_count=20)
+    sid = cp.sessions.open_session("demo", max_cost=Decimal("500"), max_action_count=20)
     print(f"Session: {sid}")
 
     # Telemetry — fail-open in MIXED mode
-    cp.emit(sid, EventKind.CYCLE_STARTED, {"cycle": 1})
-    cp.emit_app(sid, "job_started", {"job_id": "demo-1"})
+    cp.sessions.emit(sid, EventKind.CYCLE_STARTED, {"cycle": 1})
+    cp.sessions.emit_app(sid, "job_started", {"job_id": "demo-1"})
 
     # Budget check — fail-open (returns True on error)
-    ok = cp.check_budget(sid, cost=Decimal("25"))
+    ok = cp.budget.check_budget(sid, cost=Decimal("25"))
     print(f"Budget ok: {ok}")
 
     # Budget increment — fail-closed (state-bearing)
-    cp.increment_budget(sid, cost=Decimal("25"))
+    cp.budget.increment_budget(sid, cost=Decimal("25"))
 
-    cp.close_session(sid)
-    print(f"Events: {len(cp.replay(sid))}")
+    cp.sessions.close_session(sid)
+    print(f"Events: {len(cp.sessions.replay(sid))}")
     cp.close()
     Path("./resilient_demo.db").unlink(missing_ok=True)
 

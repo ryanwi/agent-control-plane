@@ -133,7 +133,7 @@ class LongRunningSupportAgent:
         self.cp.setup()
 
     def _open_session(self, *, horizon: Horizon, sequence: int, profile: HorizonProfile) -> UUID:
-        return self.cp.open_session(
+        return self.cp.sessions.open_session(
             f"continuous-{horizon.value}-session-{sequence}",
             max_cost=profile.max_cost_per_session,
             max_action_count=profile.max_actions_per_session,
@@ -141,7 +141,7 @@ class LongRunningSupportAgent:
         )
 
     def _close_session(self, *, horizon: Horizon, sequence: int, session_id: UUID, cycles_completed: int) -> None:
-        self.cp.close_session(
+        self.cp.sessions.close_session(
             session_id,
             payload={"summary": "session window complete", "cycles_completed": cycles_completed},
             command_id=f"{horizon.value}-session-{sequence}-close",
@@ -203,12 +203,12 @@ class LongRunningSupportAgent:
             weight=Decimal("0.40"),
             score=Decimal("0.70"),
         )
-        proposal = self.cp.create_proposal(
+        proposal = self.cp.approvals.create_proposal(
             proposal,
             command_id=f"{horizon.value}-session-{stats.session_sequence}-cycle-{cycle_no}-proposal",
         )
 
-        ticket = self.cp.create_ticket(
+        ticket = self.cp.approvals.create_ticket(
             session_id,
             proposal.id,
             timeout_at=datetime.now(UTC) + timedelta(minutes=15),
@@ -216,10 +216,10 @@ class LongRunningSupportAgent:
         )
 
         if decision is GovernanceDecision.APPROVE:
-            has_budget = self.cp.check_budget(session_id, cost=proposal.weight, action_count=1)
+            has_budget = self.cp.budget.check_budget(session_id, cost=proposal.weight, action_count=1)
             if not has_budget:
                 decision = GovernanceDecision.DENY
-                self.cp.emit(
+                self.cp.sessions.emit(
                     session_id,
                     EventKind.BUDGET_EXHAUSTED,
                     {"cycle": cycle_no, "case_id": case.case_id},
@@ -243,12 +243,12 @@ class LongRunningSupportAgent:
 
         if status == "APPROVED":
             stats.approved += 1
-            self.cp.increment_budget(session_id, cost=proposal.weight, action_count=1)
+            self.cp.budget.increment_budget(session_id, cost=proposal.weight, action_count=1)
         else:
             stats.denied += 1
 
         if cycle_no % profile.checkpoint_every_cycles == 0:
-            checkpoint = self.cp.create_checkpoint(
+            checkpoint = self.cp.agentic.create_checkpoint(
                 session_id,
                 label=f"{horizon.value}-cycle-{cycle_no}",
                 metadata={"cycle": cycle_no, "session_sequence": stats.session_sequence},
@@ -267,7 +267,7 @@ class LongRunningSupportAgent:
         granted_events = 0
         denied_events = 0
         for sid in session_ids:
-            for event in self.cp.replay(sid, after_seq=0, limit=10_000):
+            for event in self.cp.sessions.replay(sid, after_seq=0, limit=10_000):
                 if event.event_kind == EventKind.APPROVAL_GRANTED:
                     granted_events += 1
                 elif event.event_kind == EventKind.APPROVAL_DENIED:
@@ -324,7 +324,7 @@ class LongRunningSupportAgent:
             )
 
         granted_events, denied_events = self._approval_event_counts(session_ids)
-        scorecard = self.cp.get_operational_scorecard()
+        scorecard = self.cp.observer.get_operational_scorecard()
         print(
             "scorecard="
             f"events={scorecard.total_events} "

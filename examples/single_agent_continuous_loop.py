@@ -26,7 +26,7 @@ def main() -> None:
     )
     cp.setup()
 
-    session_id = cp.open_session(
+    session_id = cp.sessions.open_session(
         "single-agent-continuous-demo",
         max_cost=Decimal("10.00"),
         max_action_count=4,
@@ -45,9 +45,9 @@ def main() -> None:
             weight=Decimal("0.60"),
             score=Decimal("0.75"),
         )
-        proposal = cp.create_proposal(proposal, command_id=f"single-cycle-{cycle_no}-proposal")
+        proposal = cp.approvals.create_proposal(proposal, command_id=f"single-cycle-{cycle_no}-proposal")
 
-        ticket = cp.create_ticket(
+        ticket = cp.approvals.create_ticket(
             session_id,
             proposal.id,
             timeout_at=datetime.now(UTC) + timedelta(minutes=5),
@@ -55,21 +55,21 @@ def main() -> None:
         )
 
         if should_approve:
-            cp.approve_ticket(
+            cp.approvals.approve_ticket(
                 ticket.id,
                 decided_by="single-agent",
                 reason="Cycle configured to approve",
                 decision_type=ApprovalDecisionType.ALLOW_ONCE,
                 command_id=f"single-cycle-{cycle_no}-approve",
             )
-            cp.emit(
+            cp.sessions.emit(
                 session_id,
                 EventKind.APPROVAL_GRANTED,
                 {"case_id": case_id, "cycle": cycle_no},
                 state_bearing=True,
                 command_id=f"single-cycle-{cycle_no}-emit-granted",
             )
-            cp.emit(
+            cp.sessions.emit(
                 session_id,
                 EventKind.EXECUTION_COMPLETED,
                 {"case_id": case_id, "cycle": cycle_no, "result": "status sent"},
@@ -79,12 +79,12 @@ def main() -> None:
             )
             print(f"cycle={cycle_no} case={case_id} approved")
         else:
-            cp.deny_ticket(
+            cp.approvals.deny_ticket(
                 ticket.id,
                 reason="Cycle configured to deny",
                 command_id=f"single-cycle-{cycle_no}-deny",
             )
-            cp.emit(
+            cp.sessions.emit(
                 session_id,
                 EventKind.APPROVAL_DENIED,
                 {"case_id": case_id, "cycle": cycle_no},
@@ -96,13 +96,13 @@ def main() -> None:
 
         sleep(0.2)
 
-    cp.close_session(
+    cp.sessions.close_session(
         session_id,
         payload={"summary": "single-agent continuous demo completed"},
         command_id="single-close-session",
     )
 
-    print("events_recorded=", len(cp.replay(session_id)))
+    print("events_recorded=", len(cp.sessions.replay(session_id)))
     print("db_path=", db_path)
 
 

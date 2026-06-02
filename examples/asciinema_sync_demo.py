@@ -30,7 +30,7 @@ def run_demo(db_path: Path) -> None:
     facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_path}", mapper=mapper)
     facade.setup()
 
-    session = facade.open_session(
+    session = facade.sessions.open_session(
         "asciinema-sync-demo",
         max_cost=Decimal("25.00"),
         max_action_count=5,
@@ -48,10 +48,10 @@ def run_demo(db_path: Path) -> None:
         weight=Decimal("1.25"),
         score=Decimal("0.91"),
     )
-    created = facade.create_proposal(proposal, command_id="demo-create-proposal")
+    created = facade.approvals.create_proposal(proposal, command_id="demo-create-proposal")
     print(f"proposal_id={created.id}")
 
-    ticket = facade.create_ticket(
+    ticket = facade.approvals.create_ticket(
         session,
         created.id,
         timeout_at=datetime.now(UTC) + timedelta(minutes=10),
@@ -59,7 +59,7 @@ def run_demo(db_path: Path) -> None:
     )
     print(f"ticket_id={ticket.id}")
 
-    approved = facade.approve_ticket(
+    approved = facade.approvals.approve_ticket(
         ticket.id,
         decided_by="ops-demo",
         reason="Approved in terminal demo",
@@ -68,11 +68,11 @@ def run_demo(db_path: Path) -> None:
     )
     print(f"ticket_status={approved.status}")
 
-    budget_ok = facade.check_budget(session, cost=Decimal("1.25"), action_count=1)
+    budget_ok = facade.budget.check_budget(session, cost=Decimal("1.25"), action_count=1)
     print(f"budget_check={budget_ok}")
-    facade.increment_budget(session, cost=Decimal("1.25"), action_count=1)
+    facade.budget.increment_budget(session, cost=Decimal("1.25"), action_count=1)
 
-    app_seq = facade.emit_app(
+    app_seq = facade.sessions.emit_app(
         session,
         "job_started",
         {"job_id": "demo-1", "note": "mapped app event"},
@@ -80,7 +80,7 @@ def run_demo(db_path: Path) -> None:
     )
     print(f"app_event_seq={app_seq}")
 
-    emit_seq = facade.emit(
+    emit_seq = facade.sessions.emit(
         session,
         EventKind.EXECUTION_COMPLETED,
         {"proposal_id": str(created.id), "result": "ok"},
@@ -90,14 +90,14 @@ def run_demo(db_path: Path) -> None:
     )
     print(f"execution_event_seq={emit_seq}")
 
-    closed = facade.close_session(
+    closed = facade.sessions.close_session(
         session,
         payload={"result": "ok"},
         command_id="demo-close-session",
     )
     print(f"final_status={closed.session.status}")
 
-    events = facade.replay(session)
+    events = facade.sessions.replay(session)
     print(f"event_count={len(events)}")
     facade.close()
 

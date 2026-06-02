@@ -2,8 +2,26 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
-from agent_control_plane.async_facade import AsyncControlPlaneFacade
-from agent_control_plane.async_resilient import AsyncResilientControlPlane
+from agent_control_plane.async_facade import (
+    AsyncAgenticGateway,
+    AsyncApprovalGateway,
+    AsyncBudgetGateway,
+    AsyncControlPlaneFacade,
+    AsyncControlPlaneObserver,
+    AsyncLifecycleGateway,
+    AsyncMaintenanceGateway,
+    AsyncSessionGateway,
+)
+from agent_control_plane.async_resilient import (
+    AsyncResilientAgenticGateway,
+    AsyncResilientApprovalGateway,
+    AsyncResilientBudgetGateway,
+    AsyncResilientControlPlane,
+    AsyncResilientLifecycleGateway,
+    AsyncResilientMaintenanceGateway,
+    AsyncResilientObserverGateway,
+    AsyncResilientSessionGateway,
+)
 from agent_control_plane.benchmark import (
     FitnessEvaluator,
     ScenarioRunner,
@@ -103,7 +121,15 @@ from agent_control_plane.policies import (
 )
 from agent_control_plane.recovery.crash_recovery import CrashRecovery
 from agent_control_plane.recovery.timeout_escalation import TimeoutEscalation
-from agent_control_plane.resilient import ResilientControlPlane
+from agent_control_plane.resilient import (
+    ResiliencePolicy,
+    ResilientAgenticGateway,
+    ResilientApprovalGateway,
+    ResilientBudgetGateway,
+    ResilientControlPlane,
+    ResilientObserverGateway,
+    ResilientSessionGateway,
+)
 from agent_control_plane.setup import ControlPlaneSetup, EventConfig, GovernanceConfig, ResilienceConfig
 from agent_control_plane.storage import (
     ApprovalRepository,
@@ -135,11 +161,16 @@ from agent_control_plane.storage import (
 )
 from agent_control_plane.storage.protocols import AsyncTokenBudgetRepository, TokenBudgetRepository
 from agent_control_plane.sync import (
+    AgenticGateway,
     AppEventMapper,
+    ApprovalGateway,
+    BudgetGateway,
     ControlPlaneFacade,
+    ControlPlaneObserver,
     DictEventMapper,
     KillResult,
     MappedEvent,
+    SessionGateway,
     SessionLifecycleResult,
     SyncControlPlane,
     UnknownAppEventError,
@@ -286,8 +317,35 @@ __all__ = [
     "ResilienceConfig",
     "ResilientControlPlane",
     "AsyncResilientControlPlane",
+    "ResiliencePolicy",
     "ResilienceMode",
     "OperationCategory",
+    # ── Sync gateway objects ──────────────────────
+    "SessionGateway",
+    "ApprovalGateway",
+    "BudgetGateway",
+    "AgenticGateway",
+    "ControlPlaneObserver",
+    "ResilientSessionGateway",
+    "ResilientApprovalGateway",
+    "ResilientBudgetGateway",
+    "ResilientAgenticGateway",
+    "ResilientObserverGateway",
+    # ── Async gateway objects ─────────────────────
+    "AsyncSessionGateway",
+    "AsyncApprovalGateway",
+    "AsyncBudgetGateway",
+    "AsyncAgenticGateway",
+    "AsyncControlPlaneObserver",
+    "AsyncLifecycleGateway",
+    "AsyncMaintenanceGateway",
+    "AsyncResilientSessionGateway",
+    "AsyncResilientApprovalGateway",
+    "AsyncResilientBudgetGateway",
+    "AsyncResilientAgenticGateway",
+    "AsyncResilientObserverGateway",
+    "AsyncResilientLifecycleGateway",
+    "AsyncResilientMaintenanceGateway",
     # ── Core facades (if you need more control) ───
     "ControlPlaneFacade",
     "AsyncControlPlaneFacade",

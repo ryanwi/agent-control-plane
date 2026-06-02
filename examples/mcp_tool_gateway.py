@@ -50,7 +50,7 @@ def main() -> None:
     )
 
     print("Result:", result.model_dump())
-    print("Remaining budget:", cp.get_remaining_budget(sid))
+    print("Remaining budget:", cp.budget.get_remaining_budget(sid))
     print("Events recorded:", len(cp.replay_events(sid)))
     cp.close()
 

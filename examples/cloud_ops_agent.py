@@ -169,7 +169,7 @@ class CloudOpsAgent:
             logger.info(
                 f"Action '{action_name}' (Tier: {route.tier}, Risk: {route.risk_level}) requires manual approval."
             )
-            ticket = await self.approval_gate.create_ticket(self.session.id, action.id)
+            ticket = await self.approval_gate.approvals.create_ticket(self.session.id, action.id)
             is_approved = await self.simulate_human_review(ticket.id, action)
 
         if is_approved:
@@ -193,12 +193,12 @@ class CloudOpsAgent:
     async def execute(self, action: ActionProposal):
         """Final execution of the action with budget and cycle checks."""
         # 5. Check Budget
-        if not await self.budget.check_budget(self.session.id, cost=action.weight):
+        if not await self.budget.budget.check_budget(self.session.id, cost=action.weight):
             logger.error("BUDGET EXHAUSTED: Cannot perform more actions.")
             return
 
         # 6. Cycle & Execution
-        await self.guard.acquire_cycle(self.session.id, cycle_id=uuid4())
+        await self.guard.lifecycle.acquire_cycle(self.session.id, cycle_id=uuid4())
         try:
             await self.budget.increment(self.session.id, cost=action.weight)
 
@@ -215,7 +215,7 @@ class CloudOpsAgent:
             await self.uow._session.flush()
             logger.info(f"SUCCESS: Executed {action.decision} on {action.resource_id}")
         finally:
-            await self.guard.release_cycle(self.session.id)
+            await self.guard.lifecycle.release_cycle(self.session.id)
 
 
 async def main():

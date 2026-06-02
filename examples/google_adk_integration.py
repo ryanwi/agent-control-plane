@@ -69,7 +69,7 @@ def main() -> None:
     cp = ControlPlaneFacade.from_database_url(f"sqlite:///{db_path}", mapper=mapper)
     cp.setup()
 
-    session_id = cp.open_session(
+    session_id = cp.sessions.open_session(
         "google-adk-integration-demo",
         max_cost=Decimal("15.00"),
         max_action_count=4,
@@ -96,9 +96,9 @@ def main() -> None:
             weight=Decimal("0.50"),
             score=Decimal("0.70"),
         )
-        proposal = cp.create_proposal(proposal, command_id=f"adk-cycle-{idx}-proposal")
+        proposal = cp.approvals.create_proposal(proposal, command_id=f"adk-cycle-{idx}-proposal")
 
-        ticket = cp.create_ticket(
+        ticket = cp.approvals.create_ticket(
             session_id,
             proposal.id,
             timeout_at=datetime.now(UTC) + timedelta(minutes=5),
@@ -106,21 +106,21 @@ def main() -> None:
         )
 
         if should_approve:
-            cp.approve_ticket(
+            cp.approvals.approve_ticket(
                 ticket.id,
                 decided_by="google-adk-pipeline",
                 reason=f"Pipeline returned {decision}",
                 decision_type=ApprovalDecisionType.ALLOW_ONCE,
                 command_id=f"adk-cycle-{idx}-approve",
             )
-            cp.emit(
+            cp.sessions.emit(
                 session_id,
                 EventKind.APPROVAL_GRANTED,
                 {"case_id": case.case_id, "decision": decision, "provider": "google_adk"},
                 state_bearing=True,
                 command_id=f"adk-cycle-{idx}-emit-granted",
             )
-            cp.emit(
+            cp.sessions.emit(
                 session_id,
                 EventKind.EXECUTION_COMPLETED,
                 {"case_id": case.case_id, "result": "status sent"},
@@ -130,12 +130,12 @@ def main() -> None:
             )
             print(f"{case.case_id}: APPROVED")
         else:
-            cp.deny_ticket(
+            cp.approvals.deny_ticket(
                 ticket.id,
                 reason=f"Pipeline returned {decision}",
                 command_id=f"adk-cycle-{idx}-deny",
             )
-            cp.emit(
+            cp.sessions.emit(
                 session_id,
                 EventKind.APPROVAL_DENIED,
                 {"case_id": case.case_id, "decision": decision, "provider": "google_adk"},
@@ -145,13 +145,13 @@ def main() -> None:
             )
             print(f"{case.case_id}: DENIED")
 
-    cp.close_session(
+    cp.sessions.close_session(
         session_id,
         payload={"summary": "google adk integration demo completed"},
         command_id="adk-demo-close-session",
     )
 
-    print("events_recorded=", len(cp.replay(session_id)))
+    print("events_recorded=", len(cp.sessions.replay(session_id)))
     print("db_path=", db_path)
 
 

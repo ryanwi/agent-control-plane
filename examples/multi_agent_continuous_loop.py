@@ -46,7 +46,7 @@ def main() -> None:
     )
     cp.setup()
 
-    session_id = cp.open_session(
+    session_id = cp.sessions.open_session(
         "multi-agent-continuous-demo",
         max_cost=Decimal("10.00"),
         max_action_count=4,
@@ -59,9 +59,9 @@ def main() -> None:
 
     for cycle_no, case_id in enumerate(cycle_plan, start=1):
         proposal = planner.propose(session_id=session_id, case_id=case_id, cycle_no=cycle_no)
-        proposal = cp.create_proposal(proposal, command_id=f"multi-cycle-{cycle_no}-proposal")
+        proposal = cp.approvals.create_proposal(proposal, command_id=f"multi-cycle-{cycle_no}-proposal")
 
-        ticket = cp.create_ticket(
+        ticket = cp.approvals.create_ticket(
             session_id,
             proposal.id,
             timeout_at=datetime.now(UTC) + timedelta(minutes=5),
@@ -70,21 +70,21 @@ def main() -> None:
 
         approved = reviewer.review(case_id=case_id, cycle_no=cycle_no)
         if approved:
-            cp.approve_ticket(
+            cp.approvals.approve_ticket(
                 ticket.id,
                 decided_by="reviewer-agent",
                 reason="Reviewer approved",
                 decision_type=ApprovalDecisionType.ALLOW_ONCE,
                 command_id=f"multi-cycle-{cycle_no}-approve",
             )
-            cp.emit(
+            cp.sessions.emit(
                 session_id,
                 EventKind.APPROVAL_GRANTED,
                 {"case_id": case_id, "cycle": cycle_no, "reviewer": "reviewer-agent"},
                 state_bearing=True,
                 command_id=f"multi-cycle-{cycle_no}-emit-granted",
             )
-            cp.emit(
+            cp.sessions.emit(
                 session_id,
                 EventKind.EXECUTION_COMPLETED,
                 {"case_id": case_id, "cycle": cycle_no, "result": "status sent"},
@@ -94,12 +94,12 @@ def main() -> None:
             )
             print(f"cycle={cycle_no} case={case_id} approved")
         else:
-            cp.deny_ticket(
+            cp.approvals.deny_ticket(
                 ticket.id,
                 reason="Reviewer denied",
                 command_id=f"multi-cycle-{cycle_no}-deny",
             )
-            cp.emit(
+            cp.sessions.emit(
                 session_id,
                 EventKind.APPROVAL_DENIED,
                 {"case_id": case_id, "cycle": cycle_no, "reviewer": "reviewer-agent"},
@@ -111,13 +111,13 @@ def main() -> None:
 
         sleep(0.2)
 
-    cp.close_session(
+    cp.sessions.close_session(
         session_id,
         payload={"summary": "multi-agent continuous demo completed"},
         command_id="multi-close-session",
     )
 
-    print("events_recorded=", len(cp.replay(session_id)))
+    print("events_recorded=", len(cp.sessions.replay(session_id)))
     print("db_path=", db_path)
 
 

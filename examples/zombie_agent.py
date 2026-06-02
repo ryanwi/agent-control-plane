@@ -49,7 +49,7 @@ async def simulate_crash(session_maker):
 
         # Acquire cycle but never release it
         cycle_id = uuid4()
-        await guard.acquire_cycle(cs.id, cycle_id)
+        await guard.lifecycle.acquire_cycle(cs.id, cycle_id)
         await uow.commit()
 
         logger.info(f"[CRASH] Agent acquired cycle {cycle_id} for session {cs.id} and is now dying...")
@@ -71,7 +71,7 @@ async def recover_agent(session_maker, crashed_session_id):
         logger.info(f"[RECOVERY] Recovery summary: {recovery_summary}")
 
         # Verify the session is no longer locked
-        cs = await uow.session_repo.get_session(crashed_session_id)
+        cs = await uow.session_repo.sessions.get_session(crashed_session_id)
         if cs and cs.active_cycle_id is None:
             logger.info(f"  Status: SUCCESS (Session {cs.id} lock was safely cleared).")
         else:

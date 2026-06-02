@@ -127,7 +127,7 @@ async def demo_event_emission() -> None:
             await acc.assess(sid, _proposal(sid, "list_customers"), RiskLevel.LOW)
 
         await uow.commit()
-        events = await uow.events.replay(sid)
+        events = await uow.events.sessions.replay(sid)
         escalation_events = [e for e in events if e.event_kind == EventKind.SESSION_RISK_ESCALATED]
         print(f"  SESSION_RISK_ESCALATED events emitted: {len(escalation_events)}")
         for e in escalation_events:

@@ -43,11 +43,13 @@ class SupportAgent:
             weight=Decimal("0.75"),
             score=Decimal("0.88"),
         )
-        proposal = self.control_plane.create_proposal(proposal, command_id=f"story-{cycle_tag}-create-proposal")
+        proposal = self.control_plane.approvals.create_proposal(
+            proposal, command_id=f"story-{cycle_tag}-create-proposal"
+        )
         print(f"proposal_id={proposal.id}")
         print(f"approval_request=allow decision={proposal.decision} on {proposal.resource_type}:{proposal.resource_id}")
 
-        approval_ticket = self.control_plane.create_ticket(
+        approval_ticket = self.control_plane.approvals.create_ticket(
             session_id,
             proposal.id,
             timeout_at=datetime.now(UTC) + timedelta(minutes=5),
@@ -56,12 +58,12 @@ class SupportAgent:
         print(f"approval_ticket_id={approval_ticket.id}")
 
         if not should_approve:
-            denied_ticket = self.control_plane.deny_ticket(
+            denied_ticket = self.control_plane.approvals.deny_ticket(
                 approval_ticket.id,
                 reason="Denied in demo cycle",
                 command_id=f"story-{cycle_tag}-deny-ticket",
             )
-            self.control_plane.emit(
+            self.control_plane.sessions.emit(
                 session_id,
                 EventKind.APPROVAL_DENIED,
                 {"proposal_id": str(proposal.id), "resource_id": proposal.resource_id, "cycle": cycle_no},
@@ -75,14 +77,14 @@ class SupportAgent:
             )
             return
 
-        approved_ticket = self.control_plane.approve_ticket(
+        approved_ticket = self.control_plane.approvals.approve_ticket(
             approval_ticket.id,
             decided_by="operator-demo",
             reason="Approved for demo",
             decision_type=ApprovalDecisionType.ALLOW_ONCE,
             command_id=f"story-{cycle_tag}-approve-ticket",
         )
-        self.control_plane.emit(
+        self.control_plane.sessions.emit(
             session_id,
             EventKind.APPROVAL_GRANTED,
             {"proposal_id": str(proposal.id), "resource_id": proposal.resource_id, "cycle": cycle_no},
@@ -93,16 +95,16 @@ class SupportAgent:
         print(f"approval_status={approved_ticket.status}")
         print(f"approval_granted_for=decision={proposal.decision} on {proposal.resource_type}:{proposal.resource_id}")
 
-        if self.control_plane.check_budget(session_id, cost=proposal.weight, action_count=1):
-            self.control_plane.increment_budget(session_id, cost=proposal.weight, action_count=1)
+        if self.control_plane.budget.check_budget(session_id, cost=proposal.weight, action_count=1):
+            self.control_plane.budget.increment_budget(session_id, cost=proposal.weight, action_count=1)
 
-        self.control_plane.emit_app(
+        self.control_plane.sessions.emit_app(
             session_id,
             "agent_started",
             {"agent": "support", "proposal_id": str(proposal.id), "cycle": cycle_no},
             state_bearing=True,
         )
-        self.control_plane.emit(
+        self.control_plane.sessions.emit(
             session_id,
             EventKind.EXECUTION_COMPLETED,
             {"proposal_id": str(proposal.id), "status": "ok", "cycle": cycle_no},
@@ -113,7 +115,7 @@ class SupportAgent:
         print("execution_status=completed")
 
     def run_forever(self, *, max_cycles: int = 2, loop_sleep_seconds: float = 0.3) -> None:
-        session_id = self.control_plane.open_session(
+        session_id = self.control_plane.sessions.open_session(
             "support-agent-demo",
             max_cost=Decimal("20.00"),
             max_action_count=3,
@@ -138,7 +140,7 @@ class SupportAgent:
             )
             sleep(loop_sleep_seconds)
 
-        result = self.control_plane.close_session(
+        result = self.control_plane.sessions.close_session(
             session_id,
             payload={"summary": "continuous loop demo completed", "cycles": max_cycles},
             command_id="story-close-session",

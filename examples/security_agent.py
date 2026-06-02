@@ -169,7 +169,7 @@ class SecurityAgent:
         else:
             # Requires approval ticket
             logger.info(f"Action {action_name} requires approval. Creating ticket...")
-            ticket = await self.approval_gate.create_ticket(self.session.id, action.id)
+            ticket = await self.approval_gate.approvals.create_ticket(self.session.id, action.id)
             # In a real scenario, this would wait for a human. Here we simulate an operator decision.
             await self.simulate_operator_decision(ticket.id, action)
 
@@ -204,12 +204,12 @@ class SecurityAgent:
     async def execute_action(self, action: ActionProposal, route):
         """Final check and execution of the action."""
         # 5. Check Budget
-        if not await self.budget.check_budget(self.session.id, cost=action.weight, action_count=1):
+        if not await self.budget.budget.check_budget(self.session.id, cost=action.weight, action_count=1):
             logger.error(f"Budget exceeded for session {self.session.id}!")
             return
 
         # 6. Acquire cycle and execute
-        await self.guard.acquire_cycle(self.session.id, cycle_id=uuid4())
+        await self.guard.lifecycle.acquire_cycle(self.session.id, cycle_id=uuid4())
         try:
             # Increment budget consumption
             await self.budget.increment(self.session.id, cost=action.weight, action_count=1)
@@ -233,7 +233,7 @@ class SecurityAgent:
             logger.info(f"Successfully EXECUTED: {action.decision} on {action.resource_id}")
 
         finally:
-            await self.guard.release_cycle(self.session.id)
+            await self.guard.lifecycle.release_cycle(self.session.id)
 
 
 async def main():

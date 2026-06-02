@@ -119,7 +119,7 @@ async def main():
                 prop.status = ProposalStatus.EXECUTED.value
             else:
                 logger.info(f"  Result: MANUAL GATE REQUIRED (Risk: {route.risk_level})")
-                ticket = await gate.create_ticket(cs.id, prop.id)
+                ticket = await gate.approvals.create_ticket(cs.id, prop.id)
                 await gate.approve(ticket.id, decided_by="compliance-officer")
                 await budget.increment(cs.id, cost=dto.weight)
                 prop.status = ProposalStatus.EXECUTED.value

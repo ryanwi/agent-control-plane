@@ -109,7 +109,7 @@ async def main():
                 prop.status = ProposalStatus.EXECUTED.value
             else:
                 logger.info("  Result: MANUAL GATE REQUIRED")
-                ticket = await gate.create_ticket(cs.id, prop.id)
+                ticket = await gate.approvals.create_ticket(cs.id, prop.id)
                 await gate.approve(ticket.id, decided_by="soc-analyst")
                 prop.status = ProposalStatus.EXECUTED.value
 

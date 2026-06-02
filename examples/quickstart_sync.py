@@ -27,21 +27,21 @@ def main() -> None:
     )
     cp.setup()
 
-    sid = cp.open_session("sync-demo", max_cost=Decimal("50"), max_action_count=10)
+    sid = cp.sessions.open_session("sync-demo", max_cost=Decimal("50"), max_action_count=10)
     print(f"Created session: {sid}")
 
-    ok = cp.check_budget(sid, cost=Decimal("12.50"), action_count=1)
+    ok = cp.budget.check_budget(sid, cost=Decimal("12.50"), action_count=1)
     print(f"Budget check (12.50): {ok}")
 
-    cp.increment_budget(sid, cost=Decimal("12.50"), action_count=1)
-    remaining = cp.get_remaining_budget(sid)
+    cp.budget.increment_budget(sid, cost=Decimal("12.50"), action_count=1)
+    remaining = cp.budget.get_remaining_budget(sid)
     print(f"Remaining: ${remaining['remaining_cost']} cost, {remaining['remaining_count']} actions")
 
-    seq = cp.emit_app(sid, "job_started", {"job_id": "sync-demo-1"})
+    seq = cp.sessions.emit_app(sid, "job_started", {"job_id": "sync-demo-1"})
     print(f"App event appended at seq={seq}")
 
-    cp.close_session(sid, payload={"result": "ok"})
-    events = cp.replay(sid)
+    cp.sessions.close_session(sid, payload={"result": "ok"})
+    events = cp.sessions.replay(sid)
     print(f"Recorded {len(events)} events")
     cp.close()
 
