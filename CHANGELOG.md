@@ -2,15 +2,34 @@
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-06-01
+
 ### Added
 
 - **Richer governance event telemetry** — `export_event()` now emits a `cp.`-namespaced attribute set that covers session identity (`cp.session_id`, `cp.agent_id`, `cp.correlation_id`), action identity (`cp.action_id`, `cp.policy_snapshot_id`), runtime context (`cp.runtime_kind`, `cp.live_target_id`, `cp.cwd`, `cp.worktree`, `cp.project_id`), and a new `cp.outcome` attribute derived from the event kind. This closes the observability gap where a trace could show "policy approved" with no signal that the action was ever executed on the intended runtime.
   - New `GovernanceOutcome` enum (`accepted`, `applied`, `denied`, `timeout`, `stale-target`, `wrong-session`, `no-live-target`) is exported from `agent_control_plane`.
   - `HANDOFF_REJECTED` disambiguates into `stale-target`, `wrong-session`, or `no-live-target` based on payload flags set by the host app.
   - Host apps can override the computed outcome by setting `payload["outcome"]` to any `GovernanceOutcome` value.
-  - `TracerLike` protocol and `export_scorecard()` are unchanged. The event name changed from `"agent_control_plane.event"` to `"agent_control_plane.governance"`.
+  - `TracerLike` protocol and `export_scorecard()` are unchanged. The event name changed from `"agent_control_plane.event"` to `"agent_control_plane.governance"` (see Breaking below).
 - **Egress capability-grant evaluator** — built-in `EgressEvaluator` (+ `EgressEvaluatorConfig`, `EgressGrant`) models egress as a *capability grant* rather than a destination filter. Reaching an allowlisted destination is necessary but not sufficient: the specific capability exercised at that destination must also be granted, so allowing a host for one operation does not implicitly permit every other operation reachable there. Each `EgressGrant` maps a destination (host or URL; subdomain matching configurable) to the capabilities permitted there; the evaluator fails closed on an unknown destination and on a granted destination invoked with an ungranted capability. `destination_field`/`capability_field` select which proposal attributes carry the destination and capability (defaults `resource_id`/`decision`). Plugs into the existing async `Evaluator` framework (registry, condition trees, parallel evaluation).
 - Documented (security_model.md) that `DefaultAssetClassifier` is a coarse destination filter (substring match on the resource id), not a capability grant; use `EgressEvaluator` where reaching a destination must not implicitly permit every operation there.
+- **Session state integrity engine** — new `engine/state_integrity.py` validates internal session consistency on resume and crash recovery, closing a class of silent corruption bugs.
+  - `validate_session_integrity(state)` checks for negative counters, negative limits, and aborted sessions missing an abort reason.
+  - `SessionStateIntegrityError` is raised by `SessionManager.resume_session()` and `CrashRecovery._recover_session()` on violation (fail-closed); the recovery path also emits an audit event before raising.
+  - New `EventKind.SESSION_STATE_INVALID` added to the `EventKind` enum for structured audit records.
+
+### Changed
+
+- **`EmitMetadata` dataclass** — `emit()` on `ControlPlaneFacade`, `AsyncControlPlaneFacade`, `ResilientControlPlane`, and `AsyncResilientControlPlane` now takes a single `EmitMetadata` frozen dataclass instead of 7 optional keyword arguments (`agent_id`, `correlation_id`, `idempotency_key`, `state_bearing`, `policy_snapshot_id`, `action_id`, `extra`). Callers must wrap attribution kwargs in `EmitMetadata(...)`. `EmitMetadata` is exported from `agent_control_plane`.
+- **`ControlPlaneSetup` sub-configs** — `ControlPlaneSetup.__init__()` now takes three typed sub-config objects instead of 13 flat keyword arguments: `GovernanceConfig` (action names, policy, token budgets), `EventConfig` (event map, unknown-event policy), and `ResilienceConfig` (mode and per-category overrides). All three are exported from `agent_control_plane`.
+- **`EventFrame.event_kind`** — the `kind` field on `EventFrame` has been renamed to `event_kind` for consistency with the `cp.event_kind` telemetry attribute. Any code that accessed `frame.kind` directly must update to `frame.event_kind`.
+
+### Breaking (pre-1.0)
+
+- `emit()` signature changed: 7 optional kwargs → `EmitMetadata` dataclass (see Changed above).
+- `ControlPlaneSetup.__init__()` signature changed: 13 flat kwargs → 3 sub-config objects (`GovernanceConfig`, `EventConfig`, `ResilienceConfig`).
+- `EventFrame.kind` renamed to `EventFrame.event_kind`.
+- Telemetry span name changed from `"agent_control_plane.event"` to `"agent_control_plane.governance"`. Any OTel span name filters or dashboards targeting the old name must update.
 
 ## [0.16.0] - 2026-06-01
 

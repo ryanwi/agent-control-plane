@@ -86,8 +86,9 @@ make demo-asciicast-agent
 - Condition trees: `ConditionEvaluator` with recursive `and`/`or`/`not` rules for policy composition
 - Pluggable evaluators: `EvaluatorRegistry` with entry-point discovery, built-in `RegexEvaluator` and `ListEvaluator`
 - Parallel evaluation: `ParallelPolicyEvaluator` with cancel-on-deny semantics
+- Egress governance: `EgressEvaluator` — capability-grant model (destination + capability must both be explicitly allowed)
 - Durable events and replay: `EventStore`
-- Session lifecycle and recovery: `SessionManager`, `CrashRecovery`, `TimeoutEscalation`
+- Session lifecycle and recovery: `SessionManager`, `CrashRecovery`, `TimeoutEscalation`, session state integrity validation
 - Host wrappers: `ControlPlaneFacade` (sync), `AsyncControlPlaneFacade` (async)
 
 ## Token Budget Tracking

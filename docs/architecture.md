@@ -54,6 +54,7 @@ The package is organized around explicit layers:
   - `model_governor` — model tier classification and access policy
   - `condition_evaluator` — recursive boolean condition tree evaluation
   - `parallel_evaluator` — concurrent evaluator execution with cancel-on-deny
+  - `state_integrity` — session state consistency checks on resume and crash recovery
 - `evaluators/`
   - `protocol` — `Evaluator` protocol and `EvaluatorResult` DTO
   - `registry` — `EvaluatorRegistry` with manual registration and entry-point discovery
@@ -215,6 +216,7 @@ Future roadmap:
 - Build composite policy rules with condition trees (`AndCondition`, `OrCondition`, `NotCondition`) and plug them into `AutoApproveConditions.condition_tree`.
 - Register custom evaluators via `EvaluatorRegistry` or the `agent_control_plane.evaluators` entry-point group for domain-specific policy checks.
 - Use `ParallelPolicyEvaluator` for concurrent evaluation of multiple evaluators with early cancellation on first deny.
+- Use `EgressEvaluator` to model outbound access as capability grants rather than a destination allowlist — reaching a host is necessary but does not implicitly permit every operation there.
 - Customize approval scope semantics (resource/region/project/team) using existing scoped ticket fields.
 - For deployment/runtime composition, use experimental capability contracts in
   `agent_control_plane.experimental.capabilities` and wire providers at composition boundaries
@@ -249,8 +251,9 @@ Exports are centralized through [agent_control_plane/__init__.py](../src/agent_c
 | Module | Public symbols | Stability contract |
 | --- | --- | --- |
 | `agent_control_plane` | `PolicyEngine`, `ProposalRouter`, `ApprovalGate`, `BudgetTracker`, `ConcurrencyGuard`, `KillSwitch`, `EventStore`, `SessionManager`, `AgentRegistry`, `DelegationGuard`, `CrashRecovery`, `TimeoutEscalation`, `ModelRegistry`, `RiskClassifier`, `DefaultRiskClassifier`, `ConditionEvaluator`, `ParallelPolicyEvaluator` | Core control-plane entry points for orchestration and recovery. |
-| `agent_control_plane` | `ActionName`, `ActionTier`, `RiskLevel`, `ApprovalStatus`, `ApprovalDecisionType`, `ProposalStatus`, `SessionStatus`, `EventKind`, `ExecutionMode`, `AbortReason`, `KillSwitchScope`, `RoutingResolutionStep`, `AssetMatch`, `AgentScope` | Enumerations used by all engines; considered stable between minor releases. |
-| `agent_control_plane` | `ActionProposal`, `AgentMetadata`, `AgentCapability`, `DelegationProposal`, `SessionCreate`, `SessionSummary`, `PolicySnapshot`, `ApprovalScope`, `ApprovalTicket`, `RequestFrame`, `EventFrame`, `ResponseFrame`, `KillResult`, `SteeringContext`, `ConditionNode`, `EvaluatorResult`, `ParallelEvaluationResult` | Domain/contract types are semantically stable; add optional fields in minor releases only. |
+| `agent_control_plane` | `ActionName`, `ActionTier`, `RiskLevel`, `ApprovalStatus`, `ApprovalDecisionType`, `ProposalStatus`, `SessionStatus`, `EventKind`, `ExecutionMode`, `AbortReason`, `KillSwitchScope`, `RoutingResolutionStep`, `AssetMatch`, `AgentScope`, `GovernanceOutcome` | Enumerations used by all engines; considered stable between minor releases. |
+| `agent_control_plane` | `ActionProposal`, `AgentMetadata`, `AgentCapability`, `DelegationProposal`, `SessionCreate`, `SessionSummary`, `PolicySnapshot`, `ApprovalScope`, `ApprovalTicket`, `RequestFrame`, `EventFrame`, `ResponseFrame`, `KillResult`, `SteeringContext`, `ConditionNode`, `EvaluatorResult`, `ParallelEvaluationResult`, `EmitMetadata`, `GovernanceConfig`, `EventConfig`, `ResilienceConfig` | Domain/contract types are semantically stable; add optional fields in minor releases only. |
+| `agent_control_plane` | `EgressEvaluator`, `EgressEvaluatorConfig`, `EgressGrant` | Egress capability-grant evaluator; plugs into the async `Evaluator` framework. |
 | `agent_control_plane.evaluators` | `Evaluator`, `EvaluatorRegistry`, `EvaluatorResult`, `RegexEvaluator`, `ListEvaluator` | Pluggable evaluator protocol, registry, and built-in implementations. |
 | `agent_control_plane.models` | `ModelRegistry`, `ControlSessionMixin`, `ControlEventMixin`, `ApprovalTicketMixin`, `PolicySnapshotMixin`, `AgentMixin`, `DelegationMixin` | Intended for embedding into host SQLAlchemy models and runtime bootstrapping. |
 | `agent_control_plane.experimental.*` | capability contracts and other extension scaffolding | Experimental surface; may change between minor releases in pre-1.0. |
