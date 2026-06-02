@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-06-01
+
+### Fixed
+
+- **Session-state integrity validation now covers every resume/startup path.** `validate_session_integrity()` previously guarded only `resume_session` and stuck-session crash recovery, leaving two holes:
+  - `activate_session` (CREATED → ACTIVE) in both `SessionManager` and `AsyncControlPlaneFacade` trusted persisted state without validating it — a persisted-then-tampered CREATED session could activate with corrupt counters. It now validates first.
+  - The crash-recovery startup sweep validated only *stuck* sessions (those holding a cycle lock); a non-stuck ACTIVE session with corrupt persisted state (e.g. a negative `used_cost` from rollback/tampering) was silently left runnable. The sweep now validates non-stuck ACTIVE sessions too.
+  All of these fail closed (raise `SessionStateIntegrityError`) and emit a state-bearing `SESSION_STATE_INVALID` audit event; clean sessions are left untouched.
+
+### Documented
+
+- `security_model.md` (threat scenario 13) records that the structural invariants catch corruption but not an attacker *lowering* `used_cost`/`used_action_count` to regain budget — those stay non-negative and pass. Sound detection requires reconciling the persisted counter against a complete cost-increment ledger, which does not exist today, so it is a documented follow-up rather than a speculative runtime check.
+
 ## [0.17.0] - 2026-06-01
 
 ### Added
