@@ -13,6 +13,7 @@ from agent_control_plane.async_facade import AsyncControlPlaneFacade
 from agent_control_plane.engine.concurrency import CycleAlreadyActiveError
 from agent_control_plane.models.registry import ModelRegistry
 from agent_control_plane.sync import DictEventMapper
+from agent_control_plane.types.approvals import ApprovalScope
 from agent_control_plane.types.enums import (
     ActionName,
     ActionTier,
@@ -117,9 +118,7 @@ async def test_async_facade_approval_lifecycle_and_expiry(tmp_path: Path):
     approved = await facade.approve_ticket(
         ticket.id,
         decision_type=ApprovalDecisionType.ALLOW_FOR_SESSION,
-        scope_resource_ids=["resource-1"],
-        scope_max_cost=Decimal("100"),
-        scope_max_action_count=2,
+        scope=ApprovalScope(resource_ids=["resource-1"], max_cost=Decimal("100"), max_count=2),
     )
     assert approved.status == ApprovalStatus.APPROVED
     assert approved.decision_type == ApprovalDecisionType.ALLOW_FOR_SESSION

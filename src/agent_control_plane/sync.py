@@ -33,7 +33,7 @@ from agent_control_plane.types.agentic import (
     RollbackResult,
     SessionCheckpoint,
 )
-from agent_control_plane.types.approvals import ApprovalTicket
+from agent_control_plane.types.approvals import ApprovalScope, ApprovalTicket
 from agent_control_plane.types.enums import (
     AbortReason,
     ApprovalDecisionType,
@@ -50,7 +50,7 @@ from agent_control_plane.types.enums import (
     UnknownAppEventPolicy,
 )
 from agent_control_plane.types.frames import EmitMetadata, EventFrame
-from agent_control_plane.types.ids import AgentId, IdempotencyKey
+from agent_control_plane.types.ids import AgentId, IdempotencyKey, ResourceId
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import Page, SessionHealth, StateChange, StateChangePage
 from agent_control_plane.types.sessions import SessionState
@@ -208,7 +208,7 @@ class ApprovalTicketUpdateFields(TypedDict, total=False):
     decided_by: str
     decision_reason: str | None
     decided_at: datetime
-    scope_resource_ids: list[str] | None
+    scope_resource_ids: list[ResourceId] | None
     scope_max_cost: Decimal | None
     scope_max_count: int | None
     scope_expiry: datetime | None
@@ -763,12 +763,10 @@ class ControlPlaneFacade:
         decided_by: str = "operator",
         reason: str | None = None,
         decision_type: ApprovalDecisionType = ApprovalDecisionType.ALLOW_ONCE,
-        scope_resource_ids: list[str] | None = None,
-        scope_max_cost: Decimal | None = None,
-        scope_max_action_count: int | None = None,
-        scope_expiry: datetime | None = None,
+        scope: ApprovalScope | None = None,
         command_id: IdempotencyKey | None = None,
     ) -> ApprovalTicket:
+        s = scope or ApprovalScope()
         with self._cp.session_scope() as db:
             uow = self._cp._uow_factory(db)
             cached = self._get_cached_command_result(uow, command_id, CMD_APPROVE_TICKET)
@@ -783,10 +781,10 @@ class ControlPlaneFacade:
                 "decided_at": datetime.now(UTC),
             }
             if decision_type == ApprovalDecisionType.ALLOW_FOR_SESSION:
-                fields["scope_resource_ids"] = scope_resource_ids
-                fields["scope_max_cost"] = scope_max_cost
-                fields["scope_max_count"] = scope_max_action_count
-                fields["scope_expiry"] = scope_expiry
+                fields["scope_resource_ids"] = s.resource_ids if s.resource_ids else None
+                fields["scope_max_cost"] = s.max_cost
+                fields["scope_max_count"] = s.max_count
+                fields["scope_expiry"] = s.expiry
             uow.approval_repo.update_ticket(ticket_id, **fields)
             uow.proposal_repo.update_status(ticket.proposal_id, ProposalStatus.APPROVED)
             result = ticket.model_copy(update=fields)

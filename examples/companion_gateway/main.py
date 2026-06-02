@@ -10,6 +10,7 @@ from uuid import UUID, uuid4
 from agent_control_plane.sync import KillResult
 from agent_control_plane.types import (
     ApprovalDecisionType,
+    ApprovalScope,
     ApprovalStatus,
     ApprovalTicket,
     EventKind,
@@ -76,23 +77,10 @@ class DemoFacade(FacadeProtocol):
         decided_by: str = "operator",
         reason: str | None = None,
         decision_type: ApprovalDecisionType = ApprovalDecisionType.ALLOW_ONCE,
-        scope_resource_ids: list[str] | None = None,
-        scope_max_cost: str | None = None,
-        scope_max_action_count: int | None = None,
-        scope_expiry: str | None = None,
+        scope: ApprovalScope | None = None,
         command_id: str | None = None,
     ) -> ApprovalTicket:
-        _ = (
-            ticket_id,
-            decided_by,
-            reason,
-            decision_type,
-            scope_resource_ids,
-            scope_max_cost,
-            scope_max_action_count,
-            scope_expiry,
-            command_id,
-        )
+        _ = (ticket_id, decided_by, reason, decision_type, scope, command_id)
         raise ValueError("Ticket not found")
 
     async def deny_ticket(self, ticket_id: UUID, *, reason: str = "", command_id: str | None = None) -> ApprovalTicket:

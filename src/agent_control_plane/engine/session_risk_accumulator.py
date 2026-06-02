@@ -19,6 +19,14 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class _AssessmentResult:
+    new_state: SessionRiskState
+    escalated_risk: RiskLevel
+    all_reasons: list[str]
+    was_escalated: bool
+
+
+@dataclass
 class _ScoreEscalation:
     risk: RiskLevel
     reasons: list[str] = field(default_factory=list)
@@ -74,65 +82,68 @@ class SessionRiskAccumulator:
         current action.
         """
         state = self._get_or_create_state(session_id)
-
-        # Record this action
         action_name = str(proposal.decision)
         new_recent = [*state.recent_actions, action_name]
         if self._max_window > 0:
             new_recent = new_recent[-self._max_window :]
-
         new_score = state.accumulated_score + self._score_contribution(action_risk_level)
         new_count = state.action_count + 1
+        result = self._compute_assessment(state, new_score, new_count, new_recent, action_risk_level)
+        self._states[session_id] = result.new_state
 
-        # Check score-based escalation
-        score = self._check_score_escalation(new_score, action_risk_level)
-
-        # Check pattern-based escalation against updated window
-        pattern = self._check_pattern_escalation(new_recent)
-
-        # Determine final escalated risk (max of all sources)
-        candidates = [action_risk_level, score.risk]
-        if pattern.risk is not None:
-            candidates.append(pattern.risk)
-        escalated_risk = max(candidates, key=lambda r: r.rank)
-
-        all_reasons = score.reasons + pattern.reasons
-        was_escalated = escalated_risk.rank > action_risk_level.rank
-
-        # Update detected_patterns list using matches from the pattern check
-        new_detected = list(state.detected_patterns)
-        for name in pattern.matched_names:
-            if name not in new_detected:
-                new_detected.append(name)
-
-        new_state = SessionRiskState(
-            session_id=session_id,
-            accumulated_score=new_score,
-            action_count=new_count,
-            recent_actions=new_recent,
-            detected_patterns=new_detected,
-            current_risk_level=escalated_risk,
-        )
-        self._states[session_id] = new_state
-
-        if was_escalated and self._event_store is not None:
+        if result.was_escalated and self._event_store is not None:
             await self._event_store.append(
                 session_id,
                 EventKind.SESSION_RISK_ESCALATED,
                 {
                     "session_id": str(session_id),
                     "original_risk": action_risk_level.value,
-                    "escalated_risk": escalated_risk.value,
-                    "reasons": all_reasons,
+                    "escalated_risk": result.escalated_risk.value,
+                    "reasons": result.all_reasons,
                 },
                 state_bearing=False,
             )
 
         return SessionRiskEscalation(
             original_risk=action_risk_level,
+            escalated_risk=result.escalated_risk,
+            escalation_reasons=result.all_reasons,
+            session_state=result.new_state,
+            was_escalated=result.was_escalated,
+        )
+
+    def _compute_assessment(
+        self,
+        state: SessionRiskState,
+        new_score: Decimal,
+        new_count: int,
+        new_recent: list[str],
+        action_risk_level: RiskLevel,
+    ) -> _AssessmentResult:
+        score = self._check_score_escalation(new_score, action_risk_level)
+        pattern = self._check_pattern_escalation(new_recent)
+        candidates = [action_risk_level, score.risk]
+        if pattern.risk is not None:
+            candidates.append(pattern.risk)
+        escalated_risk = max(candidates, key=lambda r: r.rank)
+        all_reasons = score.reasons + pattern.reasons
+        was_escalated = escalated_risk.rank > action_risk_level.rank
+        new_detected = list(state.detected_patterns)
+        for name in pattern.matched_names:
+            if name not in new_detected:
+                new_detected.append(name)
+        new_state = SessionRiskState(
+            session_id=state.session_id,
+            accumulated_score=new_score,
+            action_count=new_count,
+            recent_actions=new_recent,
+            detected_patterns=new_detected,
+            current_risk_level=escalated_risk,
+        )
+        return _AssessmentResult(
+            new_state=new_state,
             escalated_risk=escalated_risk,
-            escalation_reasons=all_reasons,
-            session_state=new_state,
+            all_reasons=all_reasons,
             was_escalated=was_escalated,
         )
 

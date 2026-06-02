@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from agent_control_plane.sync import KillResult
 from agent_control_plane.types import (
     ApprovalDecisionType,
+    ApprovalScope,
     ApprovalStatus,
     ApprovalTicket,
     Page,
@@ -57,10 +58,7 @@ class FacadeProtocol(Protocol):
         decided_by: str = "operator",
         reason: str | None = None,
         decision_type: ApprovalDecisionType = ApprovalDecisionType.ALLOW_ONCE,
-        scope_resource_ids: list[str] | None = None,
-        scope_max_cost: Any | None = None,
-        scope_max_action_count: int | None = None,
-        scope_expiry: Any | None = None,
+        scope: ApprovalScope | None = None,
         command_id: str | None = None,
     ) -> ApprovalTicket: ...
 
@@ -285,15 +283,21 @@ def create_app(  # noqa: C901
     ) -> dict[str, Any]:
         req = body or ApproveTicketRequest()
         try:
+            from datetime import datetime as _datetime
+            from decimal import Decimal as _Decimal
+
+            scope = ApprovalScope(
+                resource_ids=req.scope_resource_ids or [],
+                max_cost=_Decimal(req.scope_max_cost) if req.scope_max_cost else None,
+                max_count=req.scope_max_action_count,
+                expiry=_datetime.fromisoformat(req.scope_expiry) if req.scope_expiry else None,
+            )
             row = await facade.approve_ticket(
                 ticket_id,
                 decided_by=req.decided_by,
                 reason=req.reason,
                 decision_type=req.decision_type,
-                scope_resource_ids=req.scope_resource_ids,
-                scope_max_cost=req.scope_max_cost,
-                scope_max_action_count=req.scope_max_action_count,
-                scope_expiry=req.scope_expiry,
+                scope=scope,
                 command_id=x_idempotency_key,
             )
         except ValueError as exc:

@@ -30,7 +30,7 @@ from agent_control_plane.types.agentic import (
     RollbackResult,
     SessionCheckpoint,
 )
-from agent_control_plane.types.approvals import ApprovalTicket
+from agent_control_plane.types.approvals import ApprovalScope, ApprovalTicket
 from agent_control_plane.types.enums import (
     ApprovalDecisionType,
     ApprovalStatus,
@@ -360,10 +360,7 @@ class ResilientControlPlane:
         decided_by: str = "operator",
         reason: str | None = None,
         decision_type: ApprovalDecisionType = ApprovalDecisionType.ALLOW_ONCE,
-        scope_resource_ids: list[str] | None = None,
-        scope_max_cost: Decimal | None = None,
-        scope_max_action_count: int | None = None,
-        scope_expiry: datetime | None = None,
+        scope: ApprovalScope | None = None,
         command_id: IdempotencyKey | None = None,
     ) -> ApprovalTicket | None:
         try:
@@ -372,10 +369,7 @@ class ResilientControlPlane:
                 decided_by=decided_by,
                 reason=reason,
                 decision_type=decision_type,
-                scope_resource_ids=scope_resource_ids,
-                scope_max_cost=scope_max_cost,
-                scope_max_action_count=scope_max_action_count,
-                scope_expiry=scope_expiry,
+                scope=scope,
                 command_id=command_id,
             )
         except Exception as exc:

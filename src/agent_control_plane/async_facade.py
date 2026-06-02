@@ -46,7 +46,7 @@ from agent_control_plane.types.agentic import (
     RollbackResult,
     SessionCheckpoint,
 )
-from agent_control_plane.types.approvals import ApprovalTicket
+from agent_control_plane.types.approvals import ApprovalScope, ApprovalTicket
 from agent_control_plane.types.enums import (
     AbortReason,
     ApprovalDecisionType,
@@ -194,6 +194,12 @@ def _accumulate_scorecard_event(
         handler(event_at, event, sc, acc)
 
 
+@dataclass
+class _SchemaGuard:
+    initialized: bool = False
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+
 class AsyncControlPlaneFacade:
     """Async control-plane facade for async host applications."""
 
@@ -214,8 +220,7 @@ class AsyncControlPlaneFacade:
         self._unknown_policy = unknown_policy
         self._registry = registry or ScopedModelRegistry()
         self._uow_factory = uow_factory or AsyncSqlAlchemyUnitOfWork
-        self._schema_lock = asyncio.Lock()
-        self._schema_initialized = False
+        self._schema = _SchemaGuard()
         if register_reference_models:
             register_models(registry=self._registry)
 
@@ -267,15 +272,15 @@ class AsyncControlPlaneFacade:
             await self._engine.dispose()
 
     async def _ensure_schema(self) -> None:
-        if self._engine is None or self._schema_initialized:
+        if self._engine is None or self._schema.initialized:
             return
-        async with self._schema_lock:
-            if self._schema_initialized:
+        async with self._schema.lock:
+            if self._schema.initialized:
                 return
             with registry_scope(self._registry):
                 async with self._engine.begin() as conn:
                     await conn.run_sync(Base.metadata.create_all)
-            self._schema_initialized = True
+            self._schema.initialized = True
 
     @asynccontextmanager
     async def session_scope(self) -> AsyncIterator[AsyncSession]:
@@ -451,12 +456,10 @@ class AsyncControlPlaneFacade:
         decided_by: str = "operator",
         reason: str | None = None,
         decision_type: ApprovalDecisionType = ApprovalDecisionType.ALLOW_ONCE,
-        scope_resource_ids: list[str] | None = None,
-        scope_max_cost: Decimal | None = None,
-        scope_max_action_count: int | None = None,
-        scope_expiry: datetime | None = None,
+        scope: ApprovalScope | None = None,
         command_id: IdempotencyKey | None = None,
     ) -> ApprovalTicket:
+        s = scope or ApprovalScope()
         async with self.session_scope() as db:
             uow = self._uow_factory(db)
             cached = await self._get_cached_command_result(uow, command_id, CMD_APPROVE_TICKET)
@@ -471,10 +474,10 @@ class AsyncControlPlaneFacade:
                 "decided_at": datetime.now(UTC),
             }
             if decision_type == ApprovalDecisionType.ALLOW_FOR_SESSION:
-                fields["scope_resource_ids"] = scope_resource_ids
-                fields["scope_max_cost"] = scope_max_cost
-                fields["scope_max_count"] = scope_max_action_count
-                fields["scope_expiry"] = scope_expiry
+                fields["scope_resource_ids"] = s.resource_ids if s.resource_ids else None
+                fields["scope_max_cost"] = s.max_cost
+                fields["scope_max_count"] = s.max_count
+                fields["scope_expiry"] = s.expiry
             await uow.approval_repo.update_ticket(ticket_id, **fields)
             await uow.proposal_repo.update_status(ticket.proposal_id, ProposalStatus.APPROVED)
             result = ticket.model_copy(update=fields)

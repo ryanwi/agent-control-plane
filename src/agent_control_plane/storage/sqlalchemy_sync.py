@@ -728,7 +728,11 @@ class SyncSqlAlchemyTokenBudgetRepo:
             )
             self._session.add(new_row)
             self._session.flush()
+        return self._build_budget_state(config_id, window_start, window_end, new_tokens, new_cost)
 
+    def _build_budget_state(
+        self, config_id: UUID, window_start: datetime, window_end: datetime, new_tokens: int, new_cost: Decimal
+    ) -> TokenBudgetState:
         config = self.get_budget_config(config_id)
         identity = config.identity if config else IdentityContext()
         period = config.period if config else BudgetPeriod.DAILY

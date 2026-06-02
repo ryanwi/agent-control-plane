@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator
 
 from agent_control_plane.sync import KillResult
-from agent_control_plane.types.approvals import ApprovalTicket
+from agent_control_plane.types.approvals import ApprovalScope, ApprovalTicket
 from agent_control_plane.types.enums import (
     ApprovalDecisionType,
     ApprovalStatus,
@@ -63,23 +63,10 @@ class _StubFacade:
         decided_by: str = "operator",
         reason: str | None = None,
         decision_type: ApprovalDecisionType = ApprovalDecisionType.ALLOW_ONCE,
-        scope_resource_ids: list[str] | None = None,
-        scope_max_cost: Any | None = None,
-        scope_max_action_count: int | None = None,
-        scope_expiry: Any | None = None,
+        scope: ApprovalScope | None = None,
         command_id: str | None = None,
     ) -> ApprovalTicket:
-        _ = (
-            ticket_id,
-            decided_by,
-            reason,
-            decision_type,
-            scope_resource_ids,
-            scope_max_cost,
-            scope_max_action_count,
-            scope_expiry,
-            command_id,
-        )
+        _ = (ticket_id, decided_by, reason, decision_type, scope, command_id)
         if self.approve_conflict:
             raise ValueError("Ticket already decided")
         ticket = self._ticket()

@@ -43,6 +43,7 @@ test:
 
 lint:
 	$(RUFF) check src tests examples
+	$(PYLINT) src
 
 pylint:
 	$(PYLINT) src
