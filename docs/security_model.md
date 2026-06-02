@@ -61,6 +61,21 @@ This document defines the security posture of `agent-control-plane` as an embedd
   Note that `DefaultAssetClassifier` is only a coarse destination filter (substring match on
   the resource id); it answers "is this asset in scope," not "which operation is permitted."
 
+13. Corrupt or tampered persisted session state on resume/startup
+- Threat: session state (budget counters, status, abort metadata) is persisted and reloaded
+  every time a session is resumed, activated, or crash-recovered. A DB rollback, corruption,
+  or tampering could feed invalid state back into a running session.
+- Control: `validate_session_integrity()` runs before every transition that trusts persisted
+  state — `SessionManager.activate_session`/`resume_session`, the async facade equivalents,
+  and the crash-recovery startup sweep (including non-stuck ACTIVE sessions). Violations fail
+  closed (raise) and emit a state-bearing `SESSION_STATE_INVALID` audit event.
+- Limitation: the invariants are *structural* (non-negative counters, `ABORTED ⟹ abort_reason`).
+  They catch gross corruption but **not** an attacker who *lowers* `used_cost`/`used_action_count`
+  to regain budget — those values stay non-negative and pass. Sound detection requires
+  reconciling the persisted counter against an independent, complete ledger of cost increments
+  (each `increment_budget` would need to emit a cost-bearing event); no such ledger exists for
+  session budgets today, so reconciliation is a documented follow-up rather than an active check.
+
 ## Zero Trust integration guidance
 
 - Authenticate every caller at the app edge (OIDC/JWT/service credentials).

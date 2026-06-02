@@ -143,6 +143,48 @@ async def test_resume_without_event_store_still_fails_closed():
     assert (await repo.get_session(cs.id)).status == SessionStatus.PAUSED
 
 
+# --- activate_session wiring ----------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_activate_fails_closed_on_corrupt_state():
+    repo = InMemorySessionRepository()
+    event_repo = InMemoryEventRepository()
+    sm = SessionManager(repo, event_store=EventStore(event_repo))
+    cs = await repo.create_session(
+        session_name="activate-corrupt",
+        status=SessionStatus.CREATED,
+        execution_mode=ExecutionMode.LIVE,
+        max_cost=Decimal("100"),
+        max_action_count=50,
+    )
+    await repo.update_session(cs.id, used_cost=Decimal("-5"))
+
+    with pytest.raises(SessionStateIntegrityError):
+        await sm.activate_session(cs.id)
+
+    assert (await repo.get_session(cs.id)).status == SessionStatus.CREATED
+    events = await event_repo.replay(cs.id)
+    assert any(e.kind == EventKind.SESSION_STATE_INVALID for e in events)
+
+
+@pytest.mark.asyncio
+async def test_activate_clean_session_succeeds():
+    repo = InMemorySessionRepository()
+    sm = SessionManager(repo, event_store=EventStore(InMemoryEventRepository()))
+    cs = await repo.create_session(
+        session_name="activate-clean",
+        status=SessionStatus.CREATED,
+        execution_mode=ExecutionMode.LIVE,
+        max_cost=Decimal("100"),
+        max_action_count=50,
+    )
+
+    activated = await sm.activate_session(cs.id)
+
+    assert activated.status == SessionStatus.ACTIVE
+
+
 # --- crash recovery wiring ------------------------------------------------------------
 
 

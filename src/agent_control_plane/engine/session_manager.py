@@ -66,10 +66,11 @@ class SessionManager:
         return await self._repo.list_sessions(statuses=statuses, limit=limit)
 
     async def activate_session(self, session_id: UUID) -> SessionState:
-        """Transition session from CREATED to ACTIVE."""
+        """Transition session from CREATED to ACTIVE, failing closed on invalid persisted state."""
         cs = await self._get_session_or_raise(session_id)
         if cs.status != SessionStatus.CREATED:
             raise ValueError(f"Cannot activate session in state {cs.status}")
+        await self._assert_state_integrity(cs)
         await self._repo.update_session(session_id, status=SessionStatus.ACTIVE, updated_at=datetime.now(UTC))
         cs.status = SessionStatus.ACTIVE
         return cs
@@ -88,19 +89,28 @@ class SessionManager:
         cs = await self._get_session_or_raise(session_id)
         if cs.status != SessionStatus.PAUSED:
             raise ValueError(f"Cannot resume session in state {cs.status}")
-        violations = validate_session_integrity(cs)
-        if violations:
-            if self._event_store is not None:
-                await self._event_store.append(
-                    session_id=session_id,
-                    event_kind=EventKind.SESSION_STATE_INVALID,
-                    payload={"violations": [{"code": v.code, "message": v.message} for v in violations]},
-                    state_bearing=True,
-                )
-            raise SessionStateIntegrityError(violations)
+        await self._assert_state_integrity(cs)
         await self._repo.update_session(session_id, status=SessionStatus.ACTIVE, updated_at=datetime.now(UTC))
         cs.status = SessionStatus.ACTIVE
         return cs
+
+    async def _assert_state_integrity(self, cs: SessionState) -> None:
+        """Validate persisted session state before trusting it; fail closed on violation.
+
+        Records a state-bearing SESSION_STATE_INVALID audit event (when an event store is
+        configured) and raises SessionStateIntegrityError so the transition does not proceed.
+        """
+        violations = validate_session_integrity(cs)
+        if not violations:
+            return
+        if self._event_store is not None:
+            await self._event_store.append(
+                session_id=cs.id,
+                event_kind=EventKind.SESSION_STATE_INVALID,
+                payload={"violations": [{"code": v.code, "message": v.message} for v in violations]},
+                state_bearing=True,
+            )
+        raise SessionStateIntegrityError(violations)
 
     async def complete_session(self, session_id: UUID) -> SessionState:
         """Mark a session as completed."""

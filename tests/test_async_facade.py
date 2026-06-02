@@ -120,6 +120,36 @@ async def test_async_facade_resume_fails_closed_on_corrupt_state(tmp_path: Path)
 
 
 @pytest.mark.asyncio
+async def test_async_facade_activate_fails_closed_on_corrupt_state(tmp_path: Path):
+    db_file = tmp_path / "cp_async_activate_integrity.db"
+    facade = AsyncControlPlaneFacade.from_database_url(f"sqlite+aiosqlite:///{db_file}")
+
+    sid = await facade.open_session("activate-integrity")  # CREATED
+
+    # Corrupt persisted state before the CREATED -> ACTIVE transition.
+    async with facade.session_scope() as db:
+        session_model = ModelRegistry.get("ControlSession")
+        row = await db.get(session_model, sid)
+        row.used_cost = Decimal("-5")
+        await db.commit()
+
+    with pytest.raises(SessionStateIntegrityError):
+        await facade.activate_session(sid)
+
+    # Session must stay CREATED — fail closed.
+    session = await facade.get_session(sid)
+    assert session is not None
+    assert session.status == SessionStatus.CREATED
+
+    events = await facade.replay(sid)
+    invalid = [e for e in events if e.kind == EventKind.SESSION_STATE_INVALID]
+    assert invalid
+    assert "negative_used_cost" in str(invalid[-1].payload)
+
+    await facade.close()
+
+
+@pytest.mark.asyncio
 async def test_async_facade_approval_lifecycle_and_expiry(tmp_path: Path):
     db_file = tmp_path / "cp_async_approvals.db"
     facade = AsyncControlPlaneFacade.from_database_url(f"sqlite+aiosqlite:///{db_file}")

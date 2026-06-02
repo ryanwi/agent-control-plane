@@ -346,6 +346,16 @@ class AsyncControlPlaneFacade:
             cs = await uow.session_repo.get_session_for_update(session_id)
             if cs.status != SessionStatus.CREATED:
                 raise ValueError(f"Cannot activate session in state {cs.status}")
+            violations = validate_session_integrity(cs)
+            if violations:
+                await uow.event_repo.append(
+                    session_id=session_id,
+                    event_kind=EventKind.SESSION_STATE_INVALID,
+                    payload={"violations": [{"code": v.code, "message": v.message} for v in violations]},
+                    state_bearing=True,
+                )
+                await uow.commit()
+                raise SessionStateIntegrityError(violations)
             await uow.session_repo.update_session(session_id, status=SessionStatus.ACTIVE, updated_at=datetime.now(UTC))
             await uow.commit()
             session = await uow.session_repo.get_session(session_id)
