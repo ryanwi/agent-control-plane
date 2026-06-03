@@ -29,6 +29,7 @@ from agent_control_plane.benchmark import (
     hash_config,
     run_batch,
     run_benchmark,
+    write_html_report,
 )
 from agent_control_plane.builders import (
     KillSwitchServices,
@@ -567,6 +568,7 @@ __all__ = [
     "PassThroughGuardrailPolicy",
     "run_batch",
     "run_benchmark",
+    "write_html_report",
     "ScenarioRunner",
     "create_tables",
     "get_version",

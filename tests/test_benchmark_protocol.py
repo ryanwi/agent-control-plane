@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from agent_control_plane.benchmark import WeightedFitnessEvaluator, hash_config, run_batch, run_benchmark
 from agent_control_plane.types.benchmark import BenchmarkRunSpec, BenchmarkScenarioSpec, FitnessWeights
 
@@ -55,3 +57,25 @@ def test_run_batch_executes_all_specs() -> None:
     results = run_batch(specs, runner=_Runner())
     assert len(results) == 3
     assert [r.scenario_name for r in results] == ["scenario-0", "scenario-1", "scenario-2"]
+
+
+def test_benchmark_run_result_shape() -> None:
+    spec = BenchmarkRunSpec(
+        scenario=BenchmarkScenarioSpec(name="shape-check", version="2", seed=42),
+        config={"x": 1},
+        config_hash=hash_config({"x": 1}),
+    )
+    result = run_benchmark(spec, runner=_Runner())
+
+    assert isinstance(result.run_id, UUID)
+    assert result.scenario_name == "shape-check"
+    assert result.scenario_version == "2"
+    assert result.seed == 42
+    assert isinstance(result.config_hash, str) and len(result.config_hash) == 16
+    assert isinstance(result.metrics, dict)
+    assert isinstance(result.fitness, float)
+    assert isinstance(result.fitness_breakdown, dict)
+    assert result.started_at.tzinfo is not None  # UTC-aware
+    assert result.ended_at.tzinfo is not None
+    assert result.ended_at >= result.started_at
+    assert isinstance(result.notes, list)

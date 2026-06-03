@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`write_html_report(results, path)`** — stdlib-only HTML reporter for benchmark runs.
+  Takes a `list[BenchmarkRunResult]` and emits a self-contained static file with a
+  summary table and per-result drill-down (metrics, fitness breakdown, notes, run ID).
+  Exported from `agent_control_plane` alongside the existing benchmark API.
+
+- **`BenchmarkRunResult` shape test** — `test_benchmark_run_result_shape` asserts every
+  field on the DTO (types, UTC-awareness, `config_hash` length, timestamp ordering) to
+  serve as a stable contract for downstream consumers.
+
 ## [0.24.0] - 2026-06-01
 
 ### Fixed (security)
