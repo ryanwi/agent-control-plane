@@ -109,10 +109,16 @@ class ControlPlaneSetup:
         """Create tables, register models, configure engines, return ready-to-use CP."""
         self._register_common()
         resolved_mapper = self._resolve_mapper()
+        risk_accumulator = None
+        if self._governance.risk_patterns:
+            from agent_control_plane.engine.session_risk_accumulator import SessionRiskAccumulator
+
+            risk_accumulator = SessionRiskAccumulator(patterns=self._governance.risk_patterns)
         facade = ControlPlaneFacade.from_database_url(
             self._database_url,
             mapper=resolved_mapper,
             unknown_policy=self._events.unknown_event_policy,
+            risk_accumulator=risk_accumulator,
         )
         facade.setup()
         return ResilientControlPlane(
@@ -161,7 +167,12 @@ class ControlPlaneSetup:
 
     @property
     def risk_patterns(self) -> list[RiskPattern] | None:
-        """Risk patterns for SessionRiskAccumulator (caller creates the engine)."""
+        """Risk patterns registered with the control plane.
+
+        When provided, ``build()`` automatically constructs a ``SessionRiskAccumulator``
+        and wires it into the facade so proposals are risk-escalated without
+        manual engine construction.
+        """
         return self._governance.risk_patterns
 
     @property

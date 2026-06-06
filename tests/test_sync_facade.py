@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
+from agent_control_plane.engine.session_risk_accumulator import SessionRiskAccumulator
 from agent_control_plane.models.registry import ModelRegistry
 from agent_control_plane.sync import (
     AppEventMapper,
@@ -32,14 +33,17 @@ from agent_control_plane.types.enums import (
     ActionTier,
     ApprovalStatus,
     EventKind,
+    ExecutionMode,
     ProposalStatus,
     RiskLevel,
     SessionStatus,
     UnknownAppEventPolicy,
 )
 from agent_control_plane.types.frames import EmitMetadata, EventMetadata
+from agent_control_plane.types.policies import PolicySnapshot
 from agent_control_plane.types.preconditions import Precondition, PreconditionStatus
 from agent_control_plane.types.proposals import ActionProposal
+from agent_control_plane.types.risk import RiskPattern
 
 
 def _insert_pending_proposal(facade: ControlPlaneFacade, session_id: UUID, *, resource_id: str) -> UUID:
@@ -486,5 +490,92 @@ def test_control_plane_facade_run_failing_precondition_aborts_before_execution(t
     assert len(failures) == 1
     assert failures[0].state_bearing is True
     assert EventKind.EXECUTION_COMPLETED not in [e.kind for e in events]
+
+    facade.close()
+
+
+# ---------------------------------------------------------------------------
+# SessionRiskAccumulator integration
+# ---------------------------------------------------------------------------
+
+_RISK_ACTIONS = ["read_crm", "query_db", "send_email"]
+
+
+def _risk_policy() -> PolicySnapshot:
+    return PolicySnapshot(
+        action_tiers={
+            "blocked": [],
+            "always_approve": [],
+            "auto_approve": _RISK_ACTIONS,
+            "unrestricted": [],
+        },
+        risk_limits={"max_risk_score": "10000", "max_weight_pct": "5.0", "custom": {}},
+        execution_mode=ExecutionMode.DRY_RUN,
+        approval_timeout_seconds=300,
+        auto_approve_conditions={
+            "max_risk_tier": RiskLevel.HIGH,
+            "dry_run_only": True,
+            "max_weight": "2.5",
+            "min_score": "0.7",
+        },
+    )
+
+
+def _risk_proposal(session_id: UUID, decision: str) -> ActionProposal:
+    return ActionProposal(
+        session_id=session_id,
+        resource_id="res-1",
+        resource_type="task",
+        decision=decision,
+        reasoning="risk integration test",
+        weight=Decimal("1.0"),
+        score=Decimal("0.9"),
+    )
+
+
+def test_route_proposal_risk_escalation_emits_event_and_upgrades_tier(tmp_path: Path):
+    """Two proposals through the same session — second triggers score-based escalation."""
+    from agent_control_plane.types.enums import register_action_names
+
+    register_action_names(_RISK_ACTIONS)
+
+    pattern = RiskPattern(
+        name="exfil_chain",
+        description="CRM read → DB query = elevated exfil risk",
+        action_sequence=["read_crm", "query_db"],
+        window_size=5,
+        escalate_to=RiskLevel.HIGH,
+    )
+    accumulator = SessionRiskAccumulator(patterns=[pattern])
+
+    db_file = tmp_path / "risk_integration.db"
+    facade = ControlPlaneFacade.from_database_url(
+        f"sqlite:///{db_file}",
+        risk_accumulator=accumulator,
+    )
+    facade.setup()
+    policy = _risk_policy()
+
+    session_id = facade.sessions.open_session("risk-test", execution_mode=ExecutionMode.DRY_RUN)
+
+    # First proposal — no prior history; risk stays LOW
+    p1 = _risk_proposal(session_id, "read_crm")
+    decision1 = facade.route_proposal(p1, policy)
+    assert decision1.risk_escalated is False
+    assert decision1.risk_level == RiskLevel.LOW
+
+    # Second proposal — pattern [read_crm, query_db] now complete; HIGH escalation expected
+    p2 = _risk_proposal(session_id, "query_db")
+    decision2 = facade.route_proposal(p2, policy)
+    assert decision2.risk_escalated is True
+    assert decision2.risk_level == RiskLevel.HIGH
+
+    # SESSION_RISK_ESCALATED event must be in the audit log
+    events = facade.sessions.replay(session_id)
+    escalation_events = [e for e in events if e.kind == EventKind.SESSION_RISK_ESCALATED]
+    assert len(escalation_events) == 1
+    payload = escalation_events[0].payload
+    assert payload["escalated_risk"] == RiskLevel.HIGH.value
+    assert payload["original_risk"] == RiskLevel.LOW.value
 
     facade.close()

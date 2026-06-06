@@ -1315,6 +1315,7 @@ class ControlPlaneFacade:
         *,
         mapper: AppEventMapper | None = None,
         unknown_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.RAISE,
+        risk_accumulator: SessionRiskAccumulator | None = None,
     ) -> None:
         self.sessions: SessionGateway = SessionGateway(control_plane, mapper, unknown_policy)
         self.approvals: ApprovalGateway = ApprovalGateway(control_plane)
@@ -1323,6 +1324,8 @@ class ControlPlaneFacade:
         self.agents: AgentGateway = AgentGateway(control_plane)
         self.observer: ControlPlaneObserver = ControlPlaneObserver(control_plane)
         self._cp = control_plane
+        if risk_accumulator is not None:
+            self._cp._risk_accumulator = risk_accumulator
 
     @classmethod
     def from_database_url(
@@ -1335,6 +1338,7 @@ class ControlPlaneFacade:
         session_factory: sessionmaker[Session] | None = None,
         registry: RegistryProtocol | None = None,
         uow_factory: Callable[[Session], SyncSqlAlchemyUnitOfWork] | None = None,
+        risk_accumulator: SessionRiskAccumulator | None = None,
     ) -> ControlPlaneFacade:
         cp = SyncControlPlane(
             database_url=database_url,
@@ -1342,6 +1346,7 @@ class ControlPlaneFacade:
             session_factory=session_factory,
             registry=registry,
             uow_factory=uow_factory,
+            risk_accumulator=risk_accumulator,
         )
         return cls(cp, mapper=mapper, unknown_policy=unknown_policy)
 
@@ -1350,6 +1355,14 @@ class ControlPlaneFacade:
 
     def close(self) -> None:
         self._cp.close()
+
+    def route_proposal(
+        self,
+        proposal: ActionProposal,
+        policy_snapshot: PolicySnapshot,
+    ) -> RoutingDecision:
+        """Route a proposal through policy; delegates to ``SyncControlPlane.route_proposal``."""
+        return self._cp.route_proposal(proposal, policy_snapshot)
 
     def verify_preconditions(
         self,

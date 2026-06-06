@@ -44,6 +44,20 @@
   fields (all nullable). The underlying `get_ticket_for_update()` lock method is added
   to `ApprovalRepository` and `AsyncApprovalRepository` protocols.
 
+- **`SyncControlPlane.route_proposal()` and `ControlPlaneFacade.route_proposal()`** —
+  new method on both types exposes the full routing path (policy classification + optional
+  session-risk escalation) to sync callers without manual engine construction. Both accept
+  `(proposal, policy_snapshot)` and return a `RoutingDecision`. Passing a
+  `risk_accumulator` at construction time wires it into every `route_proposal()` call —
+  the same escalation path as `ProposalRouter` in the async stack. A non-state-bearing
+  `SESSION_RISK_ESCALATED` event is written to the audit log when escalation fires.
+
+  `ControlPlaneFacade.__init__()` and `ControlPlaneFacade.from_database_url()` now accept
+  `risk_accumulator: SessionRiskAccumulator | None = None` (default `None`; no breaking
+  change). `ControlPlaneSetup.build()` auto-constructs a `SessionRiskAccumulator` from
+  `GovernanceConfig.risk_patterns` when patterns are present, so the standard setup path
+  now wires session-risk routing without host-app engine construction.
+
 ### Fixed
 
 - **`ControlPlaneFacade.run()` now enforces preconditions automatically** — `run()`

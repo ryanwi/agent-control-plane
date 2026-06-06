@@ -225,6 +225,32 @@ Two caveats apply: (1) the risk accumulator is excluded, so the simulated tier m
 
 An approved ticket can be revoked after the fact via `ApprovalGateway.revoke_ticket()` (sync, async, and resilient variants). Revocation resets the associated proposal back to `PENDING` and appends a state-bearing `APPROVAL_REVOKED` event. The ticket's status transitions to `ApprovalStatus.REVOKED`; the `revoked_by`, `revocation_reason`, and `revoked_at` fields record who revoked it and why. Callers are responsible for re-issuing a new ticket via `create_ticket()` when manual re-approval is warranted.
 
+### Session risk accumulation
+
+`SessionRiskAccumulator` watches the action chain within a session and escalates the effective `RiskLevel` when accumulated score crosses thresholds or known danger sequences are detected. It sits between `classify_risk_level()` and `classify_action_tier()` in the policy flow, so a session accumulating risky history automatically receives stricter routing on subsequent proposals.
+
+**Standard setup path** — pass `risk_patterns` to `GovernanceConfig`; `ControlPlaneSetup.build()` auto-constructs a `SessionRiskAccumulator` and wires it into the facade:
+
+```python
+cp = ControlPlaneSetup(
+    database_url="sqlite:///./cp.db",
+    governance=GovernanceConfig(
+        risk_patterns=[
+            RiskPattern(
+                name="exfil_chain",
+                action_sequence=["read_crm", "query_database", "send_email"],
+                window_size=10,
+                escalate_to=RiskLevel.HIGH,
+            )
+        ],
+    ),
+).build()
+```
+
+`ControlPlaneFacade.from_database_url()` also accepts `risk_accumulator` directly for custom configurations. When escalation is triggered, `route_proposal()` appends a non-state-bearing `SESSION_RISK_ESCALATED` event to the audit log and the returned `RoutingDecision` has `risk_escalated=True` with the escalated tier.
+
+The accumulator is in-process and in-memory per facade instance. Construct it without an `event_store` when using the sync `ControlPlaneFacade` — `route_proposal()` handles event emission through the sync event system.
+
 Future roadmap:
 
 1. **Native OpenTelemetry Integration**: Provide first-class OTel SDK adapters beyond protocol-level helper functions.
