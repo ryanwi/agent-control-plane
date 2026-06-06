@@ -154,6 +154,45 @@ class SessionRiskAccumulator:
             was_escalated=was_escalated,
         )
 
+    def peek(
+        self,
+        session_id: UUID,
+        action_risk_level: RiskLevel,
+    ) -> SessionRiskEscalation:
+        """Non-mutating assessment against the session's *current* accumulated state.
+
+        Unlike :meth:`assess`, this neither updates internal state nor emits events,
+        so it is safe to call repeatedly (e.g. polled by ``RuntimeMonitor`` during a
+        mid-flight execution). It answers: "given everything this session has
+        accumulated so far, is the effective risk for ``action_risk_level`` escalated?"
+
+        The in-flight proposal is *not* re-added to the score or window — it was
+        already counted by the :meth:`assess` call that admitted it — so repeated
+        peeks return a stable answer rather than inflating the score each cycle.
+        """
+        state = self._states.get(session_id)
+        if state is None:
+            return SessionRiskEscalation(
+                original_risk=action_risk_level,
+                escalated_risk=action_risk_level,
+                escalation_reasons=[],
+                session_state=self._fresh_state(session_id),
+                was_escalated=False,
+            )
+        score = self._check_score_escalation(state.accumulated_score, action_risk_level)
+        pattern = self._check_pattern_escalation(state.recent_actions)
+        candidates = [action_risk_level, score.risk]
+        if pattern.risk is not None:
+            candidates.append(pattern.risk)
+        escalated_risk = max(candidates, key=lambda r: r.rank)
+        return SessionRiskEscalation(
+            original_risk=action_risk_level,
+            escalated_risk=escalated_risk,
+            escalation_reasons=score.reasons + pattern.reasons,
+            session_state=state,
+            was_escalated=escalated_risk.rank > action_risk_level.rank,
+        )
+
     def get_state(self, session_id: UUID) -> SessionRiskState | None:
         """Return the current accumulated state for a session, or None if unknown."""
         return self._states.get(session_id)
@@ -199,15 +238,18 @@ class SessionRiskAccumulator:
 
     def _get_or_create_state(self, session_id: UUID) -> SessionRiskState:
         if session_id not in self._states:
-            self._states[session_id] = SessionRiskState(
-                session_id=session_id,
-                accumulated_score=Decimal("0"),
-                action_count=0,
-                recent_actions=[],
-                detected_patterns=[],
-                current_risk_level=RiskLevel.LOW,
-            )
+            self._states[session_id] = self._fresh_state(session_id)
         return self._states[session_id]
+
+    def _fresh_state(self, session_id: UUID) -> SessionRiskState:
+        return SessionRiskState(
+            session_id=session_id,
+            accumulated_score=Decimal("0"),
+            action_count=0,
+            recent_actions=[],
+            detected_patterns=[],
+            current_risk_level=RiskLevel.LOW,
+        )
 
 
 def _is_contiguous_subsequence(sequence: list[str], window: list[str]) -> bool:

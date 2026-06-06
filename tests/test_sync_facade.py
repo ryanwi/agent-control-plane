@@ -579,3 +579,63 @@ def test_route_proposal_risk_escalation_emits_event_and_upgrades_tier(tmp_path: 
     assert payload["original_risk"] == RiskLevel.LOW.value
 
     facade.close()
+
+
+# ---------------------------------------------------------------------------
+# revoke_ticket terminal-state guard
+# ---------------------------------------------------------------------------
+
+
+def _approve_ticket(facade: ControlPlaneFacade, session_id: UUID, resource_id: str):
+    """Helper: insert proposal, create ticket, approve it. Returns (proposal_id, ticket)."""
+    proposal_id = _insert_pending_proposal(facade, session_id, resource_id=resource_id)
+    ticket = facade.approvals.create_ticket(session_id, proposal_id, datetime.now(UTC) + timedelta(minutes=10))
+    approved = facade.approvals.approve_ticket(ticket.id)
+    return proposal_id, approved
+
+
+def _set_proposal_status(facade: ControlPlaneFacade, proposal_id: UUID, status: ProposalStatus) -> None:
+    with facade._cp.session_scope() as db:
+        proposal_model = ModelRegistry.get("ActionProposal")
+        from sqlalchemy import update as sa_update
+
+        db.execute(sa_update(proposal_model).where(proposal_model.id == proposal_id).values(status=status))
+        db.commit()
+
+
+@pytest.mark.parametrize("terminal_status", [ProposalStatus.EXECUTED, ProposalStatus.FAILED])
+def test_revoke_ticket_raises_when_proposal_already_terminal(tmp_path: Path, terminal_status: ProposalStatus):
+    facade = ControlPlaneFacade.from_database_url(f"sqlite:///{tmp_path / 'revoke_terminal.db'}")
+    facade.setup()
+
+    sid = facade.sessions.open_session("revoke-terminal-test")
+    proposal_id, ticket = _approve_ticket(facade, sid, resource_id="res-terminal")
+    _set_proposal_status(facade, proposal_id, terminal_status)
+
+    with pytest.raises(ValueError, match="already executed"):
+        facade.approvals.revoke_ticket(ticket.id)
+
+    # Ticket must remain APPROVED — no partial mutation
+    unchanged = facade.approvals.get_ticket(ticket.id)
+    assert unchanged is not None
+    assert unchanged.status == ApprovalStatus.APPROVED
+
+    facade.close()
+
+
+def test_revoke_ticket_succeeds_when_proposal_approved(tmp_path: Path):
+    facade = ControlPlaneFacade.from_database_url(f"sqlite:///{tmp_path / 'revoke_ok.db'}")
+    facade.setup()
+
+    sid = facade.sessions.open_session("revoke-ok-test")
+    proposal_id, ticket = _approve_ticket(facade, sid, resource_id="res-ok")
+
+    revoked = facade.approvals.revoke_ticket(ticket.id, revoked_by="operator", reason="stale")
+    assert revoked.status == ApprovalStatus.REVOKED
+    assert revoked.revoked_by == "operator"
+
+    proposal = facade.approvals.get_proposal(proposal_id)
+    assert proposal is not None
+    assert proposal.status == ProposalStatus.PENDING
+
+    facade.close()

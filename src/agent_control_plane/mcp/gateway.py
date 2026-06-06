@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from agent_control_plane.engine.session_risk_accumulator import SessionRiskAccumulator
     from agent_control_plane.evaluators.protocol import ResponseEvaluator
-    from agent_control_plane.types.enums import RiskLevel
     from agent_control_plane.types.steering import SteeringContext
 from uuid import UUID
 
@@ -21,6 +22,11 @@ from sqlalchemy.orm import Session
 from agent_control_plane.engine.budget_tracker import BudgetExhaustedError
 from agent_control_plane.engine.policy_engine import PolicyEngine
 from agent_control_plane.engine.router import RoutingDecision
+from agent_control_plane.engine.runtime_monitor import (
+    CancellableExecution,
+    RuntimeMonitor,
+    RuntimeMonitorConfig,
+)
 from agent_control_plane.models.registry import ModelRegistry
 from agent_control_plane.storage.sqlalchemy_sync import SyncSqlAlchemyUnitOfWork
 from agent_control_plane.sync import MappedEvent, SyncControlPlane
@@ -32,6 +38,7 @@ from agent_control_plane.types.enums import (
     GovernanceOutcome,
     McpEventName,
     ProposalStatus,
+    RiskLevel,
     SessionStatus,
     UnknownAppEventPolicy,
     parse_action_name,
@@ -174,11 +181,15 @@ class ToolPolicyMap:
 class McpGatewayConfig(BaseModel):
     """Configuration for the embedded MCP gateway."""
 
+    model_config = {"arbitrary_types_allowed": True}
+
     policy_snapshot: PolicySnapshot = Field(default_factory=PolicySnapshot)
     auto_create_sessions: bool = False
     default_max_cost: Decimal = Decimal("10000")
     default_max_action_count: int = 100
     unknown_event_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.RAISE
+    execution_factory: Callable[[ToolCallContext], CancellableExecution] | None = None
+    runtime_monitor_config: RuntimeMonitorConfig = Field(default_factory=RuntimeMonitorConfig)
 
 
 @dataclass(frozen=True)
@@ -208,6 +219,35 @@ class McpEventMapper:
         return MappedEvent(event_kind=spec.event_kind, payload=dict(payload), state_bearing=spec.state_bearing)
 
 
+class _SyncEmitEventSink:
+    """Bridges ``RuntimeMonitor``'s async audit append to the gateway's sync event path.
+
+    The monitor runs in an event loop spun up for the duration of a single tool call
+    (see ``_execute_tool_monitored``); the actual tool runs in a worker thread, so the
+    loop is free to perform this short synchronous DB write when an interrupt fires.
+    """
+
+    def __init__(self, cp: SyncControlPlane) -> None:
+        self._cp = cp
+
+    async def append(
+        self,
+        session_id: UUID,
+        event_kind: EventKind,
+        payload: dict[str, Any],
+        *,
+        state_bearing: bool = False,
+        metadata: EventMetadata | None = None,
+    ) -> int | None:
+        return self._cp.emit_event(
+            session_id,
+            event_kind,
+            payload,
+            state_bearing=state_bearing,
+            metadata=metadata,
+        )
+
+
 class McpGateway:
     """Govern MCP tool calls with policy, approval, budget, and audit events."""
 
@@ -221,6 +261,7 @@ class McpGateway:
         event_mapper: McpEventMapper | None = None,
         response_evaluators: Sequence[ResponseEvaluator] | None = None,
         precondition_providers: Sequence[PreconditionStateProvider] | None = None,
+        risk_accumulator: SessionRiskAccumulator | None = None,
     ) -> None:
         self._cp = control_plane
         self._executor = executor
@@ -230,6 +271,11 @@ class McpGateway:
         self._policy_engine = PolicyEngine(self._config.policy_snapshot)
         self._response_evaluators: tuple[ResponseEvaluator, ...] = tuple(response_evaluators or ())
         self._precondition_providers: tuple[PreconditionStateProvider, ...] = tuple(precondition_providers or ())
+        # Optional cooperative mid-execution interrupt path. Active only when a host
+        # supplies an execution factory *and* a risk accumulator is available to watch.
+        self._execution_factory = self._config.execution_factory
+        self._runtime_monitor_config = self._config.runtime_monitor_config
+        self._risk_accumulator = risk_accumulator or getattr(control_plane, "_risk_accumulator", None)
 
     def handle_tool_call(self, context: ToolCallContext) -> ToolCallResult:
         """Govern and execute an MCP tool call."""
@@ -356,7 +402,7 @@ class McpGateway:
                 f"{len(precondition_result.divergences)} divergence(s)"
             )
 
-        result = self._execute_tool(session_id, context)
+        result = self._execute_tool(session_id, context, proposal=proposal, risk_level=risk_level)
 
         try:
             self._cp.increment_budget(session_id, cost=result.cost, action_count=1)
@@ -427,7 +473,48 @@ class McpGateway:
             resolution_step=routing.resolution_step,
         )
 
-    def _execute_tool(self, session_id: UUID, context: ToolCallContext) -> ToolCallResult:
+    def _execute_tool(
+        self,
+        session_id: UUID,
+        context: ToolCallContext,
+        *,
+        proposal: ActionProposal,
+        risk_level: RiskLevel,
+    ) -> ToolCallResult:
+        if self._execution_factory is not None and self._risk_accumulator is not None:
+            return self._execute_tool_monitored(session_id, context, proposal, risk_level)
+        return self._invoke_executor(session_id, context)
+
+    def _execute_tool_monitored(
+        self,
+        session_id: UUID,
+        context: ToolCallContext,
+        proposal: ActionProposal,
+        risk_level: RiskLevel,
+    ) -> ToolCallResult:
+        """Run the executor while a ``RuntimeMonitor`` watches for mid-flight risk spikes.
+
+        The host's blocking executor runs in a worker thread so the monitor's poll loop
+        stays responsive on the event loop. The monitor only *signals* — it never alters
+        the result or swallows the executor's error, both of which propagate unchanged.
+        """
+        assert self._execution_factory is not None  # narrowed by caller
+        assert self._risk_accumulator is not None
+        execution = self._execution_factory(context)
+        monitor = RuntimeMonitor(
+            execution,
+            self._risk_accumulator,
+            event_store=_SyncEmitEventSink(self._cp),
+            config=self._runtime_monitor_config,
+        )
+
+        async def _run() -> ToolCallResult:
+            async with monitor.watching(session_id, proposal, risk_level):
+                return await asyncio.to_thread(self._invoke_executor, session_id, context)
+
+        return asyncio.run(_run())
+
+    def _invoke_executor(self, session_id: UUID, context: ToolCallContext) -> ToolCallResult:
         try:
             result = self._executor.execute(context)
         except Exception as exc:  # pragma: no cover - defensive conversion

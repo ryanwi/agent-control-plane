@@ -611,3 +611,84 @@ async def test_list_sessions_includes_started_at(tmp_path: Path):
     assert target.started_at is not None
 
     await facade.close()
+
+
+# ---------------------------------------------------------------------------
+# revoke_ticket terminal-state guard (async)
+# ---------------------------------------------------------------------------
+
+
+async def _async_insert_pending_proposal(facade: AsyncControlPlaneFacade, session_id, resource_id: str):
+    async with facade.session_scope() as db:
+        proposal_model = ModelRegistry.get("ActionProposal")
+        proposal = proposal_model(
+            id=uuid4(),
+            session_id=session_id,
+            cycle_event_seq=None,
+            resource_id=resource_id,
+            resource_type="task",
+            decision="status",
+            reasoning="terminal guard test",
+            metadata_json={},
+            weight=Decimal("1.0"),
+            score=Decimal("0.9"),
+            action_tier=ActionTier.ALWAYS_APPROVE,
+            risk_level=RiskLevel.MEDIUM,
+            status=ProposalStatus.PENDING,
+        )
+        db.add(proposal)
+        await db.commit()
+        return proposal.id
+
+
+async def _async_set_proposal_status(facade: AsyncControlPlaneFacade, proposal_id, status: ProposalStatus) -> None:
+    from sqlalchemy import update as sa_update
+
+    async with facade.session_scope() as db:
+        proposal_model = ModelRegistry.get("ActionProposal")
+        await db.execute(sa_update(proposal_model).where(proposal_model.id == proposal_id).values(status=status))
+        await db.commit()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("terminal_status", [ProposalStatus.EXECUTED, ProposalStatus.FAILED])
+async def test_async_revoke_ticket_raises_when_proposal_already_terminal(
+    tmp_path: Path, terminal_status: ProposalStatus
+):
+    facade = AsyncControlPlaneFacade.from_database_url(f"sqlite+aiosqlite:///{tmp_path / 'async_revoke_terminal.db'}")
+
+    sid = await facade.sessions.open_session("async-revoke-terminal")
+    proposal_id = await _async_insert_pending_proposal(facade, sid, resource_id="res-terminal")
+    ticket = await facade.approvals.create_ticket(sid, proposal_id, datetime.now(UTC) + timedelta(minutes=10))
+    await facade.approvals.approve_ticket(ticket.id)
+    await _async_set_proposal_status(facade, proposal_id, terminal_status)
+
+    with pytest.raises(ValueError, match="already executed"):
+        await facade.approvals.revoke_ticket(ticket.id)
+
+    # Ticket must remain APPROVED — no partial mutation
+    unchanged = await facade.approvals.get_ticket(ticket.id)
+    assert unchanged is not None
+    assert unchanged.status == ApprovalStatus.APPROVED
+
+    await facade.close()
+
+
+@pytest.mark.asyncio
+async def test_async_revoke_ticket_succeeds_when_proposal_approved(tmp_path: Path):
+    facade = AsyncControlPlaneFacade.from_database_url(f"sqlite+aiosqlite:///{tmp_path / 'async_revoke_ok.db'}")
+
+    sid = await facade.sessions.open_session("async-revoke-ok")
+    proposal_id = await _async_insert_pending_proposal(facade, sid, resource_id="res-ok")
+    ticket = await facade.approvals.create_ticket(sid, proposal_id, datetime.now(UTC) + timedelta(minutes=10))
+    await facade.approvals.approve_ticket(ticket.id)
+
+    revoked = await facade.approvals.revoke_ticket(ticket.id, revoked_by="operator", reason="stale")
+    assert revoked.status == ApprovalStatus.REVOKED
+    assert revoked.revoked_by == "operator"
+
+    proposal = await facade.approvals.get_proposal(proposal_id)
+    assert proposal is not None
+    assert proposal.status == ProposalStatus.PENDING
+
+    await facade.close()

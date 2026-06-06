@@ -4,6 +4,19 @@
 
 ### Added
 
+- **Cooperative mid-execution interrupt (`RuntimeMonitor`)** — ACP can now ask a host
+  executor to stop an action that is *already running* when session risk spikes, closing
+  the gap between "cleared the kill switch" and "EventStore records the outcome". Hosts
+  opt in by implementing the `CancellableExecution` protocol (`async cancel(reason)` +
+  `is_running`); ACP never reaches across the abstraction boundary to force a stop. The
+  `RuntimeMonitor` polls `SessionRiskAccumulator.peek()` (a new non-mutating assessment)
+  while an execution is in flight and, on escalation at/above a configurable threshold
+  (default `HIGH`, 250 ms poll), records a state-bearing `RUNTIME_INTERRUPT_REQUESTED`
+  event and calls `execution.cancel()` — exactly once. `McpGateway` wires this in as an
+  optional path via `McpGatewayConfig.execution_factory`; whether the executor actually
+  stops remains the executor's responsibility. The monitor never intercepts the
+  execution result or swallows executor errors.
+
 - **Optional session-risk routing integration** — `ProposalRouter` now accepts a
   `SessionRiskAccumulator`. When provided, routed decisions use the accumulator's
   effective risk for auto-approval and tier classification, and expose

@@ -51,6 +51,7 @@ The package is organized around explicit layers:
   - `precondition_verifier` — optional pre-execution resource-state verification
   - `event_store` — monotonic event persistence and buffering
   - `session_risk_accumulator` — cross-action risk accumulation and pattern detection per session
+  - `runtime_monitor` — cooperative mid-execution interrupt: watches session risk while an action is in flight and signals a host-implemented `CancellableExecution` to stop when risk escalates
   - `token_budget_tracker` — identity-scoped, time-windowed token budget enforcement
   - `model_governor` — model tier classification and access policy
   - `condition_evaluator` — recursive boolean condition tree evaluation
@@ -252,6 +253,49 @@ cp = ControlPlaneSetup(
 `ControlPlaneFacade.from_database_url()` also accepts `risk_accumulator` directly for custom configurations. When escalation is triggered, `route_proposal()` appends a non-state-bearing `SESSION_RISK_ESCALATED` event to the audit log and the returned `RoutingDecision` has `risk_escalated=True` with the escalated tier.
 
 The accumulator is in-process and in-memory per facade instance. Construct it without an `event_store` when using the sync `ControlPlaneFacade` — `route_proposal()` handles event emission through the sync event system.
+
+### Cooperative mid-execution interrupt (`RuntimeMonitor`)
+
+The `SessionRiskAccumulator` acts *between* proposals: the next proposal is routed with an
+escalated risk level once thresholds are crossed. But once an action clears `KillSwitch`
+and executes, the control plane is blind to it until `EventStore.append()` closes the loop.
+`RuntimeMonitor` fills that gap **without owning the executor** — ACP is a governance
+library, so it signals and the host decides what to do.
+
+Host executors opt in by implementing the `CancellableExecution` protocol:
+
+- `async def cancel(self, reason: str) -> None` — ACP's request to stop the in-flight
+  action. The executor decides what "cancel" means (asyncio task cancellation, setting a
+  `threading.Event`, writing a stop file, signalling a subprocess, …).
+- `@property def is_running(self) -> bool` — lets ACP skip the call if execution already
+  completed naturally.
+
+`RuntimeMonitor` takes a `CancellableExecution` handle and a `SessionRiskAccumulator`.
+Its `watch(session_id, proposal, action_risk_level)` (or the `watching(...)` async context
+manager) starts a background poll loop that re-checks risk with the non-mutating
+`SessionRiskAccumulator.peek()`. When the effective risk escalates above the admitted
+level *and* reaches a configurable threshold (default `HIGH`; `poll_interval_seconds`
+default `0.25`), the monitor records a **state-bearing** `RUNTIME_INTERRUPT_REQUESTED`
+event and calls `execution.cancel()` — exactly once per watch. `peek()` does not re-add the
+in-flight proposal to the accumulated score, so polling is idempotent rather than inflating
+risk each cycle.
+
+Design guarantees:
+
+- **Cooperative, not coercive.** ACP asks and records; whether the executor actually stops
+  is the executor's responsibility. The audit log records the request regardless.
+- **Observe, don't intercept.** The monitor never alters the execution result and never
+  swallows executor errors — both propagate unchanged.
+- **Fail-closed audit.** `RUNTIME_INTERRUPT_REQUESTED` is `state_bearing=True`; a
+  persistence failure raises (the monitor records the request *before* calling `cancel()`).
+
+`McpGateway` wires this in as an optional path: supply `McpGatewayConfig.execution_factory`
+(a `Callable[[ToolCallContext], CancellableExecution]`) and a `SessionRiskAccumulator`
+(passed to the gateway or carried by the `SyncControlPlane`). The gateway then wraps each
+`executor.execute()` in a `RuntimeMonitor.watching()` context, running the blocking executor
+in a worker thread so the poll loop stays responsive. `ControlPlaneFacade.run()` is *not*
+wired — its execution body is caller-managed by design, so callers compose `RuntimeMonitor`
+directly when they want the same behaviour.
 
 Future roadmap:
 

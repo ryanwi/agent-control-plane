@@ -59,6 +59,11 @@ from agent_control_plane.engine.policy_engine import (
 )
 from agent_control_plane.engine.precondition_verifier import PreconditionVerifier
 from agent_control_plane.engine.router import ProposalRouter, RoutingDecision
+from agent_control_plane.engine.runtime_monitor import (
+    CancellableExecution,
+    RuntimeMonitor,
+    RuntimeMonitorConfig,
+)
 from agent_control_plane.engine.session_manager import SessionManager
 from agent_control_plane.engine.session_risk_accumulator import SessionRiskAccumulator
 from agent_control_plane.engine.token_budget_tracker import TokenBudgetExhaustedError, TokenBudgetTracker
@@ -522,6 +527,9 @@ __all__ = [
     "RiskLimits",
     "RoutingDecision",
     "RoutingResolutionStep",
+    "RuntimeMonitor",
+    "RuntimeMonitorConfig",
+    "CancellableExecution",
     "ScopedModelRegistry",
     "SessionRiskAccumulator",
     "SessionRiskEscalation",

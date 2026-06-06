@@ -116,6 +116,7 @@ class EventKind(StrEnum):
     HANDOFF_REJECTED = "handoff_rejected"
     LEASE_EXPIRED = "lease_expired"
     SESSION_RISK_ESCALATED = "session_risk_escalated"
+    RUNTIME_INTERRUPT_REQUESTED = "runtime_interrupt_requested"
     AGENT_REVOKED = "agent_revoked"
     AGENT_REINSTATED = "agent_reinstated"
     TOKEN_BUDGET_EXHAUSTED = "token_budget_exhausted"
