@@ -104,6 +104,14 @@ class ToolExecutionError(McpGovernanceError):
     """Raised when the underlying tool execution fails."""
 
 
+class PreconditionFailedError(McpGovernanceError):
+    """Raised when a declared precondition diverges from actual resource state.
+
+    Emitted after ``TOOL_CALL_ALLOWED`` — the proposal passed policy/budget checks but
+    the resource state check failed before execution began.
+    """
+
+
 class ToolResultRejectedError(McpGovernanceError):
     """Raised when a response evaluator rejects tool output before it re-enters context.
 
@@ -331,10 +339,20 @@ class McpGateway:
 
         precondition_result = self._verify_preconditions(session_id, proposal, context)
         if precondition_result.status == PreconditionStatus.FAILED:
-            return ToolCallResult(
-                ok=False,
-                output=precondition_result.model_dump(mode="json"),
-                error="precondition_failed",
+            self._emit(
+                session_id,
+                McpEventName.TOOL_CALL_BLOCKED,
+                {
+                    "tool_name": context.tool_name,
+                    "reason": "precondition_failed",
+                    "outcome": GovernanceOutcome.PRECONDITION_FAILED.value,
+                },
+                correlation_id=context.correlation_id,
+                idempotency_key=context.idempotency_key,
+            )
+            raise PreconditionFailedError(
+                f"Precondition check failed for {context.tool_name}: "
+                f"{len(precondition_result.divergences)} divergence(s)"
             )
 
         result = self._execute_tool(session_id, context)

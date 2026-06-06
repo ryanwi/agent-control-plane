@@ -28,6 +28,28 @@
   field on the DTO (types, UTC-awareness, `config_hash` length, timestamp ordering) to
   serve as a stable contract for downstream consumers.
 
+### Fixed
+
+- **`ControlPlaneFacade.run()` now enforces preconditions automatically** — `run()`
+  accepts `preconditions`, `proposal_id`, `action_id`, and `precondition_providers`
+  kwargs. When supplied, preconditions are verified after the kill-switch check and
+  before the body executes. A failing check appends a state-bearing
+  `PRECONDITION_FAILED` event, aborts the session, and raises
+  `RuntimeError("precondition_failed")` without entering the body. Previously
+  non-MCP callers using `run()` had no automatic precondition enforcement — the
+  feature failed open by omission unless callers manually invoked
+  `verify_preconditions()`.
+
+- **`McpGateway` precondition failure now raises `PreconditionFailedError` and emits
+  `TOOL_CALL_BLOCKED`** — previously the only denial path that returned `ok=False`
+  instead of raising, breaking callers written against the `McpGovernanceError`
+  exception contract. The `TOOL_CALL_ALLOWED` event emitted before the precondition
+  check was also left without a corresponding outcome event, leaving an unclosed
+  governance cycle in the MCP stream. Both are corrected: `TOOL_CALL_BLOCKED` (with
+  `reason="precondition_failed"` and `outcome=GovernanceOutcome.PRECONDITION_FAILED`)
+  is emitted before the raise. `PreconditionFailedError` is a new `McpGovernanceError`
+  subclass exported from `agent_control_plane`.
+
 ## [0.24.0] - 2026-06-01
 
 ### Fixed (security)

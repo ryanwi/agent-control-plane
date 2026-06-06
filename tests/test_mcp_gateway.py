@@ -14,6 +14,7 @@ from agent_control_plane.mcp import (
     McpGateway,
     McpGatewayConfig,
     PolicyDeniedError,
+    PreconditionFailedError,
     ToolCallContext,
     ToolCallResult,
     ToolExecutionError,
@@ -177,23 +178,22 @@ def test_file_hash_precondition_failure_aborts_before_execution(tmp_path: Path):
         config=McpGatewayConfig(policy_snapshot=policy),
     )
 
-    result = gateway.handle_tool_call(
-        ToolCallContext(
-            tool_name="status",
-            session_id=sid,
-            estimated_cost=Decimal("1.00"),
-            preconditions=[
-                Precondition(
-                    resource_id=str(target),
-                    provider_id="file_sha256",
-                    expected_state=expected,
-                )
-            ],
+    with pytest.raises(PreconditionFailedError, match="divergence"):
+        gateway.handle_tool_call(
+            ToolCallContext(
+                tool_name="status",
+                session_id=sid,
+                estimated_cost=Decimal("1.00"),
+                preconditions=[
+                    Precondition(
+                        resource_id=str(target),
+                        provider_id="file_sha256",
+                        expected_state=expected,
+                    )
+                ],
+            )
         )
-    )
 
-    assert result.ok is False
-    assert result.error == "precondition_failed"
     assert executor.calls == 0
     budget = cp.get_remaining_budget(sid)
     assert budget["used_cost"] == Decimal("0.0000")
@@ -203,6 +203,10 @@ def test_file_hash_precondition_failure_aborts_before_execution(tmp_path: Path):
     assert failures[0].payload["divergences"][0]["expected_state"] == expected
     assert failures[0].payload["divergences"][0]["actual_state"] == _sha256(target)
     assert EventKind.EXECUTION_COMPLETED not in [e.kind for e in events]
+    # TOOL_CALL_ALLOWED was emitted, then TOOL_CALL_BLOCKED closes the governance cycle
+    kinds = [e.kind for e in events]
+    assert EventKind.RISK_ASSESSED in kinds  # TOOL_CALL_ALLOWED maps here
+    assert EventKind.APPROVAL_DENIED in kinds  # TOOL_CALL_BLOCKED maps here
     cp.close()
 
 

@@ -1250,9 +1250,9 @@ class ControlPlaneFacade:
     ) -> PreconditionVerificationResult:
         """Verify preconditions immediately before host-managed execution.
 
-        ``ControlPlaneFacade.run()`` only owns session lifecycle; it does not receive an
-        action proposal or execution callback. Non-MCP callers must invoke this method
-        after kill-switch/budget checks and immediately before performing side effects.
+        Non-MCP callers who manage execution outside of ``run()`` can call this
+        method directly after kill-switch/budget checks and before performing
+        side effects. When using ``run()``, pass ``preconditions`` there instead.
         """
 
         return self._cp.verify_preconditions(
@@ -1272,6 +1272,10 @@ class ControlPlaneFacade:
         max_cost: Decimal = Decimal("10000"),
         max_action_count: int = 50,
         execution_mode: ExecutionMode = ExecutionMode.DRY_RUN,
+        preconditions: list[Precondition] | None = None,
+        proposal_id: UUID | None = None,
+        action_id: str | None = None,
+        precondition_providers: list[PreconditionStateProvider] | None = None,
     ) -> Iterator[RunHandle]:
         """Open a tracked agent run and yield a handle for tagging.
 
@@ -1279,9 +1283,10 @@ class ControlPlaneFacade:
         via ``handle.tag()`` are written into the session's close payload.
         On exception: closes the session with SESSION_ABORTED and re-raises.
 
-        This context manager does not execute proposals itself. Callers that attach
-        proposal preconditions must call ``verify_preconditions()`` immediately before
-        their host-managed execution step.
+        If ``preconditions`` are supplied, they are verified after the kill-switch
+        check (``activate_session``) and before the body executes. A failing
+        verification aborts the session and raises ``RuntimeError("precondition_failed")``
+        without entering the body.
         """
         session_id = self.sessions.open_session(
             name,
@@ -1292,6 +1297,16 @@ class ControlPlaneFacade:
         self._cp.activate_session(session_id)
         handle = RunHandle(session_id=session_id)
         try:
+            if preconditions:
+                prec_result = self._cp.verify_preconditions(
+                    session_id,
+                    preconditions,
+                    proposal_id=proposal_id,
+                    action_id=action_id,
+                    providers=precondition_providers,
+                )
+                if prec_result.status == PreconditionStatus.FAILED:
+                    raise RuntimeError("precondition_failed")
             yield handle
             self.sessions.close_session(
                 session_id,

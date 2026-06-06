@@ -82,7 +82,7 @@ source-roots = ["src"]
 max-line-length = 120
 
 [tool.pylint.design]
-max-args = 8
+max-args = 9
 max-positional-arguments = 5
 max-public-methods = 21
 max-attributes = 12

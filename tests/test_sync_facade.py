@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -444,5 +445,46 @@ def test_sync_list_sessions_includes_started_at(tmp_path: Path):
     sessions = facade.observer.list_sessions(statuses=[SessionStatus.ACTIVE])
     target = next(s for s in sessions if s.id == sid)
     assert target.started_at is not None
+
+    facade.close()
+
+
+def test_control_plane_facade_run_failing_precondition_aborts_before_execution(tmp_path: Path):
+    db_file = tmp_path / "run_precondition_fail.db"
+    facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_file}")
+    facade.setup()
+
+    target = tmp_path / "config.py"
+    target.write_text("SCALAR_LR = 0.5\n")
+    expected_hash = hashlib.sha256(target.read_bytes()).hexdigest()
+    target.write_text("SCALAR_LR = 0.3\n")
+
+    executor_called = False
+
+    with (
+        pytest.raises(RuntimeError, match="precondition_failed"),
+        facade.run(
+            "precondition-fail-run",
+            preconditions=[
+                Precondition(
+                    resource_id=str(target),
+                    provider_id="file_sha256",
+                    expected_state=expected_hash,
+                )
+            ],
+        ) as _handle,
+    ):
+        executor_called = True
+
+    assert executor_called is False
+
+    sessions = facade.observer.list_sessions(statuses=[SessionStatus.COMPLETED])
+    assert len(sessions) == 1
+    sid = sessions[0].id
+    events = facade.sessions.replay(sid)
+    failures = [e for e in events if e.kind == EventKind.PRECONDITION_FAILED]
+    assert len(failures) == 1
+    assert failures[0].state_bearing is True
+    assert EventKind.EXECUTION_COMPLETED not in [e.kind for e in events]
 
     facade.close()
