@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-06-05
+
 ### Added
 
 - **Cooperative mid-execution interrupt (`RuntimeMonitor`)** — ACP can now ask a host
