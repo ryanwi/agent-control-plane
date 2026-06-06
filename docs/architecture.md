@@ -215,6 +215,12 @@ For event kinds not listed, `cp.outcome` is omitted. Host apps can override by s
 
 Preconditions are persisted without a schema migration under the reserved `ActionProposal.metadata_json` key `__acp_preconditions`. This key is ACP-managed internal storage and must not be used by host metadata schemas. Repository read paths decode it into `ActionProposal.preconditions` and remove it from host-facing `ActionProposal.metadata`.
 
+### Policy simulation (`simulate_action`)
+
+`McpGateway.simulate_action(proposal)` runs a proposal through the full `PolicyEngine` classification path and returns a `RoutingDecision` without any side effects — no proposal row is created, no approval ticket is issued, no events are appended. This is useful for agents or operators that want to preview a tier decision before committing an action.
+
+Two caveats apply: (1) the risk accumulator is excluded, so the simulated tier may differ from the live tier if session risk has accumulated since the last real proposal; (2) agent revocation is not checked (revocation is a `SyncControlPlane` call that requires a live session, not a policy-engine concern). Both are documented in the method docstring.
+
 ### Approval ticket revocation
 
 An approved ticket can be revoked after the fact via `ApprovalGateway.revoke_ticket()` (sync, async, and resilient variants). Revocation resets the associated proposal back to `PENDING` and appends a state-bearing `APPROVAL_REVOKED` event. The ticket's status transitions to `ApprovalStatus.REVOKED`; the `revoked_by`, `revocation_reason`, and `revoked_at` fields record who revoked it and why. Callers are responsible for re-issuing a new ticket via `create_ticket()` when manual re-approval is warranted.

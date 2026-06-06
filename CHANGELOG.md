@@ -28,6 +28,13 @@
   field on the DTO (types, UTC-awareness, `config_hash` length, timestamp ordering) to
   serve as a stable contract for downstream consumers.
 
+- **`McpGateway.simulate_action(proposal)`** — synchronous, side-effect-free policy
+  preview: classifies a proposal through the full `PolicyEngine` path and returns a
+  `RoutingDecision` without storing the proposal, creating approval tickets, or
+  emitting events. Risk accumulator is excluded (simulated tier may differ from the
+  live tier if session risk has accumulated); agent revocation is not checked. Useful
+  for pre-flight tier inspection before committing an action.
+
 - **Approval ticket revocation** — `ApprovalGateway.revoke_ticket()` (sync and async,
   including the resilient wrapper) revokes an approved ticket, resets the associated
   proposal to `PENDING`, and appends a state-bearing `APPROVAL_REVOKED` event. Callers
