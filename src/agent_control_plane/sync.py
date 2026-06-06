@@ -14,7 +14,10 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from agent_control_plane._scorecard import ScorecardAcc, accumulate_scorecard_event, finalize_scorecard, normalize_utc
+from agent_control_plane.engine.policy_engine import PolicyEngine
 from agent_control_plane.engine.precondition_verifier import PreconditionVerifier, precondition_failure_payload
+from agent_control_plane.engine.router import RoutingDecision
+from agent_control_plane.engine.session_risk_accumulator import SessionRiskAccumulator
 from agent_control_plane.models.reference import Base, register_models
 from agent_control_plane.models.registry import (
     RegistryProtocol,
@@ -52,6 +55,7 @@ from agent_control_plane.types.enums import (
 )
 from agent_control_plane.types.frames import EmitMetadata, EventFrame, EventMetadata
 from agent_control_plane.types.ids import AgentId, IdempotencyKey, ResourceId
+from agent_control_plane.types.policies import PolicySnapshot
 from agent_control_plane.types.preconditions import (
     Precondition,
     PreconditionStateProvider,
@@ -166,12 +170,14 @@ class SyncControlPlane:  # pylint: disable=too-many-public-methods
         registry: RegistryProtocol | None = None,
         uow_factory: Callable[[Session], SyncSqlAlchemyUnitOfWork] | None = None,
         register_reference_models: bool = True,
+        risk_accumulator: SessionRiskAccumulator | None = None,
     ) -> None:
         self._database_url = database_url
         self._registry = registry or ScopedModelRegistry()
         self._engine = engine or create_engine(database_url, future=True)
         self._session_factory = session_factory or sessionmaker(bind=self._engine, expire_on_commit=False, future=True)
         self._uow_factory = uow_factory or SyncSqlAlchemyUnitOfWork
+        self._risk_accumulator = risk_accumulator
         if register_reference_models:
             register_models(registry=self._registry)
 
@@ -333,6 +339,55 @@ class SyncControlPlane:  # pylint: disable=too-many-public-methods
                 )
             uow.commit()
             return result
+
+    def route_proposal(
+        self,
+        proposal: ActionProposal,
+        policy_snapshot: PolicySnapshot,
+    ) -> RoutingDecision:
+        """Route a proposal through policy with optional session-risk accumulation.
+
+        When a ``SessionRiskAccumulator`` was provided at construction, accumulated
+        session risk is assessed before tier classification — the same escalation path
+        as ``ProposalRouter`` in the async stack. A ``SESSION_RISK_ESCALATED`` event
+        is written to the audit log on escalation.
+
+        Initialise the accumulator without an ``event_store`` when using this method;
+        ``SyncControlPlane`` handles event emission through its own sync event system.
+        """
+        import asyncio
+
+        pe = PolicyEngine(policy_snapshot)
+        original_risk = pe.classify_risk_level(proposal)
+        risk_level = original_risk
+        risk_escalation = None
+
+        if self._risk_accumulator is not None:
+            risk_escalation = asyncio.run(self._risk_accumulator.assess(proposal.session_id, proposal, original_risk))
+            risk_level = risk_escalation.escalated_risk
+            if risk_escalation.was_escalated and self._risk_accumulator._event_store is None:
+                self.emit_event(
+                    proposal.session_id,
+                    EventKind.SESSION_RISK_ESCALATED,
+                    {
+                        "session_id": str(proposal.session_id),
+                        "original_risk": original_risk.value,
+                        "escalated_risk": risk_level.value,
+                        "reasons": risk_escalation.escalation_reasons,
+                    },
+                    state_bearing=False,
+                )
+
+        tier = pe.classify_action_tier(proposal, risk_level)
+        routing = pe.build_routing_reason(proposal, risk_level, tier)
+        return RoutingDecision(
+            tier=tier,
+            risk_level=risk_level,
+            reason=routing.reason,
+            resolution_step=routing.resolution_step,
+            risk_escalated=risk_escalation.was_escalated if risk_escalation is not None else False,
+            risk_escalation=risk_escalation,
+        )
 
     def replay_events(self, session_id: UUID, *, after_seq: int = 0, limit: int = 100) -> list[EventFrame]:
         with self.session_scope() as db:
