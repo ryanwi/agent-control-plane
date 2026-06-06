@@ -60,6 +60,26 @@
 
 ### Fixed
 
+- **Sync ticket reads now hold a row lock** — `SyncSqlAlchemyUnitOfWork.get_pending_ticket_for_update()`
+  and `get_ticket_for_update()` were missing `.with_for_update()`. On PostgreSQL,
+  concurrent sync callers (e.g. `revoke_ticket` + `approve_ticket` on the same ticket)
+  could both read the same row without a lock, both pass the application-level status
+  guard, and both write — last write wins silently. The async backend already locked the
+  row; the sync backend now does too.
+
+- **`revoke_ticket()` rejects revocation of already-executed proposals** — both the sync
+  and async facades called `update_status(proposal_id, PENDING)` unconditionally. A
+  proposal already in `EXECUTED` or `FAILED` state would be silently reset to `PENDING`,
+  making it eligible for re-approval and re-execution of an action that had already run.
+  Both facades now fetch the current proposal status before writing and raise `ValueError`
+  when the proposal is in a terminal state.
+
+- **Removed orphaned `ApprovalGate.revoke_approval()` engine method** — the method was
+  never called; both facades implement revoke logic inline. The engine version also
+  mutated the DTO in-place rather than using `model_copy`, diverging from the facade
+  pattern. Callers using `ApprovalGate` directly should use the facade's
+  `revoke_ticket()` instead.
+
 - **`ControlPlaneFacade.run()` now enforces preconditions automatically** — `run()`
   accepts `preconditions`, `proposal_id`, `action_id`, and `precondition_providers`
   kwargs. When supplied, preconditions are verified after the kill-switch check and

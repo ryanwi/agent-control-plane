@@ -225,6 +225,8 @@ Two caveats apply: (1) the risk accumulator is excluded, so the simulated tier m
 
 An approved ticket can be revoked after the fact via `ApprovalGateway.revoke_ticket()` (sync, async, and resilient variants). Revocation resets the associated proposal back to `PENDING` and appends a state-bearing `APPROVAL_REVOKED` event. The ticket's status transitions to `ApprovalStatus.REVOKED`; the `revoked_by`, `revocation_reason`, and `revoked_at` fields record who revoked it and why. Callers are responsible for re-issuing a new ticket via `create_ticket()` when manual re-approval is warranted.
 
+Revocation is rejected when the associated proposal is already in a terminal state (`EXECUTED` or `FAILED`) — the action has already run and resetting it to `PENDING` would allow re-execution. Both facades raise `ValueError` in this case; the ticket is not modified.
+
 ### Session risk accumulation
 
 `SessionRiskAccumulator` watches the action chain within a session and escalates the effective `RiskLevel` when accumulated score crosses thresholds or known danger sequences are detected. It sits between `classify_risk_level()` and `classify_action_tier()` in the policy flow, so a session accumulating risky history automatically receives stricter routing on subsequent proposals.
@@ -344,6 +346,7 @@ Compatibility posture and migration guidance are documented in [compatibility.md
 ## 10) Operational gotchas and anti-patterns
 
 - Avoid calling model methods directly and bypassing engines; that breaks audit trails and recovery assumptions.
+- Avoid re-implementing approval write paths outside the facade — `get_ticket_for_update()` and `get_pending_ticket_for_update()` hold a `FOR UPDATE` row lock; bypassing them loses the lock and can produce silent last-write-wins races under concurrency.
 - Avoid sharing a single active cycle across multiple proposal streams without concurrency checks.
 - Avoid unbounded scoped approvals (countless session scope without expiry) unless intentionally audited.
 - Avoid swallowing `state_bearing=True` persistence errors; those failures must block the decision path.
