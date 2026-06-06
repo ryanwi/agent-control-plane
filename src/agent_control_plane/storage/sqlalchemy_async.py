@@ -439,6 +439,9 @@ class AsyncSqlAlchemyApprovalRepo:
             timeout_at=getattr(row, "timeout_at", None),
             created_at=row.created_at,
             decided_at=getattr(row, "decided_at", None),
+            revoked_by=getattr(row, "revoked_by", None),
+            revocation_reason=getattr(row, "revocation_reason", None),
+            revoked_at=getattr(row, "revoked_at", None),
         )
 
 

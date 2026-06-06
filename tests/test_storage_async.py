@@ -168,6 +168,40 @@ async def test_approval_lifecycle(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
+async def test_revocation_audit_fields_persist(db_session: AsyncSession):
+    session_repo = AsyncSqlAlchemySessionRepo(db_session)
+    approval_repo = AsyncSqlAlchemyApprovalRepo(db_session)
+
+    cs = await session_repo.create_session(
+        session_name="revoke-audit-test",
+        status=SessionStatus.ACTIVE,
+        execution_mode="dry_run",
+        max_cost=Decimal("100"),
+        max_action_count=10,
+    )
+
+    timeout_at = datetime.now(UTC) + timedelta(hours=1)
+    ticket = await approval_repo.create_ticket(cs.id, uuid4(), timeout_at)
+    await approval_repo.update_ticket(ticket.id, status=ApprovalStatus.APPROVED)
+
+    revoked_at = datetime.now(UTC)
+    await approval_repo.update_ticket(
+        ticket.id,
+        status=ApprovalStatus.REVOKED,
+        revoked_by="risk_monitor",
+        revocation_reason="session risk escalated",
+        revoked_at=revoked_at,
+    )
+
+    reloaded = await approval_repo.get_ticket(ticket.id)
+    assert reloaded is not None
+    assert reloaded.status == ApprovalStatus.REVOKED
+    assert reloaded.revoked_by == "risk_monitor"
+    assert reloaded.revocation_reason == "session risk escalated"
+    assert reloaded.revoked_at is not None
+
+
+@pytest.mark.asyncio
 async def test_deny_all_pending(db_session: AsyncSession):
     session_repo = AsyncSqlAlchemySessionRepo(db_session)
     approval_repo = AsyncSqlAlchemyApprovalRepo(db_session)

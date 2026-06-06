@@ -185,6 +185,39 @@ def test_approval_lifecycle(db_session: Session):
     assert scope_tickets[0].scope_max_count == 3
 
 
+def test_revocation_audit_fields_persist(db_session: Session):
+    session_repo = SyncSqlAlchemySessionRepo(db_session)
+    approval_repo = SyncSqlAlchemyApprovalRepo(db_session)
+
+    cs = session_repo.create_session(
+        session_name="revoke-audit-test",
+        status=SessionStatus.ACTIVE,
+        execution_mode="dry_run",
+        max_cost=Decimal("100"),
+        max_action_count=10,
+    )
+
+    timeout_at = datetime.now(UTC) + timedelta(hours=1)
+    ticket = approval_repo.create_ticket(cs.id, uuid4(), timeout_at)
+    approval_repo.update_ticket(ticket.id, status=ApprovalStatus.APPROVED)
+
+    revoked_at = datetime.now(UTC)
+    approval_repo.update_ticket(
+        ticket.id,
+        status=ApprovalStatus.REVOKED,
+        revoked_by="risk_monitor",
+        revocation_reason="session risk escalated",
+        revoked_at=revoked_at,
+    )
+
+    reloaded = approval_repo.get_ticket(ticket.id)
+    assert reloaded is not None
+    assert reloaded.status == ApprovalStatus.REVOKED
+    assert reloaded.revoked_by == "risk_monitor"
+    assert reloaded.revocation_reason == "session risk escalated"
+    assert reloaded.revoked_at is not None
+
+
 def test_deny_all_pending(db_session: Session):
     session_repo = SyncSqlAlchemySessionRepo(db_session)
     approval_repo = SyncSqlAlchemyApprovalRepo(db_session)
