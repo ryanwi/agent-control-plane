@@ -643,6 +643,12 @@ class AsyncApprovalGateway(_AsyncGatewayBase):
             ticket = await uow.approval_repo.get_ticket_for_update(ticket_id)
             if ticket.status != ApprovalStatus.APPROVED:
                 raise ValueError(f"Ticket {ticket_id} is not approved (status={ticket.status})")
+            proposal = await uow.proposal_repo.get_proposal(ticket.proposal_id)
+            if proposal is not None and proposal.status in {ProposalStatus.EXECUTED, ProposalStatus.FAILED}:
+                raise ValueError(
+                    f"Cannot revoke ticket {ticket_id}: proposal {ticket.proposal_id} is already "
+                    f"{proposal.status} (action already executed)"
+                )
             revoked_at = datetime.now(UTC)
             fields: ApprovalTicketUpdateFields = {
                 "status": ApprovalStatus.REVOKED,

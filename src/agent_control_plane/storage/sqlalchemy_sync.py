@@ -325,7 +325,9 @@ class SyncSqlAlchemyApprovalRepo:
 
     def get_pending_ticket_for_update(self, ticket_id: UUID) -> ApprovalTicket:
         approval_ticket_model = ModelRegistry.get("ApprovalTicket")
-        result = self._session.execute(select(approval_ticket_model).where(approval_ticket_model.id == ticket_id))
+        result = self._session.execute(
+            select(approval_ticket_model).where(approval_ticket_model.id == ticket_id).with_for_update()
+        )
         ticket = result.scalar_one_or_none()
         if ticket is None:
             raise ValueError(f"Ticket {ticket_id} not found")
@@ -335,7 +337,9 @@ class SyncSqlAlchemyApprovalRepo:
 
     def get_ticket_for_update(self, ticket_id: UUID) -> ApprovalTicket:
         approval_ticket_model = ModelRegistry.get("ApprovalTicket")
-        result = self._session.execute(select(approval_ticket_model).where(approval_ticket_model.id == ticket_id))
+        result = self._session.execute(
+            select(approval_ticket_model).where(approval_ticket_model.id == ticket_id).with_for_update()
+        )
         ticket = result.scalar_one_or_none()
         if ticket is None:
             raise ValueError(f"Ticket {ticket_id} not found")

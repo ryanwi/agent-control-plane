@@ -194,54 +194,6 @@ class ApprovalGate:
 
         return None
 
-    async def revoke_approval(
-        self,
-        ticket_id: UUID,
-        *,
-        revoked_by: str = "system",
-        reason: str = "",
-        trigger: str = "manual",
-    ) -> ApprovalTicket:
-        """Revoke an approved ticket, resetting the proposal to PENDING for re-approval.
-
-        The caller is responsible for re-issuing a ticket via create_ticket() if manual
-        re-approval is needed. This method only revokes; it does not create a new ticket.
-        State-bearing write -- failure aborts the operation.
-        """
-        ticket = await self._approval_repo.get_ticket_for_update(ticket_id)
-        if ticket.status != ApprovalStatus.APPROVED:
-            raise ValueError(f"Ticket {ticket_id} is not approved (status={ticket.status})")
-
-        revoked_at = datetime.now(UTC)
-        await self._approval_repo.update_ticket(
-            ticket_id,
-            status=ApprovalStatus.REVOKED,
-            revoked_by=revoked_by,
-            revocation_reason=reason,
-            revoked_at=revoked_at,
-        )
-        await self._proposal_repo.update_status(ticket.proposal_id, ProposalStatus.PENDING)
-
-        await self.event_store.append(
-            session_id=ticket.session_id,
-            event_kind=EventKind.APPROVAL_REVOKED,
-            payload={
-                "ticket_id": str(ticket_id),
-                "proposal_id": str(ticket.proposal_id),
-                "revoked_by": revoked_by,
-                "reason": reason,
-                "trigger": trigger,
-            },
-            state_bearing=True,
-        )
-
-        logger.info("Revoked approval ticket %s (trigger=%s)", ticket_id, trigger)
-        ticket.status = ApprovalStatus.REVOKED
-        ticket.revoked_by = revoked_by
-        ticket.revocation_reason = reason
-        ticket.revoked_at = revoked_at
-        return ticket
-
     async def get_pending_tickets(
         self,
         *,
