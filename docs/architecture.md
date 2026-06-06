@@ -211,9 +211,13 @@ For event kinds not listed, `cp.outcome` is omitted. Host apps can override by s
 
 `ActionProposal.preconditions` lets callers attach optional resource-state checks that run immediately before execution, after kill-switch checks. A precondition is a `(resource_id, expected_state)` plus a `provider_id` that resolves the current state, such as `file_sha256` for a file-content hash or `env` for an environment variable value. Host applications can provide additional `PreconditionStateProvider` implementations for resources such as database rows or object-store versions.
 
-`McpGateway` runs this verification automatically before invoking its tool executor. A failure raises `PreconditionFailedError` (a `McpGovernanceError` subclass) and emits `TOOL_CALL_BLOCKED` with `reason="precondition_failed"` — consistent with all other denial paths in the gateway. `ControlPlaneFacade.run()` and `ResilientControlPlane.run()` only manage session lifecycle; they do not own host execution. Non-MCP callers must call `verify_preconditions()` immediately before their execution step when a proposal declares preconditions and handle `PreconditionVerificationResult.status == FAILED` themselves.
+`McpGateway` runs this verification automatically before invoking its tool executor. A failure raises `PreconditionFailedError` (a `McpGovernanceError` subclass) and emits `TOOL_CALL_BLOCKED` with `reason="precondition_failed"` — consistent with all other denial paths in the gateway. `ControlPlaneFacade.run()` also verifies preconditions automatically when they are passed as kwargs (`preconditions`, `proposal_id`, `action_id`, `precondition_providers`); a failure aborts the session and raises `RuntimeError("precondition_failed")` before the body executes. Non-MCP callers who manage execution outside of `run()` must call `verify_preconditions()` directly.
 
 Preconditions are persisted without a schema migration under the reserved `ActionProposal.metadata_json` key `__acp_preconditions`. This key is ACP-managed internal storage and must not be used by host metadata schemas. Repository read paths decode it into `ActionProposal.preconditions` and remove it from host-facing `ActionProposal.metadata`.
+
+### Approval ticket revocation
+
+An approved ticket can be revoked after the fact via `ApprovalGateway.revoke_ticket()` (sync, async, and resilient variants). Revocation resets the associated proposal back to `PENDING` and appends a state-bearing `APPROVAL_REVOKED` event. The ticket's status transitions to `ApprovalStatus.REVOKED`; the `revoked_by`, `revocation_reason`, and `revoked_at` fields record who revoked it and why. Callers are responsible for re-issuing a new ticket via `create_ticket()` when manual re-approval is warranted.
 
 Future roadmap:
 
