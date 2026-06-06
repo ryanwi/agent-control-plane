@@ -28,6 +28,15 @@
   field on the DTO (types, UTC-awareness, `config_hash` length, timestamp ordering) to
   serve as a stable contract for downstream consumers.
 
+- **Approval ticket revocation** — `ApprovalGateway.revoke_ticket()` (sync and async,
+  including the resilient wrapper) revokes an approved ticket, resets the associated
+  proposal to `PENDING`, and appends a state-bearing `APPROVAL_REVOKED` event. Callers
+  are responsible for re-issuing a ticket via `create_ticket()` when manual re-approval
+  is needed. `ApprovalStatus.REVOKED` and `EventKind.APPROVAL_REVOKED` are new enum
+  values. `ApprovalTicket` gains `revoked_by`, `revocation_reason`, and `revoked_at`
+  fields (all nullable). The underlying `get_ticket_for_update()` lock method is added
+  to `ApprovalRepository` and `AsyncApprovalRepository` protocols.
+
 ### Fixed
 
 - **`ControlPlaneFacade.run()` now enforces preconditions automatically** — `run()`

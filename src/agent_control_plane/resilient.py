@@ -295,6 +295,22 @@ class ResilientApprovalGateway:
         except Exception as exc:
             return self._p.handle_error(exc, "deny_ticket", OperationCategory.STATE_BEARING, None)
 
+    def revoke_ticket(
+        self,
+        ticket_id: UUID,
+        *,
+        revoked_by: str = "system",
+        reason: str = "",
+        trigger: str = "manual",
+        command_id: IdempotencyKey | None = None,
+    ) -> ApprovalTicket | None:
+        try:
+            return self._g.revoke_ticket(
+                ticket_id, revoked_by=revoked_by, reason=reason, trigger=trigger, command_id=command_id
+            )
+        except Exception as exc:
+            return self._p.handle_error(exc, "revoke_ticket", OperationCategory.STATE_BEARING, None)
+
     def get_ticket(self, ticket_id: UUID) -> ApprovalTicket | None:
         try:
             return self._g.get_ticket(ticket_id)

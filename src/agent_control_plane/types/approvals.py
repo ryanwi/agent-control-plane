@@ -41,6 +41,10 @@ class ApprovalTicket(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     decided_at: datetime | None = None
 
+    revoked_by: str | None = None
+    revocation_reason: str | None = None
+    revoked_at: datetime | None = None
+
 
 class ApprovalDecisionRequest(BaseModel):
     """Request to approve or deny a ticket."""

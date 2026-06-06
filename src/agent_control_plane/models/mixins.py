@@ -166,6 +166,10 @@ class ApprovalTicketMixin:
     )
     decided_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
+    revoked_by: Mapped[str | None] = mapped_column(VARCHAR(100), nullable=True)
+    revocation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+
 
 class ExecutionIntentMixin:
     """Mixin for execution intent model."""

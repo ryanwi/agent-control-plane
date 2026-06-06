@@ -88,6 +88,7 @@ class EventKind(StrEnum):
     APPROVAL_GRANTED = "approval_granted"
     APPROVAL_DENIED = "approval_denied"
     APPROVAL_TIMEOUT = "approval_timeout"
+    APPROVAL_REVOKED = "approval_revoked"
     EXECUTION_STARTED = "execution_started"
     EXECUTION_COMPLETED = "execution_completed"
     PRECONDITION_FAILED = "precondition_failed"
@@ -157,6 +158,7 @@ class ApprovalStatus(StrEnum):
     APPROVED = "approved"
     DENIED = "denied"
     EXPIRED = "expired"
+    REVOKED = "revoked"
 
 
 class ApprovalDecisionType(StrEnum):

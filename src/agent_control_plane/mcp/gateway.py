@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from agent_control_plane.engine.budget_tracker import BudgetExhaustedError
 from agent_control_plane.engine.policy_engine import PolicyEngine
+from agent_control_plane.engine.router import RoutingDecision
 from agent_control_plane.models.registry import ModelRegistry
 from agent_control_plane.storage.sqlalchemy_sync import SyncSqlAlchemyUnitOfWork
 from agent_control_plane.sync import MappedEvent, SyncControlPlane
@@ -408,6 +409,23 @@ class McpGateway:
             idempotency_key=context.idempotency_key,
         )
         return result
+
+    def simulate_action(self, proposal: ActionProposal) -> RoutingDecision:
+        """Predict routing outcome for a proposal without storing it or creating tickets.
+
+        Mirrors the classification path in handle_tool_call without any side effects.
+        Risk accumulator is excluded — the simulated tier may differ from the live tier if
+        session risk has accumulated. Agent revocation is not checked.
+        """
+        risk_level = self._policy_engine.classify_risk_level(proposal)
+        tier = self._policy_engine.classify_action_tier(proposal, risk_level)
+        routing = self._policy_engine.build_routing_reason(proposal, risk_level, tier)
+        return RoutingDecision(
+            tier=tier,
+            risk_level=risk_level,
+            reason=routing.reason,
+            resolution_step=routing.resolution_step,
+        )
 
     def _execute_tool(self, session_id: UUID, context: ToolCallContext) -> ToolCallResult:
         try:
