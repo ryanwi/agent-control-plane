@@ -71,6 +71,7 @@ CMD_CREATE_PROPOSAL: Final[str] = "create_proposal"
 CMD_CREATE_TICKET: Final[str] = "create_ticket"
 CMD_APPROVE_TICKET: Final[str] = "approve_ticket"
 CMD_DENY_TICKET: Final[str] = "deny_ticket"
+CMD_REVOKE_TICKET: Final[str] = "revoke_ticket"
 
 
 def kill_command_operation(scope: KillSwitchScope) -> str:
@@ -95,6 +96,9 @@ class ApprovalTicketUpdateFields(TypedDict, total=False):
     scope_max_cost: Decimal | None
     scope_max_count: int | None
     scope_expiry: datetime | None
+    revoked_by: str
+    revocation_reason: str
+    revoked_at: datetime
 
 
 class KillResult(BaseModel):
@@ -805,6 +809,60 @@ class ApprovalGateway(_SyncGatewayBase):
             uow.proposal_repo.update_status(ticket.proposal_id, ProposalStatus.DENIED)
             result = ticket.model_copy(update=fields)
             self._record(uow, command_id, CMD_DENY_TICKET, result.model_dump(mode="json"), session_id=ticket.session_id)
+            uow.commit()
+            return result
+
+    def revoke_ticket(
+        self,
+        ticket_id: UUID,
+        *,
+        revoked_by: str = "system",
+        reason: str = "",
+        trigger: str = "manual",
+        command_id: IdempotencyKey | None = None,
+    ) -> ApprovalTicket:
+        """Revoke an approved ticket, resetting the proposal to PENDING for re-approval.
+
+        The caller is responsible for re-issuing a ticket via create_ticket() if manual
+        re-approval is needed. This method only revokes; it does not create a new ticket.
+        """
+        with self._cp.session_scope() as db:
+            uow = self._cp.uow_factory(db)
+            cached = self._cached(uow, command_id, CMD_REVOKE_TICKET)
+            if cached is not None:
+                return ApprovalTicket.model_validate(cached)
+            ticket = uow.approval_repo.get_ticket_for_update(ticket_id)
+            if ticket.status != ApprovalStatus.APPROVED:
+                raise ValueError(f"Ticket {ticket_id} is not approved (status={ticket.status})")
+            revoked_at = datetime.now(UTC)
+            fields: ApprovalTicketUpdateFields = {
+                "status": ApprovalStatus.REVOKED,
+                "revoked_by": revoked_by,
+                "revocation_reason": reason,
+                "revoked_at": revoked_at,
+            }
+            uow.approval_repo.update_ticket(ticket_id, **fields)
+            uow.proposal_repo.update_status(ticket.proposal_id, ProposalStatus.PENDING)
+            uow.event_repo.append(
+                session_id=ticket.session_id,
+                event_kind=EventKind.APPROVAL_REVOKED,
+                payload={
+                    "ticket_id": str(ticket_id),
+                    "proposal_id": str(ticket.proposal_id),
+                    "revoked_by": revoked_by,
+                    "reason": reason,
+                    "trigger": trigger,
+                },
+                state_bearing=True,
+            )
+            result = ticket.model_copy(update=fields)
+            self._record(
+                uow,
+                command_id,
+                CMD_REVOKE_TICKET,
+                result.model_dump(mode="json"),
+                session_id=ticket.session_id,
+            )
             uow.commit()
             return result
 
