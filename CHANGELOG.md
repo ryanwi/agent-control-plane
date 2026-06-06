@@ -4,6 +4,11 @@
 
 ### Added
 
+- **Optional session-risk routing integration** — `ProposalRouter` now accepts a
+  `SessionRiskAccumulator`. When provided, routed decisions use the accumulator's
+  effective risk for auto-approval and tier classification, and expose
+  `RoutingDecision.risk_escalated` plus `RoutingDecision.risk_escalation`.
+
 - **Pre-execution preconditions** — `ActionProposal.preconditions` can now carry
   optional resource-state checks that run immediately before execution, after
   kill-switch checks. `PreconditionVerifier` records state-bearing

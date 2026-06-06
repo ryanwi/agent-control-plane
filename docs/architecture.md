@@ -41,7 +41,7 @@ The package is organized around explicit layers:
 - `engine/`
   - `agent_registry` — registered agent identities and capabilities
   - `policy_engine` — risk scoring and tiering via polymorphic handlers
-  - `router` — deterministic routing with identity and capability validation
+  - `router` — deterministic routing with identity, capability validation, and optional session-risk accumulation
   - `delegation_guard` — governed task hand-offs between agents
   - `approval_gate` — ticket lifecycle, scope handling, and timeout handling
   - `budget_tracker` — atomic session budget checks and increments
@@ -90,7 +90,7 @@ sequenceDiagram
   App->>SP: create session + policy snapshot
   App->>REG: register agent identity
   App->>PE: classify proposal intent
-  PE->>RT: classify risk + route (validate identity)
+  PE->>RT: classify risk + route (validate identity, optionally accumulate session risk)
   RT-->>App: routing decision + reason
   App->>AG: check scoped approvals
   AG-->>App: ticket/None
@@ -270,7 +270,7 @@ Exports are centralized through [agent_control_plane/__init__.py](../src/agent_c
 | `agent_control_plane` | `AsyncControlPlaneFacade`, `AsyncSessionGateway`, `AsyncApprovalGateway`, `AsyncBudgetGateway`, `AsyncAgenticGateway`, `AsyncLifecycleGateway`, `AsyncMaintenanceGateway` | Async gateway variants; use in async runtimes. |
 | `agent_control_plane` | `AsyncResilientControlPlane`, `AsyncResilientSessionGateway`, `AsyncResilientApprovalGateway`, `AsyncResilientBudgetGateway`, `AsyncResilientAgenticGateway`, `AsyncResilientObserverGateway`, `AsyncResilientLifecycleGateway`, `AsyncResilientMaintenanceGateway` | Resilient async gateway variants. |
 | `agent_control_plane` | `McpGateway`, `McpGatewayConfig` | Governs MCP tool calls through the control plane. |
-| `agent_control_plane` | `PolicyEngine`, `ProposalRouter`, `ApprovalGate`, `BudgetTracker`, `ConcurrencyGuard`, `KillSwitch`, `PreconditionVerifier`, `EventStore`, `SessionManager`, `AgentRegistry`, `DelegationGuard`, `CrashRecovery`, `TimeoutEscalation`, `ModelRegistry`, `RiskClassifier`, `DefaultRiskClassifier`, `ConditionEvaluator`, `ParallelPolicyEvaluator` | Individual engines for direct wiring (advanced). |
+| `agent_control_plane` | `PolicyEngine`, `ProposalRouter`, `SessionRiskAccumulator`, `ApprovalGate`, `BudgetTracker`, `ConcurrencyGuard`, `KillSwitch`, `PreconditionVerifier`, `EventStore`, `SessionManager`, `AgentRegistry`, `DelegationGuard`, `CrashRecovery`, `TimeoutEscalation`, `ModelRegistry`, `RiskClassifier`, `DefaultRiskClassifier`, `ConditionEvaluator`, `ParallelPolicyEvaluator` | Individual engines for direct wiring (advanced). |
 | `agent_control_plane` | `ActionName` (UNKNOWN sentinel only), `ActionTier`, `RiskLevel`, `ApprovalStatus`, `ApprovalDecisionType`, `ProposalStatus`, `SessionStatus`, `EventKind`, `ExecutionMode`, `AbortReason`, `KillSwitchScope`, `RoutingResolutionStep`, `AssetMatch`, `AgentScope`, `GovernanceOutcome` | Enumerations used by all engines; considered stable between minor releases. Use plain strings for domain action names (`ActionValue = ActionName \| str`). |
 | `agent_control_plane` | `ActionProposal`, `Precondition`, `PreconditionVerificationResult`, `PreconditionStateProvider`, `AgentMetadata`, `AgentCapability`, `DelegationProposal`, `SessionCreate`, `SessionSummary`, `PolicySnapshot`, `ApprovalScope`, `ApprovalTicket`, `RequestFrame`, `EventFrame`, `ResponseFrame`, `KillResult`, `SteeringContext`, `ConditionNode`, `EvaluatorResult`, `ParallelEvaluationResult`, `EmitMetadata` | Domain/contract types are semantically stable; add optional fields in minor releases only. |
 | `agent_control_plane` | `EgressEvaluator`, `EgressEvaluatorConfig`, `EgressGrant` | Egress capability-grant evaluator; plugs into the async `Evaluator` framework. |

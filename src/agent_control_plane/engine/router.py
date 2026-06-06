@@ -9,10 +9,12 @@ from typing import TYPE_CHECKING
 from agent_control_plane.engine.policy_engine import PolicyEngine
 from agent_control_plane.types.enums import ActionTier, RiskLevel, RoutingResolutionStep
 from agent_control_plane.types.proposals import ActionProposal
+from agent_control_plane.types.risk import SessionRiskEscalation
 from agent_control_plane.types.steering import SteeringContext
 
 if TYPE_CHECKING:
     from agent_control_plane.engine.agent_registry import AgentRegistry
+    from agent_control_plane.engine.session_risk_accumulator import SessionRiskAccumulator
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +28,22 @@ class RoutingDecision:
     reason: str
     resolution_step: RoutingResolutionStep
     steering: SteeringContext | None = field(default=None)
+    risk_escalated: bool = False
+    risk_escalation: SessionRiskEscalation | None = None
 
 
 class ProposalRouter:
     """Routes proposals through the policy engine with full audit trail."""
 
-    def __init__(self, policy_engine: PolicyEngine, agent_registry: AgentRegistry | None = None) -> None:
+    def __init__(
+        self,
+        policy_engine: PolicyEngine,
+        agent_registry: AgentRegistry | None = None,
+        risk_accumulator: SessionRiskAccumulator | None = None,
+    ) -> None:
         self.policy_engine = policy_engine
         self.agent_registry = agent_registry
+        self.risk_accumulator = risk_accumulator
 
     async def route(self, proposal: ActionProposal) -> RoutingDecision:
         """Route a proposal and return the decision with audit trail."""
@@ -63,7 +73,13 @@ class ProposalRouter:
                         proposal.decision,
                     )
 
-        risk_level = self.policy_engine.classify_risk_level(proposal)
+        original_risk_level = self.policy_engine.classify_risk_level(proposal)
+        risk_escalation = None
+        risk_level = original_risk_level
+        if self.risk_accumulator is not None:
+            risk_escalation = await self.risk_accumulator.assess(proposal.session_id, proposal, original_risk_level)
+            risk_level = risk_escalation.escalated_risk
+
         can_auto = await self.policy_engine.can_auto_approve_with_tree(proposal, risk_level)
         tier = self.policy_engine.classify_action_tier(proposal, risk_level, can_auto_approve=can_auto)
 
@@ -83,6 +99,8 @@ class ProposalRouter:
             reason=routing.reason,
             resolution_step=routing.resolution_step,
             steering=steering,
+            risk_escalated=risk_escalation.was_escalated if risk_escalation is not None else False,
+            risk_escalation=risk_escalation,
         )
 
         logger.info(

@@ -32,7 +32,7 @@ Two design approaches were considered:
   - `ModelGovernor.check_access()` — sync, before routing (step 2)
   - `TokenBudgetTracker.check_budget()` — async, before execution (step 5)
   - `TokenBudgetTracker.record_usage()` — async, after execution (step 8)
-- This follows the precedent set by `SessionRiskAccumulator` (v0.10.0), which is also caller-invoked and not wired into the router.
+- This follows the original `SessionRiskAccumulator` composition model from v0.10.0. Session risk now also has an opt-in `ProposalRouter` integration, but token governance remains caller-invoked.
 
 ## Consequences
 

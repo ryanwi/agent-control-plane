@@ -109,6 +109,7 @@ make demo-asciicast-agent
 ## Core Capabilities
 
 - Policy and routing: `PolicyEngine`, `ProposalRouter`
+- Session risk accumulation: optional `SessionRiskAccumulator` integration for `ProposalRouter`
 - Steering: `ActionTier.STEER` with corrective `SteeringContext` guidance and suggested alternatives
 - Human approvals: `ApprovalGate`, scoped ticket decisions
 - Budget enforcement: `BudgetTracker`

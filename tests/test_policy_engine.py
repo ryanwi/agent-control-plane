@@ -11,6 +11,7 @@ from agent_control_plane.engine.policy_engine import (
     PolicyEngine,
 )
 from agent_control_plane.engine.router import ProposalRouter
+from agent_control_plane.engine.session_risk_accumulator import SessionRiskAccumulator
 from agent_control_plane.types.enums import (
     ActionTier,
     AssetScope,
@@ -205,7 +206,27 @@ class TestProposalRouter:
         decision = await router.route(proposal)
         assert decision.tier == ActionTier.AUTO_APPROVE
         assert decision.risk_level == RiskLevel.LOW
+        assert decision.risk_escalated is False
+        assert decision.risk_escalation is None
         assert decision.resolution_step == RoutingResolutionStep.POLICY_LIST_MATCH
+
+    @pytest.mark.asyncio
+    async def test_route_uses_accumulated_session_risk_for_tiering(self):
+        accumulator = SessionRiskAccumulator(score_threshold_high=Decimal("6.0"))
+        router = ProposalRouter(PolicyEngine(_policy()), risk_accumulator=accumulator)
+        session_id = uuid4()
+
+        await router.route(_proposal(session_id=session_id, decision="refund", weight=Decimal("6.0")))
+        decision = await router.route(
+            _proposal(session_id=session_id, decision="review_notes", weight=Decimal("1.0"), score=Decimal("0.9"))
+        )
+
+        assert decision.risk_level == RiskLevel.HIGH
+        assert decision.tier == ActionTier.ALWAYS_APPROVE
+        assert decision.resolution_step == RoutingResolutionStep.RISK_TIER_MATCH
+        assert decision.risk_escalated is True
+        assert decision.risk_escalation is not None
+        assert decision.risk_escalation.original_risk == RiskLevel.LOW
 
     @pytest.mark.asyncio
     async def test_route_always_approve_medium(self):

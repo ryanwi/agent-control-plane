@@ -51,8 +51,8 @@ class SessionRiskAccumulator:
     or accumulated score thresholds are detected.
 
     Slots between classify_risk_level() and classify_action_tier() in the
-    policy flow. Host apps call it as an optional step; it is not wired into
-    ProposalRouter or SyncControlPlane.
+    policy flow. Host apps can call it directly, or opt into ProposalRouter
+    integration by passing an accumulator to the router.
     """
 
     def __init__(

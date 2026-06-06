@@ -10,6 +10,7 @@ import pytest
 from agent_control_plane.engine.agent_registry import AgentRegistry
 from agent_control_plane.engine.policy_engine import PolicyEngine
 from agent_control_plane.engine.router import ProposalRouter
+from agent_control_plane.engine.session_risk_accumulator import SessionRiskAccumulator
 from agent_control_plane.types.agents import AgentCapability, AgentMetadata
 from agent_control_plane.types.enums import ActionTier
 from agent_control_plane.types.policies import ActionTiers, PolicySnapshot
@@ -49,12 +50,20 @@ async def _registry(session_id: UUID, *, revoked: bool) -> AgentRegistry:
 @pytest.mark.asyncio
 async def test_route_blocks_revoked_agent():
     sid = uuid4()
-    router = ProposalRouter(PolicyEngine(_policy()), agent_registry=await _registry(sid, revoked=True))
+    accumulator = SessionRiskAccumulator()
+    router = ProposalRouter(
+        PolicyEngine(_policy()),
+        agent_registry=await _registry(sid, revoked=True),
+        risk_accumulator=accumulator,
+    )
 
     decision = await router.route(_proposal(sid))
 
     assert decision.tier == ActionTier.BLOCKED
     assert "revoked" in decision.reason.lower()
+    assert decision.risk_escalated is False
+    assert decision.risk_escalation is None
+    assert accumulator.get_state(sid) is None
 
 
 @pytest.mark.asyncio
