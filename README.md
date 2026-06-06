@@ -19,6 +19,7 @@ Agent stacks handle execution well; governance is the gap. This package provides
 - Deterministic policy enforcement before execution.
 - Human/risk approval gates for high-impact actions.
 - Budget guardrails and kill-switch semantics.
+- Optional pre-execution preconditions to catch resource drift before side effects.
 - Durable event history for audit, replay, and recovery.
 
 Good fit:
@@ -113,6 +114,7 @@ make demo-asciicast-agent
 - Budget enforcement: `BudgetTracker`
 - Token governance: `TokenBudgetTracker` (identity-scoped token/cost budgets), `ModelGovernor` (model tier access policy)
 - Concurrency and kill switches: `ConcurrencyGuard`, `KillSwitch`
+- Pre-execution checks: `PreconditionVerifier` with file-hash and environment providers
 - Condition trees: `ConditionEvaluator` with recursive `and`/`or`/`not` rules for policy composition
 - Pluggable evaluators: `EvaluatorRegistry` with entry-point discovery, built-in `RegexEvaluator` and `ListEvaluator`
 - Parallel evaluation: `ParallelPolicyEvaluator` with cancel-on-deny semantics

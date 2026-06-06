@@ -52,6 +52,16 @@ from .extensions import (
 from .frames import EventFrame, RequestFrame, ResponseFrame
 from .ids import AgentId, IdempotencyKey, ResourceId
 from .policies import ActionTiers, AutoApproveConditions, PolicySnapshot, RiskLimits
+from .preconditions import (
+    PRECONDITIONS_METADATA_KEY,
+    EnvironmentVariableStateProvider,
+    FileHashStateProvider,
+    Precondition,
+    PreconditionDivergence,
+    PreconditionStateProvider,
+    PreconditionStatus,
+    PreconditionVerificationResult,
+)
 from .proposals import ActionProposal, ExecutionIntent, ExecutionResult, RiskDecision
 from .query import CommandResult, Page, SessionHealth, StateChange, StateChangePage
 from .sessions import KillSwitchResult, SessionCreate, SessionState, SessionSummary
@@ -105,6 +115,12 @@ __all__ = [
     "PlanProgress",
     "PlanStep",
     "PlanStepStatus",
+    "PRECONDITIONS_METADATA_KEY",
+    "Precondition",
+    "PreconditionDivergence",
+    "PreconditionStateProvider",
+    "PreconditionStatus",
+    "PreconditionVerificationResult",
     "ProposalStatus",
     "RequestFrame",
     "ResourceId",
@@ -124,6 +140,8 @@ __all__ = [
     "StateChange",
     "StateChangePage",
     "CommandResult",
+    "EnvironmentVariableStateProvider",
+    "FileHashStateProvider",
     "clear_metadata_schemas",
     "clear_registered_action_names",
     "clear_risk_limits_extension_schema",

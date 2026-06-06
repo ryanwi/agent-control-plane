@@ -48,6 +48,7 @@ The package is organized around explicit layers:
   - `session_manager` — session lifecycle and snapshots
   - `concurrency` — lock/serialize overlapping work paths
   - `kill_switch` — emergency stop semantics by scope
+  - `precondition_verifier` — optional pre-execution resource-state verification
   - `event_store` — monotonic event persistence and buffering
   - `session_risk_accumulator` — cross-action risk accumulation and pattern detection per session
   - `token_budget_tracker` — identity-scoped, time-windowed token budget enforcement
@@ -81,6 +82,7 @@ sequenceDiagram
   participant BT as BudgetTracker
   participant CG as ConcurrencyGuard
   participant KS as KillSwitch
+  participant PV as PreconditionVerifier
   participant ES as EventStore
   participant EP as Execution Plane
   participant CR as Crash/Timeout Recovery
@@ -98,7 +100,9 @@ sequenceDiagram
   CG-->>App: lock token
   App->>KS: evaluate kill-switch scope
   KS-->>App: allowed / denied
-  App->>EP: execute if allowed
+  App->>PV: verify declared preconditions
+  PV-->>ES: PRECONDITION_FAILED if resource state diverged
+  App->>EP: execute if allowed and preconditions pass
   EP-->>ES: emit outcome events
   ES->>CR: replay/recover input for postmortem
 ```
@@ -194,6 +198,7 @@ Reliability contracts:
 |---|---|
 | `accepted` | `APPROVAL_GRANTED` |
 | `applied` | `EXECUTION_COMPLETED`, `PLAN_STEP_COMPLETED` |
+| `precondition_failed` | `PRECONDITION_FAILED` |
 | `denied` | `APPROVAL_DENIED`, `EVALUATION_BLOCKED`, `GUARDRAIL_TOOL`, `GUARDRAIL_OUTPUT` |
 | `timeout` | `APPROVAL_TIMEOUT` |
 | `stale-target` | `LEASE_EXPIRED`; `HANDOFF_REJECTED` + `payload["stale_target"]` |
@@ -201,6 +206,14 @@ Reliability contracts:
 | `no-live-target` | `HANDOFF_REJECTED` + `payload["no_live_target"]` |
 
 For event kinds not listed, `cp.outcome` is omitted. Host apps can override by setting `payload["outcome"]` to any `GovernanceOutcome` value — useful for custom event kinds or execution-plane outcomes the library cannot infer.
+
+### Proposal preconditions
+
+`ActionProposal.preconditions` lets callers attach optional resource-state checks that run immediately before execution, after kill-switch checks. A precondition is a `(resource_id, expected_state)` plus a `provider_id` that resolves the current state, such as `file_sha256` for a file-content hash or `env` for an environment variable value. Host applications can provide additional `PreconditionStateProvider` implementations for resources such as database rows or object-store versions.
+
+`McpGateway` runs this verification automatically before invoking its tool executor. `ControlPlaneFacade.run()` and `ResilientControlPlane.run()` only manage session lifecycle; they do not own host execution. Non-MCP callers must call `verify_preconditions()` immediately before their execution step when a proposal declares preconditions.
+
+Preconditions are persisted without a schema migration under the reserved `ActionProposal.metadata_json` key `__acp_preconditions`. This key is ACP-managed internal storage and must not be used by host metadata schemas. Repository read paths decode it into `ActionProposal.preconditions` and remove it from host-facing `ActionProposal.metadata`.
 
 Future roadmap:
 
@@ -257,9 +270,9 @@ Exports are centralized through [agent_control_plane/__init__.py](../src/agent_c
 | `agent_control_plane` | `AsyncControlPlaneFacade`, `AsyncSessionGateway`, `AsyncApprovalGateway`, `AsyncBudgetGateway`, `AsyncAgenticGateway`, `AsyncLifecycleGateway`, `AsyncMaintenanceGateway` | Async gateway variants; use in async runtimes. |
 | `agent_control_plane` | `AsyncResilientControlPlane`, `AsyncResilientSessionGateway`, `AsyncResilientApprovalGateway`, `AsyncResilientBudgetGateway`, `AsyncResilientAgenticGateway`, `AsyncResilientObserverGateway`, `AsyncResilientLifecycleGateway`, `AsyncResilientMaintenanceGateway` | Resilient async gateway variants. |
 | `agent_control_plane` | `McpGateway`, `McpGatewayConfig` | Governs MCP tool calls through the control plane. |
-| `agent_control_plane` | `PolicyEngine`, `ProposalRouter`, `ApprovalGate`, `BudgetTracker`, `ConcurrencyGuard`, `KillSwitch`, `EventStore`, `SessionManager`, `AgentRegistry`, `DelegationGuard`, `CrashRecovery`, `TimeoutEscalation`, `ModelRegistry`, `RiskClassifier`, `DefaultRiskClassifier`, `ConditionEvaluator`, `ParallelPolicyEvaluator` | Individual engines for direct wiring (advanced). |
+| `agent_control_plane` | `PolicyEngine`, `ProposalRouter`, `ApprovalGate`, `BudgetTracker`, `ConcurrencyGuard`, `KillSwitch`, `PreconditionVerifier`, `EventStore`, `SessionManager`, `AgentRegistry`, `DelegationGuard`, `CrashRecovery`, `TimeoutEscalation`, `ModelRegistry`, `RiskClassifier`, `DefaultRiskClassifier`, `ConditionEvaluator`, `ParallelPolicyEvaluator` | Individual engines for direct wiring (advanced). |
 | `agent_control_plane` | `ActionName` (UNKNOWN sentinel only), `ActionTier`, `RiskLevel`, `ApprovalStatus`, `ApprovalDecisionType`, `ProposalStatus`, `SessionStatus`, `EventKind`, `ExecutionMode`, `AbortReason`, `KillSwitchScope`, `RoutingResolutionStep`, `AssetMatch`, `AgentScope`, `GovernanceOutcome` | Enumerations used by all engines; considered stable between minor releases. Use plain strings for domain action names (`ActionValue = ActionName \| str`). |
-| `agent_control_plane` | `ActionProposal`, `AgentMetadata`, `AgentCapability`, `DelegationProposal`, `SessionCreate`, `SessionSummary`, `PolicySnapshot`, `ApprovalScope`, `ApprovalTicket`, `RequestFrame`, `EventFrame`, `ResponseFrame`, `KillResult`, `SteeringContext`, `ConditionNode`, `EvaluatorResult`, `ParallelEvaluationResult`, `EmitMetadata` | Domain/contract types are semantically stable; add optional fields in minor releases only. |
+| `agent_control_plane` | `ActionProposal`, `Precondition`, `PreconditionVerificationResult`, `PreconditionStateProvider`, `AgentMetadata`, `AgentCapability`, `DelegationProposal`, `SessionCreate`, `SessionSummary`, `PolicySnapshot`, `ApprovalScope`, `ApprovalTicket`, `RequestFrame`, `EventFrame`, `ResponseFrame`, `KillResult`, `SteeringContext`, `ConditionNode`, `EvaluatorResult`, `ParallelEvaluationResult`, `EmitMetadata` | Domain/contract types are semantically stable; add optional fields in minor releases only. |
 | `agent_control_plane` | `EgressEvaluator`, `EgressEvaluatorConfig`, `EgressGrant` | Egress capability-grant evaluator; plugs into the async `Evaluator` framework. |
 | `agent_control_plane.evaluators` | `Evaluator`, `EvaluatorRegistry`, `EvaluatorResult`, `RegexEvaluator`, `ListEvaluator` | Pluggable evaluator protocol, registry, and built-in implementations. |
 | `agent_control_plane.models` | `ModelRegistry`, `ControlSessionMixin`, `ControlEventMixin`, `ApprovalTicketMixin`, `PolicySnapshotMixin`, `AgentMixin`, `DelegationMixin` | Intended for embedding into host SQLAlchemy models and runtime bootstrapping. |

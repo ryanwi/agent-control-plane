@@ -50,8 +50,13 @@ from agent_control_plane.types.enums import (
     ProposalStatus,
     ResilienceMode,
 )
-from agent_control_plane.types.frames import EmitMetadata, EventFrame
+from agent_control_plane.types.frames import EmitMetadata, EventFrame, EventMetadata
 from agent_control_plane.types.ids import AgentId, IdempotencyKey
+from agent_control_plane.types.preconditions import (
+    Precondition,
+    PreconditionStateProvider,
+    PreconditionVerificationResult,
+)
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import Page, SessionHealth, StateChangePage
 from agent_control_plane.types.run_handle import RunHandle
@@ -557,6 +562,7 @@ class ResilientControlPlane:
         category_overrides: dict[OperationCategory, ResilienceMode] | None = None,
     ) -> None:
         policy = ResiliencePolicy(mode, logger, category_overrides)
+        self._p = policy
         self.sessions: ResilientSessionGateway = ResilientSessionGateway(facade.sessions, policy)
         self.approvals: ResilientApprovalGateway = ResilientApprovalGateway(facade.approvals, policy)
         self.budget: ResilientBudgetGateway = ResilientBudgetGateway(facade.budget, policy)
@@ -574,6 +580,28 @@ class ResilientControlPlane:
 
     def close(self) -> None:
         self._facade.close()
+
+    def verify_preconditions(
+        self,
+        session_id: UUID,
+        preconditions: list[Precondition],
+        *,
+        proposal_id: UUID | None = None,
+        action_id: str | None = None,
+        providers: list[PreconditionStateProvider] | None = None,
+        metadata: EventMetadata | None = None,
+    ) -> PreconditionVerificationResult | None:
+        try:
+            return self._facade.verify_preconditions(
+                session_id,
+                preconditions,
+                proposal_id=proposal_id,
+                action_id=action_id,
+                providers=providers,
+                metadata=metadata,
+            )
+        except Exception as exc:
+            return self._p.handle_error(exc, "verify_preconditions", OperationCategory.STATE_BEARING, None)
 
     @contextmanager
     def run(

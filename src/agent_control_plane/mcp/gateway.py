@@ -37,6 +37,12 @@ from agent_control_plane.types.enums import (
 )
 from agent_control_plane.types.frames import EventMetadata
 from agent_control_plane.types.policies import PolicySnapshot
+from agent_control_plane.types.preconditions import (
+    Precondition,
+    PreconditionStateProvider,
+    PreconditionStatus,
+    PreconditionVerificationResult,
+)
 from agent_control_plane.types.proposals import ActionProposal
 
 logger = logging.getLogger(__name__)
@@ -124,6 +130,7 @@ class ToolCallContext(BaseModel):
     identity_user_id: str | None = None
     identity_org_id: str | None = None
     identity_team_id: str | None = None
+    preconditions: list[Precondition] = Field(default_factory=list)
 
 
 class ToolCallResult(BaseModel):
@@ -204,6 +211,7 @@ class McpGateway:
         config: McpGatewayConfig | None = None,
         event_mapper: McpEventMapper | None = None,
         response_evaluators: Sequence[ResponseEvaluator] | None = None,
+        precondition_providers: Sequence[PreconditionStateProvider] | None = None,
     ) -> None:
         self._cp = control_plane
         self._executor = executor
@@ -212,6 +220,7 @@ class McpGateway:
         self._event_mapper = event_mapper or McpEventMapper()
         self._policy_engine = PolicyEngine(self._config.policy_snapshot)
         self._response_evaluators: tuple[ResponseEvaluator, ...] = tuple(response_evaluators or ())
+        self._precondition_providers: tuple[PreconditionStateProvider, ...] = tuple(precondition_providers or ())
 
     def handle_tool_call(self, context: ToolCallContext) -> ToolCallResult:
         """Govern and execute an MCP tool call."""
@@ -320,27 +329,15 @@ class McpGateway:
             idempotency_key=context.idempotency_key,
         )
 
-        try:
-            result = self._executor.execute(context)
-        except Exception as exc:  # pragma: no cover - defensive conversion
-            self._emit(
-                session_id,
-                McpEventName.TOOL_CALL_FAILED,
-                {"tool_name": context.tool_name, "error": str(exc), "outcome": GovernanceOutcome.FAILED.value},
-                correlation_id=context.correlation_id,
-                idempotency_key=context.idempotency_key,
+        precondition_result = self._verify_preconditions(session_id, proposal, context)
+        if precondition_result.status == PreconditionStatus.FAILED:
+            return ToolCallResult(
+                ok=False,
+                output=precondition_result.model_dump(mode="json"),
+                error="precondition_failed",
             )
-            raise ToolExecutionError(str(exc)) from exc
 
-        if not result.ok:
-            self._emit(
-                session_id,
-                McpEventName.TOOL_CALL_FAILED,
-                {"tool_name": context.tool_name, "error": result.error, "outcome": GovernanceOutcome.FAILED.value},
-                correlation_id=context.correlation_id,
-                idempotency_key=context.idempotency_key,
-            )
-            raise ToolExecutionError(result.error or "Tool execution failed")
+        result = self._execute_tool(session_id, context)
 
         try:
             self._cp.increment_budget(session_id, cost=result.cost, action_count=1)
@@ -386,11 +383,55 @@ class McpGateway:
                 "tool_name": context.tool_name,
                 "cost": str(result.cost),
                 "output_keys": sorted(result.output.keys()),
+                "precondition_status": precondition_result.status.value,
+                "precondition_checked_count": precondition_result.checked_count,
             },
             correlation_id=context.correlation_id,
             idempotency_key=context.idempotency_key,
         )
         return result
+
+    def _execute_tool(self, session_id: UUID, context: ToolCallContext) -> ToolCallResult:
+        try:
+            result = self._executor.execute(context)
+        except Exception as exc:  # pragma: no cover - defensive conversion
+            self._emit(
+                session_id,
+                McpEventName.TOOL_CALL_FAILED,
+                {"tool_name": context.tool_name, "error": str(exc), "outcome": GovernanceOutcome.FAILED.value},
+                correlation_id=context.correlation_id,
+                idempotency_key=context.idempotency_key,
+            )
+            raise ToolExecutionError(str(exc)) from exc
+
+        if not result.ok:
+            self._emit(
+                session_id,
+                McpEventName.TOOL_CALL_FAILED,
+                {"tool_name": context.tool_name, "error": result.error, "outcome": GovernanceOutcome.FAILED.value},
+                correlation_id=context.correlation_id,
+                idempotency_key=context.idempotency_key,
+            )
+            raise ToolExecutionError(result.error or "Tool execution failed")
+        return result
+
+    def _verify_preconditions(
+        self,
+        session_id: UUID,
+        proposal: ActionProposal,
+        context: ToolCallContext,
+    ) -> PreconditionVerificationResult:
+        return self._cp.verify_preconditions(
+            session_id,
+            proposal.preconditions,
+            proposal_id=proposal.id,
+            action_id=context.tool_name,
+            providers=list(self._precondition_providers),
+            metadata=EventMetadata(
+                correlation_id=context.correlation_id,
+                idempotency_key=context.idempotency_key,
+            ),
+        )
 
     def _inspect_response(self, proposal: ActionProposal, result: ToolCallResult) -> _RejectionContext | None:
         """Screen tool output through response evaluators. Returns a denial context on deny.
@@ -455,6 +496,7 @@ class McpGateway:
             decision=action,
             reasoning=f"MCP tool call: {context.tool_name}",
             metadata={"tool_name": context.tool_name},
+            preconditions=context.preconditions,
             weight=context.estimated_cost,
             score=score,
         )
@@ -488,7 +530,7 @@ class McpGateway:
             resource_type=proposal.resource_type,
             decision=proposal.decision,
             reasoning=proposal.reasoning,
-            metadata_json=proposal.metadata,
+            metadata_json=proposal.persisted_metadata(),
             weight=proposal.weight,
             score=proposal.score,
             action_tier=proposal.action_tier,

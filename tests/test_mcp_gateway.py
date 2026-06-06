@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from decimal import Decimal
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -22,6 +23,7 @@ from agent_control_plane.sync import SyncControlPlane
 from agent_control_plane.telemetry import export_event
 from agent_control_plane.types.enums import EventKind, GovernanceOutcome
 from agent_control_plane.types.policies import ActionTiers, PolicySnapshot
+from agent_control_plane.types.preconditions import Precondition
 
 
 class _OkExecutor:
@@ -32,6 +34,15 @@ class _OkExecutor:
 class _FailingExecutor:
     def execute(self, context: ToolCallContext) -> ToolCallResult:
         return ToolCallResult(ok=False, output={}, error="boom")
+
+
+class _CountingExecutor:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def execute(self, context: ToolCallContext) -> ToolCallResult:
+        self.calls += 1
+        return ToolCallResult(ok=True, output={"tool": context.tool_name}, cost=Decimal("1.25"))
 
 
 class _Tracer:
@@ -47,6 +58,10 @@ def _new_cp(tmp_path: Path, suffix: str) -> SyncControlPlane:
     cp = SyncControlPlane(f"sqlite:///{db_file}")
     cp.setup()
     return cp
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def test_unknown_tool_fails_closed(tmp_path: Path):
@@ -104,6 +119,90 @@ def test_auto_approved_tool_executes_and_consumes_budget(tmp_path: Path):
     assert budget["used_cost"] == Decimal("1.25")
     events = cp.replay_events(sid)
     assert EventKind.EXECUTION_COMPLETED in [e.kind for e in events]
+    cp.close()
+
+
+def test_file_hash_precondition_passes_and_executes(tmp_path: Path):
+    cp = _new_cp(tmp_path, "mcp_precondition_pass")
+    sid = cp.create_session("mcp-precondition-pass", max_cost=Decimal("5"), max_action_count=5)
+    target = tmp_path / "config.py"
+    target.write_text("SCALAR_LR = 0.5\n")
+    executor = _CountingExecutor()
+
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=["status"]))
+    gateway = McpGateway(
+        cp,
+        executor,
+        ToolPolicyMap({"status": "status"}),
+        config=McpGatewayConfig(policy_snapshot=policy),
+    )
+
+    result = gateway.handle_tool_call(
+        ToolCallContext(
+            tool_name="status",
+            session_id=sid,
+            estimated_cost=Decimal("1.00"),
+            preconditions=[
+                Precondition(
+                    resource_id=str(target),
+                    provider_id="file_sha256",
+                    expected_state=_sha256(target),
+                )
+            ],
+        )
+    )
+
+    assert result.ok is True
+    assert executor.calls == 1
+    executed = [e for e in cp.replay_events(sid) if e.kind == EventKind.EXECUTION_COMPLETED][-1]
+    assert executed.payload["precondition_status"] == "passed"
+    assert executed.payload["precondition_checked_count"] == 1
+    cp.close()
+
+
+def test_file_hash_precondition_failure_aborts_before_execution(tmp_path: Path):
+    cp = _new_cp(tmp_path, "mcp_precondition_fail")
+    sid = cp.create_session("mcp-precondition-fail", max_cost=Decimal("5"), max_action_count=5)
+    target = tmp_path / "config.py"
+    target.write_text("SCALAR_LR = 0.5\n")
+    expected = _sha256(target)
+    target.write_text("SCALAR_LR = 0.3\n")
+    executor = _CountingExecutor()
+
+    policy = PolicySnapshot(action_tiers=ActionTiers(auto_approve=["status"]))
+    gateway = McpGateway(
+        cp,
+        executor,
+        ToolPolicyMap({"status": "status"}),
+        config=McpGatewayConfig(policy_snapshot=policy),
+    )
+
+    result = gateway.handle_tool_call(
+        ToolCallContext(
+            tool_name="status",
+            session_id=sid,
+            estimated_cost=Decimal("1.00"),
+            preconditions=[
+                Precondition(
+                    resource_id=str(target),
+                    provider_id="file_sha256",
+                    expected_state=expected,
+                )
+            ],
+        )
+    )
+
+    assert result.ok is False
+    assert result.error == "precondition_failed"
+    assert executor.calls == 0
+    budget = cp.get_remaining_budget(sid)
+    assert budget["used_cost"] == Decimal("0.0000")
+    events = cp.replay_events(sid)
+    failures = [e for e in events if e.kind == EventKind.PRECONDITION_FAILED]
+    assert len(failures) == 1
+    assert failures[0].payload["divergences"][0]["expected_state"] == expected
+    assert failures[0].payload["divergences"][0]["actual_state"] == _sha256(target)
+    assert EventKind.EXECUTION_COMPLETED not in [e.kind for e in events]
     cp.close()
 
 

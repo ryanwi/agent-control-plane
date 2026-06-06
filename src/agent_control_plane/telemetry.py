@@ -20,6 +20,7 @@ class MeterLike(Protocol):
 _OUTCOME_MAP: dict[EventKind, GovernanceOutcome] = {
     EventKind.APPROVAL_GRANTED: GovernanceOutcome.ACCEPTED,
     EventKind.EXECUTION_COMPLETED: GovernanceOutcome.APPLIED,
+    EventKind.PRECONDITION_FAILED: GovernanceOutcome.PRECONDITION_FAILED,
     EventKind.PLAN_STEP_COMPLETED: GovernanceOutcome.APPLIED,
     EventKind.APPROVAL_DENIED: GovernanceOutcome.DENIED,
     EventKind.EVALUATION_BLOCKED: GovernanceOutcome.DENIED,

@@ -18,6 +18,7 @@ from .enums import (
 )
 from .extensions import get_metadata_schema
 from .ids import AgentId, ResourceId
+from .preconditions import Precondition, encode_preconditions_for_metadata
 
 
 class ActionProposal(AliasProfiledModel):
@@ -34,6 +35,7 @@ class ActionProposal(AliasProfiledModel):
     decision: ActionValue
     reasoning: str
     metadata: dict[str, Any] = Field(default_factory=dict)
+    preconditions: list[Precondition] = Field(default_factory=list)
 
     # Optional scoring (domain-specific classifiers can use these)
     weight: Decimal = Decimal("0")
@@ -63,6 +65,11 @@ class ActionProposal(AliasProfiledModel):
         if resolved_schema is None:
             raise ValueError(f"No metadata schema registered for {type(self).__name__}")
         return resolved_schema.model_validate(self.metadata)
+
+    def persisted_metadata(self) -> dict[str, Any]:
+        """Host metadata plus ACP-reserved proposal storage fields."""
+
+        return encode_preconditions_for_metadata(self.metadata, self.preconditions)
 
 
 class RiskDecision(AliasProfiledModel):

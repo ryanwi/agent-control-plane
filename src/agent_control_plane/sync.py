@@ -14,6 +14,7 @@ from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from agent_control_plane._scorecard import ScorecardAcc, accumulate_scorecard_event, finalize_scorecard, normalize_utc
+from agent_control_plane.engine.precondition_verifier import PreconditionVerifier, precondition_failure_payload
 from agent_control_plane.models.reference import Base, register_models
 from agent_control_plane.models.registry import (
     RegistryProtocol,
@@ -51,6 +52,12 @@ from agent_control_plane.types.enums import (
 )
 from agent_control_plane.types.frames import EmitMetadata, EventFrame, EventMetadata
 from agent_control_plane.types.ids import AgentId, IdempotencyKey, ResourceId
+from agent_control_plane.types.preconditions import (
+    Precondition,
+    PreconditionStateProvider,
+    PreconditionStatus,
+    PreconditionVerificationResult,
+)
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import Page, SessionHealth, StateChange, StateChangePage
 from agent_control_plane.types.run_handle import RunHandle
@@ -143,7 +150,7 @@ class UnknownAppEventError(ValueError):
     """Raised when an app event cannot be resolved by the configured mapper."""
 
 
-class SyncControlPlane:
+class SyncControlPlane:  # pylint: disable=too-many-public-methods
     """Synchronous control-plane facade (no asyncio event loop required)."""
 
     def __init__(
@@ -295,6 +302,33 @@ class SyncControlPlane:
             )
             uow.commit()
             return seq
+
+    def verify_preconditions(
+        self,
+        session_id: UUID,
+        preconditions: list[Precondition],
+        *,
+        proposal_id: UUID | None = None,
+        action_id: str | None = None,
+        providers: list[PreconditionStateProvider] | None = None,
+        metadata: EventMetadata | None = None,
+    ) -> PreconditionVerificationResult:
+        """Verify preconditions and record a state-bearing failure event if they diverge."""
+
+        with self.session_scope() as db:
+            uow = self._uow_factory(db)
+            verifier = PreconditionVerifier(event_store=None, providers=providers)
+            result = verifier.check(preconditions)
+            if result.status == PreconditionStatus.FAILED:
+                uow.event_repo.append(
+                    session_id=session_id,
+                    event_kind=EventKind.PRECONDITION_FAILED,
+                    payload=precondition_failure_payload(result, proposal_id=proposal_id, action_id=action_id),
+                    state_bearing=True,
+                    metadata=metadata,
+                )
+            uow.commit()
+            return result
 
     def replay_events(self, session_id: UUID, *, after_seq: int = 0, limit: int = 100) -> list[EventFrame]:
         with self.session_scope() as db:
@@ -1204,6 +1238,32 @@ class ControlPlaneFacade:
     def close(self) -> None:
         self._cp.close()
 
+    def verify_preconditions(
+        self,
+        session_id: UUID,
+        preconditions: list[Precondition],
+        *,
+        proposal_id: UUID | None = None,
+        action_id: str | None = None,
+        providers: list[PreconditionStateProvider] | None = None,
+        metadata: EventMetadata | None = None,
+    ) -> PreconditionVerificationResult:
+        """Verify preconditions immediately before host-managed execution.
+
+        ``ControlPlaneFacade.run()`` only owns session lifecycle; it does not receive an
+        action proposal or execution callback. Non-MCP callers must invoke this method
+        after kill-switch/budget checks and immediately before performing side effects.
+        """
+
+        return self._cp.verify_preconditions(
+            session_id,
+            preconditions,
+            proposal_id=proposal_id,
+            action_id=action_id,
+            providers=providers,
+            metadata=metadata,
+        )
+
     @contextmanager
     def run(
         self,
@@ -1218,6 +1278,10 @@ class ControlPlaneFacade:
         Opens a session, activates it, and closes it on exit. Tags accumulated
         via ``handle.tag()`` are written into the session's close payload.
         On exception: closes the session with SESSION_ABORTED and re-raises.
+
+        This context manager does not execute proposals itself. Callers that attach
+        proposal preconditions must call ``verify_preconditions()`` immediately before
+        their host-managed execution step.
         """
         session_id = self.sessions.open_session(
             name,

@@ -4,6 +4,16 @@
 
 ### Added
 
+- **Pre-execution preconditions** — `ActionProposal.preconditions` can now carry
+  optional resource-state checks that run immediately before execution, after
+  kill-switch checks. `PreconditionVerifier` records state-bearing
+  `PRECONDITION_FAILED` events with expected/actual divergence details and uses the
+  distinct `GovernanceOutcome.PRECONDITION_FAILED` telemetry outcome. Built-in
+  providers cover SHA-256 file hashes and environment variables; hosts can supply
+  `PreconditionStateProvider` implementations for other resource types. ACP reserves
+  the internal `metadata_json` key `__acp_preconditions` for migration-free proposal
+  persistence.
+
 - **`write_html_report(results, path)`** — stdlib-only HTML reporter for benchmark runs.
   Takes a `list[BenchmarkRunResult]` and emits a self-contained static file with a
   summary table and per-result drill-down (metrics, fitness breakdown, notes, run ID).

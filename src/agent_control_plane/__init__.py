@@ -57,6 +57,7 @@ from agent_control_plane.engine.policy_engine import (
     PolicyEngine,
     RiskClassifier,
 )
+from agent_control_plane.engine.precondition_verifier import PreconditionVerifier
 from agent_control_plane.engine.router import ProposalRouter, RoutingDecision
 from agent_control_plane.engine.session_manager import SessionManager
 from agent_control_plane.engine.session_risk_accumulator import SessionRiskAccumulator
@@ -261,6 +262,16 @@ from agent_control_plane.types.policies import (
     PolicySnapshot,
     RiskLimits,
 )
+from agent_control_plane.types.preconditions import (
+    PRECONDITIONS_METADATA_KEY,
+    EnvironmentVariableStateProvider,
+    FileHashStateProvider,
+    Precondition,
+    PreconditionDivergence,
+    PreconditionStateProvider,
+    PreconditionStatus,
+    PreconditionVerificationResult,
+)
 from agent_control_plane.types.proposals import (
     ActionProposal,
     ExecutionIntent,
@@ -436,9 +447,11 @@ __all__ = [
     "ExecutionIntentStatus",
     "ExecutionMode",
     "ExecutionResult",
+    "EnvironmentVariableStateProvider",
     "export_event",
     "export_scorecard",
     "FieldAliasMap",
+    "FileHashStateProvider",
     "FitnessEvaluator",
     "FitnessWeights",
     "GovernanceOutcome",
@@ -473,6 +486,13 @@ __all__ = [
     "ModelTier",
     "ParallelEvaluationResult",
     "ParallelPolicyEvaluator",
+    "PRECONDITIONS_METADATA_KEY",
+    "Precondition",
+    "PreconditionDivergence",
+    "PreconditionStateProvider",
+    "PreconditionStatus",
+    "PreconditionVerificationResult",
+    "PreconditionVerifier",
     "PolicyDeniedError",
     "SteeringRequiredError",
     "SteeringContext",

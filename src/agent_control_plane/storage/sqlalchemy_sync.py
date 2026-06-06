@@ -34,6 +34,7 @@ from agent_control_plane.types.enums import (
 )
 from agent_control_plane.types.frames import EventFrame, EventMetadata
 from agent_control_plane.types.ids import ModelId, OrgId, TeamId, UserId
+from agent_control_plane.types.preconditions import decode_preconditions_from_metadata
 from agent_control_plane.types.proposals import ActionProposal
 from agent_control_plane.types.query import CommandResult
 from agent_control_plane.types.sessions import BudgetInfo, SessionState
@@ -452,7 +453,7 @@ class SyncSqlAlchemyProposalRepo:
             resource_type=proposal.resource_type,
             decision=proposal.decision,
             reasoning=proposal.reasoning,
-            metadata_json=proposal.metadata,
+            metadata_json=proposal.persisted_metadata(),
             weight=proposal.weight,
             score=proposal.score,
             action_tier=proposal.action_tier,
@@ -508,6 +509,7 @@ class SyncSqlAlchemyProposalRepo:
         return result.scalar_one_or_none() is not None
 
     def _to_dto(self, row: Any) -> ActionProposal:
+        metadata, preconditions = decode_preconditions_from_metadata(getattr(row, "metadata_json", {}) or {})
         return ActionProposal(
             id=row.id,
             session_id=row.session_id,
@@ -517,7 +519,8 @@ class SyncSqlAlchemyProposalRepo:
             resource_type=row.resource_type,
             decision=row.decision,
             reasoning=row.reasoning,
-            metadata=getattr(row, "metadata_json", {}) or {},
+            metadata=metadata,
+            preconditions=preconditions,
             weight=row.weight,
             score=row.score,
             risk_factors=getattr(row, "risk_factors", []) or [],

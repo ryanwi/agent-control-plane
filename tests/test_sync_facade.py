@@ -37,6 +37,7 @@ from agent_control_plane.types.enums import (
     UnknownAppEventPolicy,
 )
 from agent_control_plane.types.frames import EmitMetadata, EventMetadata
+from agent_control_plane.types.preconditions import Precondition, PreconditionStatus
 from agent_control_plane.types.proposals import ActionProposal
 
 
@@ -297,6 +298,28 @@ def test_control_plane_facade_create_proposal_idempotency(tmp_path: Path):
             datetime.now(UTC) + timedelta(minutes=5),
             command_id="sync-create-proposal-1",
         )
+
+    facade.close()
+
+
+def test_control_plane_facade_verify_preconditions_records_failure(tmp_path: Path):
+    db_file = tmp_path / "cp_facade_preconditions.db"
+    facade = ControlPlaneFacade.from_database_url(f"sqlite:///{db_file}")
+    facade.setup()
+
+    sid = facade.sessions.open_session("sync-preconditions")
+    result = facade.verify_preconditions(
+        sid,
+        [Precondition(resource_id="resource-1", provider_id="unknown-provider", expected_state="expected")],
+        action_id="host-execution",
+    )
+
+    assert result.status == PreconditionStatus.FAILED
+    events = facade.sessions.replay(sid)
+    assert len(events) == 1
+    assert events[0].kind == EventKind.PRECONDITION_FAILED
+    assert events[0].state_bearing is True
+    assert events[0].payload["action_id"] == "host-execution"
 
     facade.close()
 
