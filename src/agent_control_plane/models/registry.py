@@ -13,7 +13,7 @@ class RegistryProtocol(Protocol):
     """Protocol for model registry implementations."""
 
     def register(self, name: str, model: type) -> None: ...
-    def get(self, name: str) -> Any: ...
+    def get(self, name: str) -> type[Any]: ...
     def reset(self) -> None: ...
     def models(self) -> dict[str, type]: ...
 
@@ -32,7 +32,7 @@ class ModelRegistry:
         cls._models[name] = model
 
     @classmethod
-    def get(cls, name: str) -> Any:
+    def get(cls, name: str) -> type[Any]:
         scoped = cls._scoped_models.get()
         model_map = scoped if scoped is not None else cls._models
         if name not in model_map:
@@ -83,7 +83,7 @@ class ScopedModelRegistry:
     def register(self, name: str, model: type) -> None:
         self._model_map[name] = model
 
-    def get(self, name: str) -> Any:
+    def get(self, name: str) -> type[Any]:
         if name not in self._model_map:
             raise RuntimeError(
                 f"Model '{name}' not registered. Call registry.register('{name}', YourModel) at startup."

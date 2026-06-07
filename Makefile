@@ -44,6 +44,7 @@ test:
 lint:
 	$(RUFF) check src tests examples
 	$(PYLINT) src
+	uv run lint-imports
 
 pylint:
 	$(PYLINT) src

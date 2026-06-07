@@ -107,8 +107,22 @@ jobs:
       - name: Ruff lint
         run: ruff check src/ tests/ examples/
 
+      - name: Pylint
+        run: pylint src/
+
+      - name: Import boundary check
+        run: lint-imports
+
       - name: OpenAPI spec validation
         run: make openapi-check
 
       - name: Pre-commit hooks
         run: pre-commit run --all-files
+
+  semgrep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: returntocorp/semgrep-action@v1
+        with:
+          config: lint/semgrep/governance_invariants.yml

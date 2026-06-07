@@ -8,7 +8,10 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from agent_control_plane.engine.token_budget_tracker import TokenBudgetTracker
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
@@ -1290,7 +1293,7 @@ class AsyncControlPlaneFacade:
                 yield db
 
     @asynccontextmanager
-    async def token_budget_tracker(self) -> AsyncIterator[Any]:
+    async def token_budget_tracker(self) -> AsyncIterator[TokenBudgetTracker]:
         """Yield a TokenBudgetTracker bound to a fresh DB session.
 
         Commits on clean exit. Commits on TokenBudgetExhaustedError so the

@@ -43,6 +43,7 @@ dev = [
     "openapi-spec-validator>=0.7",
     "jsonschema>=4.0",
     "PyYAML>=6.0",
+    "import-linter>=2.0",
 ]
 
 [project.urls]
@@ -105,3 +106,27 @@ disable = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.importlinter]
+root_packages = ["agent_control_plane"]
+
+[[tool.importlinter.contracts]]
+name = "Engines must not depend on concrete storage backends"
+type = "forbidden"
+source_modules = ["agent_control_plane.engine"]
+forbidden_modules = [
+    "agent_control_plane.storage.sqlalchemy_sync",
+    "agent_control_plane.storage.sqlalchemy_async",
+]
+
+[[tool.importlinter.contracts]]
+name = "Engines must not depend on the MCP gateway"
+type = "forbidden"
+source_modules = ["agent_control_plane.engine"]
+forbidden_modules = ["agent_control_plane.mcp"]
+
+[[tool.importlinter.contracts]]
+name = "Evaluators must not depend on engines (they are plugged in, not downstream)"
+type = "forbidden"
+source_modules = ["agent_control_plane.evaluators"]
+forbidden_modules = ["agent_control_plane.engine"]

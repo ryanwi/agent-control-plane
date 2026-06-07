@@ -71,9 +71,10 @@ uv run mypy src
 
 - **ModelRegistry**: host applications must register required models at startup.
 - **EventStore semantics**:
-  - `state_bearing=True` errors should fail closed (raise).
+  - `state_bearing=True` errors should fail closed (raise) — enforced by `lint/semgrep/governance_invariants.yml`.
   - non-state-bearing failures should not make critical path fail; capture/propagate via buffer behavior.
 - **Session control**: do not bypass control engines for state transitions.
+- **Import boundaries**: `engine/` must not import concrete storage backends or `mcp/`; `evaluators/` must not import `engine/` — enforced by `lint-imports` (import-linter; contracts in `pyproject.toml`).
 - **Recovery safety**: keep deterministic lock and status transitions.
 
 ## Commit conventions (for contributors)

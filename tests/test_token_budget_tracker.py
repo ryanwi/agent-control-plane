@@ -314,12 +314,15 @@ class TestRecordUsage:
                 estimated_cost_usd=Decimal("-0.01"),
             )
 
-    async def test_tracker_from_session_classmethod(self) -> None:
-        """TokenBudgetTracker.from_session builds tracker bound to caller's session."""
+    async def test_tracker_constructed_with_repo(self) -> None:
+        """TokenBudgetTracker can be constructed with any AsyncTokenBudgetRepository."""
         from unittest.mock import MagicMock
 
+        from agent_control_plane.storage.sqlalchemy_async import AsyncSqlAlchemyTokenBudgetRepo
+
         session = MagicMock()
-        tracker = TokenBudgetTracker.from_session(session)
+        repo = AsyncSqlAlchemyTokenBudgetRepo(session)
+        tracker = TokenBudgetTracker(repo)
         assert isinstance(tracker, TokenBudgetTracker)
         assert tracker._repo._session is session  # type: ignore[attr-defined]
 

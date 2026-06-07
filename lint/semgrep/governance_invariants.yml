@@ -1,0 +1,118 @@
+rules:
+  # ── Fail-closed invariant ─────────────────────────────────────────────────
+  #
+  # Governance code (engine/, mcp/, sync.py) must never let an exception
+  # silently allow an action. An except block that returns a truthy value
+  # (True, "allow", an approval object) is a security hole — a broken
+  # policy check becomes a pass-through.
+  #
+  # Fix: either re-raise the exception, return an explicit deny decision,
+  # or route through ResiliencePolicy (resilient.py) with FAIL_CLOSED for
+  # the relevant category. See docs/security_model.md §"Fail-closed".
+
+  - id: fail-open-return-true-in-except
+    patterns:
+      - pattern: |
+          try:
+            ...
+          except ...:
+            ...
+            return True
+      - pattern-not: |
+          try:
+            ...
+          except ...:
+            raise
+    message: >
+      Governance must fail closed. This except block returns True (allow),
+      which means a broken policy check silently passes. Re-raise the
+      exception or return an explicit deny. See docs/security_model.md.
+    languages: [python]
+    severity: ERROR
+    paths:
+      include:
+        - src/agent_control_plane/engine/
+        - src/agent_control_plane/mcp/
+        - src/agent_control_plane/sync.py
+        - src/agent_control_plane/async_facade.py
+
+  - id: swallowed-exception-bare-pass
+    pattern: |
+      try:
+        ...
+      except ...:
+        pass
+    message: >
+      Enforcement code must not silently swallow exceptions with bare pass.
+      Add a deny decision, log-and-re-raise, or remove the try/except.
+      Silent swallowing in governance paths hides failures and may allow
+      actions that should be denied. See docs/security_model.md §"Fail-closed".
+    languages: [python]
+    severity: WARNING
+    paths:
+      include:
+        - src/agent_control_plane/engine/
+        - src/agent_control_plane/mcp/
+        - src/agent_control_plane/sync.py
+        - src/agent_control_plane/async_facade.py
+
+  # ── State-bearing persistence invariant ──────────────────────────────────
+  #
+  # Any EventStore.append() or similar call with state_bearing=True must
+  # not have its exception swallowed. The caller is responsible for
+  # letting the exception propagate to block the decision path.
+  #
+  # Fix: do not wrap state_bearing=True calls in bare except blocks that
+  # do not re-raise. See EventStore.append() for the canonical pattern.
+
+  - id: state-bearing-exception-swallowed
+    patterns:
+      - pattern: |
+          try:
+            $CALL(..., state_bearing=True, ...)
+          except ...:
+            ...
+      - pattern-not: |
+          try:
+            $CALL(..., state_bearing=True, ...)
+          except ...:
+            ...
+            raise
+    message: >
+      state_bearing=True persistence errors must fail closed (raise), never
+      swallow. An unhandled persistence failure that continues execution
+      means decisions may be taken without a durable audit record.
+      Fix: re-raise the exception from the except block, or remove the
+      try/except and let the error propagate. See CLAUDE.md §"Conventions".
+    languages: [python]
+    severity: ERROR
+    paths:
+      include:
+        - src/agent_control_plane/
+
+  # ── FAIL_OPEN budget override footgun ────────────────────────────────────
+  #
+  # Passing FAIL_OPEN for the BUDGET resilience category means a budget
+  # check error will silently allow the action (the default value `True`
+  # is returned). This is intentional for hosts that prefer availability
+  # over strict enforcement, but must be an explicit opt-in, not a mistake.
+  #
+  # If you are deliberately configuring FAIL_OPEN for BUDGET, suppress
+  # this finding with `# nosemgrep: budget-fail-open-override` and add a
+  # comment explaining why FAIL_OPEN is acceptable for your deployment.
+
+  - id: budget-fail-open-override
+    pattern: |
+      {..., ResilienceCategory.BUDGET: ResilienceMode.FAIL_OPEN, ...}
+    message: >
+      FAIL_OPEN for ResilienceCategory.BUDGET means budget errors silently
+      allow actions (an agent can run indefinitely if the budget check
+      throws). This is an intentional opt-in for availability-first
+      deployments. If that is your intent, suppress with
+      `# nosemgrep: budget-fail-open-override` and document why.
+      See resilient.py and docs/security_model.md §"Budget enforcement".
+    languages: [python]
+    severity: WARNING
+    paths:
+      include:
+        - src/agent_control_plane/

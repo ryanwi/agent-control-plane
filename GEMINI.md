@@ -16,7 +16,7 @@ This file provides foundational context and mandates for Gemini CLI when working
 - **Language:** Python 3.11+
 - **Database/ORM:** SQLAlchemy 2.0+ (Async and Sync adapters)
 - **Validation:** Pydantic 2.0+
-- **Tooling:** `uv` (package management), `ruff` (linting/formatting), `mypy` (type checking), `pytest` (testing).
+- **Tooling:** `uv` (package management), `ruff` (linting/formatting), `mypy` (type checking), `pylint` (design checks), `import-linter` (import boundary contracts), `semgrep` (governance invariant rules in `lint/semgrep/`), `pytest` (testing).
 
 ## Architecture & Components
 
@@ -59,7 +59,9 @@ Always use `uv run` to ensure the correct environment and dependencies are used.
 - **Formatting:** `uv run ruff format src tests examples`
 - **Type Checking:** `uv run mypy src`
 - **Docs Drift:** `make docs-drift`
-- **Full Check:** `make check` (Lint + Type Check + Test)
+- **Import Boundary Check:** `lint-imports`
+- **Governance Rules:** `lint/semgrep/governance_invariants.yml` — runs in CI via `returntocorp/semgrep-action`; review manually locally
+- **Full Check:** `make check` (docs-drift + openapi-check + lint + typecheck + test + examples)
 
 ## Verification Checklist
 
@@ -75,7 +77,7 @@ Before considering a task complete, ensure the following steps are performed:
 ## Implementation Mandates
 
 ### Best Practices
-- **Fail Closed:** `state_bearing=True` persistence errors MUST raise an exception and fail the operation. Never swallow these errors.
+- **Fail Closed:** `state_bearing=True` persistence errors MUST raise an exception and fail the operation. Never swallow these errors — enforced by `lint/semgrep/governance_invariants.yml` rule `state-bearing-exception-swallowed`.
 - **Engine Integrity:** Never bypass control engines (e.g., `SessionManager`, `ApprovalGate`) to modify state directly via ORM models.
 - **Auditability:** Every meaningful state transition must emit a corresponding event via the `EventStore`.
 - **Conventional Commits:** Use standard prefixes: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`.

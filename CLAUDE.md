@@ -10,7 +10,10 @@ uv run pytest -q             # Run all tests
 uv run pytest tests/<file> -q  # Run single test file
 uv run pytest -k "test_name" # Run single test by name
 make docs-drift              # Validate instruction/docs alignment
-make check                   # Lint + typecheck + test (all at once)
+make check                   # Lint + typecheck + test + docs-drift + openapi-check + examples
+lint-imports                 # Check import boundary contracts (import-linter)
+# Governance Semgrep rules run in CI only (semgrep Python package is broken on 3.13+)
+# Rules are in lint/semgrep/governance_invariants.yml — review manually or via CI
 ```
 
 ## Architecture
@@ -27,6 +30,7 @@ Embeddable, self-hosted governance framework for autonomous agent runtimes. Sepa
 - **`recovery/`** — Crash recovery (stale cycle release) and timeout escalation.
 - **`types/`** — Pydantic v2 DTOs and enums: `enums`, `policies`, `proposals`, `approvals`, `agents`, `frames`, `sessions`, `steering`, `conditions`.
 - **`models/`** — `ModelRegistry` for lazy ORM resolution, SQLAlchemy mixins, and ready-to-use reference models (`reference.py`).
+- **`lint/semgrep/`** — Project-specific Semgrep rules enforcing governance invariants (fail-closed, state-bearing, budget-fail-open). Run via `semgrep --config lint/semgrep/governance_invariants.yml src/`.
 
 ### Key patterns
 
@@ -54,9 +58,11 @@ Higher-level entry points: `McpGateway` (MCP tool calls) and `SyncControlPlane` 
 
 - Use conventional commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`
 - Don't add domain-specific business logic into core engine modules
-- `state_bearing=True` persistence errors must fail closed (raise), never swallow
+- `state_bearing=True` persistence errors must fail closed (raise), never swallow → enforced by `lint/semgrep/governance_invariants.yml` rule `state-bearing-exception-swallowed`
 - Don't bypass control engines for state transitions — always go through the engine API
-- Ruff and mypy config lives in `pyproject.toml` — run `make check` to verify
+- `engine/` must not import concrete storage backends or `mcp/` — enforced by `lint-imports` (import-linter contracts in `pyproject.toml`)
+- `evaluators/` must not import `engine/` — enforced by `lint-imports`
+- Ruff, mypy, pylint, and import-linter config all live in `pyproject.toml` — run `make check` to verify
 - Tests use `pytest-asyncio` with `asyncio_mode = "auto"`
 - Prefer frozen dataclasses over anonymous tuples wherever fields have distinct semantic meaning — return types, mapping values, collection elements, etc. (no linter enforces this — enforce in review)
 

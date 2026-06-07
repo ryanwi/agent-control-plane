@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field, field_validator
 
 from .aliases import AliasProfiledModel
+from .conditions import ConditionNode
 from .enums import ActionValue, AssetScope, ExecutionMode, RiskLevel, parse_action_name
 from .extensions import get_risk_limits_extension_schema
 
@@ -41,7 +41,7 @@ class AutoApproveConditions(AliasProfiledModel):
     dry_run_only: bool = True
     max_weight: Decimal = Decimal("2.5")
     min_score: Decimal = Decimal("0.7")
-    condition_tree: Any | None = None
+    condition_tree: ConditionNode | None = None
 
     @field_validator("max_risk_tier", mode="before")
     @classmethod
@@ -84,3 +84,9 @@ class PolicySnapshot(AliasProfiledModel):
         if value is None or isinstance(value, AssetScope):
             return value
         return AssetScope(value.strip().lower())
+
+
+# ConditionNode is a recursive discriminated union defined in conditions.py;
+# rebuild to resolve the forward reference in AutoApproveConditions.condition_tree.
+AutoApproveConditions.model_rebuild()
+PolicySnapshot.model_rebuild()
