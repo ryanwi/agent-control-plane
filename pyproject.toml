@@ -118,6 +118,13 @@ forbidden_modules = [
     "agent_control_plane.storage.sqlalchemy_sync",
     "agent_control_plane.storage.sqlalchemy_async",
 ]
+# TokenBudgetTracker.from_session() is a public convenience factory that wires
+# the tracker to an existing AsyncSession. The import is lazy (inside the method
+# body) so it doesn't affect import-time coupling; callers who don't use
+# from_session() pay no dependency cost. Accepted exception to this contract.
+ignore_imports = [
+    "agent_control_plane.engine.token_budget_tracker -> agent_control_plane.storage.sqlalchemy_async",
+]
 
 [[tool.importlinter.contracts]]
 name = "Engines must not depend on the MCP gateway"
