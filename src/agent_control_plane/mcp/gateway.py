@@ -28,7 +28,6 @@ from agent_control_plane.engine.runtime_monitor import (
     RuntimeMonitorConfig,
 )
 from agent_control_plane.models.registry import ModelRegistry
-from agent_control_plane.storage.sqlalchemy_sync import SyncSqlAlchemyUnitOfWork
 from agent_control_plane.sync import MappedEvent, SyncControlPlane
 from agent_control_plane.types.enums import (
     ActionName,
@@ -627,7 +626,7 @@ class McpGateway:
     def _create_approval_request(self, session_id: UUID, proposal: ActionProposal) -> UUID:
         timeout_at = datetime.now(UTC) + timedelta(seconds=self._config.policy_snapshot.approval_timeout_seconds)
         with self._cp.session_scope() as db:
-            uow = SyncSqlAlchemyUnitOfWork(db)
+            uow = self._cp.uow_factory(db)
             proposal_id = self._insert_proposal_row(db, proposal)
             ticket = uow.approval_repo.create_ticket(session_id, proposal_id, timeout_at)
             uow.event_repo.append(
