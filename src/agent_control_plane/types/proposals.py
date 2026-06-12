@@ -117,3 +117,13 @@ class ExecutionResult(AliasProfiledModel):
     result_details: dict[str, Any] = Field(default_factory=dict)
 
     completed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class ClarificationRequest(AliasProfiledModel):
+    """Request for missing/ambiguous details from the agent."""
+
+    id: UUID = Field(default_factory=uuid4)
+    session_id: UUID
+    proposal_id: UUID
+    required_fields: list[str]
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

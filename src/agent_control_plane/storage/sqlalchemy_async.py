@@ -172,6 +172,7 @@ class AsyncSqlAlchemySessionRepo:
             active_policy_id=getattr(row, "active_policy_id", None),
             active_cycle_id=getattr(row, "active_cycle_id", None),
             dry_run_session_id=getattr(row, "dry_run_session_id", None),
+            steering_history=getattr(row, "steering_history", {}),
             abort_reason=getattr(row, "abort_reason", None),
             abort_details=getattr(row, "abort_details", None),
             killed_at=getattr(row, "killed_at", None),

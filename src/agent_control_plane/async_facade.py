@@ -463,12 +463,28 @@ class AsyncLifecycleGateway(_AsyncGatewayBase):
                 raise ValueError(f"Session not found after pause: {session_id}")
             return SessionLifecycleResult(session=session)
 
-    async def resume_session(self, session_id: UUID) -> SessionLifecycleResult:
+    async def resume_session(
+        self,
+        session_id: UUID,
+        resolved_parameters: dict[str, Any] | None = None,
+    ) -> SessionLifecycleResult:
         async with self._session_scope() as db:
             uow = self._uow_factory(db)
             cs = await uow.session_repo.get_session_for_update(session_id)
-            if cs.status != SessionStatus.PAUSED:
+            if cs.status not in {SessionStatus.PAUSED, SessionStatus.SUSPENDED_FOR_CLARIFICATION}:
                 raise ValueError(f"Cannot resume session in state {cs.status}")
+
+            if cs.status == SessionStatus.SUSPENDED_FOR_CLARIFICATION:
+                if not resolved_parameters:
+                    raise ValueError("Resolved parameters are required to resume a session suspended for clarification")
+
+                await uow.event_repo.append(
+                    session_id=session_id,
+                    event_kind=EventKind.CLARIFICATION_RESOLVED,
+                    payload={"resolved_parameters": resolved_parameters},
+                    state_bearing=True,
+                )
+
             if cs.killed_at is not None:
                 raise ValueError(f"Cannot resume a killed session (killed_at={cs.killed_at})")
             violations = validate_session_integrity(cs)

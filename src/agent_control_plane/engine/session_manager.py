@@ -88,11 +88,27 @@ class SessionManager:
         cs.status = SessionStatus.PAUSED
         return cs
 
-    async def resume_session(self, session_id: UUID) -> SessionState:
-        """Resume a paused session, failing closed if persisted state violates invariants."""
+    async def resume_session(
+        self,
+        session_id: UUID,
+        resolved_parameters: dict[str, Any] | None = None,
+    ) -> SessionState:
+        """Resume a paused or suspended session, failing closed if persisted state violates invariants."""
         cs = await self._get_session_or_raise(session_id)
-        if cs.status != SessionStatus.PAUSED:
+        if cs.status not in {SessionStatus.PAUSED, SessionStatus.SUSPENDED_FOR_CLARIFICATION}:
             raise ValueError(f"Cannot resume session in state {cs.status}")
+
+        if cs.status == SessionStatus.SUSPENDED_FOR_CLARIFICATION:
+            if not resolved_parameters:
+                raise ValueError("Resolved parameters are required to resume a session suspended for clarification")
+            if self._event_store is not None:
+                await self._event_store.append(
+                    session_id=session_id,
+                    event_kind=EventKind.CLARIFICATION_RESOLVED,
+                    payload={"resolved_parameters": resolved_parameters},
+                    state_bearing=True,
+                )
+
         if cs.killed_at is not None:
             raise ValueError(f"Cannot resume a killed session (killed_at={cs.killed_at}); call unkill_session first")
         await self._assert_state_integrity(cs)

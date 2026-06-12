@@ -12,6 +12,7 @@ from agent_control_plane.types.frames import EventMetadata
 from agent_control_plane.types.preconditions import (
     EnvironmentVariableStateProvider,
     FileHashStateProvider,
+    FreshnessStateProvider,
     Precondition,
     PreconditionDivergence,
     PreconditionStateProvider,
@@ -32,6 +33,7 @@ class PreconditionVerifier:
         builtins: tuple[PreconditionStateProvider, ...] = (
             FileHashStateProvider(),
             EnvironmentVariableStateProvider(),
+            FreshnessStateProvider(),
         )
         self._providers = {provider.provider_id: provider for provider in (*builtins, *(providers or ()))}
 

@@ -27,6 +27,7 @@ class PolicySnapshotMixin:
     asset_scope: Mapped[AssetScope | None] = mapped_column(VARCHAR(50), nullable=True)
     execution_mode: Mapped[str] = mapped_column(VARCHAR(20), nullable=False, default="dry_run")
     approval_timeout_seconds: Mapped[int] = mapped_column(nullable=False, default=3600)
+    max_steering_retries: Mapped[int] = mapped_column(nullable=False, default=3, server_default="3")
     auto_approve_conditions: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
@@ -55,6 +56,9 @@ class ControlSessionMixin:
 
     # Cycle tracking
     active_cycle_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+
+    # Steering loop tracking
+    steering_history: Mapped[dict[str, int]] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
 
     # Abort info
     abort_reason: Mapped[AbortReason | None] = mapped_column(VARCHAR(50), nullable=True)

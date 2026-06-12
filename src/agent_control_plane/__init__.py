@@ -270,8 +270,12 @@ from agent_control_plane.types.policies import (
 )
 from agent_control_plane.types.preconditions import (
     PRECONDITIONS_METADATA_KEY,
+    ConsensusPrecondition,
+    ConsensusStateProvider,
     EnvironmentVariableStateProvider,
     FileHashStateProvider,
+    FreshnessPrecondition,
+    FreshnessStateProvider,
     Precondition,
     PreconditionDivergence,
     PreconditionStateProvider,
@@ -280,6 +284,7 @@ from agent_control_plane.types.preconditions import (
 )
 from agent_control_plane.types.proposals import (
     ActionProposal,
+    ClarificationRequest,
     ExecutionIntent,
     ExecutionResult,
     RiskDecision,
@@ -369,6 +374,7 @@ __all__ = [
     "ActionName",
     "ActionValue",
     "ActionProposal",
+    "ClarificationRequest",
     "ActionTier",
     # Policy
     "ActionTiers",
@@ -494,6 +500,10 @@ __all__ = [
     "ParallelPolicyEvaluator",
     "PRECONDITIONS_METADATA_KEY",
     "Precondition",
+    "ConsensusPrecondition",
+    "ConsensusStateProvider",
+    "FreshnessPrecondition",
+    "FreshnessStateProvider",
     "PreconditionDivergence",
     "PreconditionStateProvider",
     "PreconditionStatus",

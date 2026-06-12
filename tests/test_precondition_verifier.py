@@ -111,3 +111,110 @@ async def test_verify_failure_event_is_state_bearing_and_fails_closed():
             uuid4(),
             [Precondition(resource_id="file", provider_id="map", expected_state="expected")],
         )
+
+
+@pytest.mark.asyncio
+async def test_freshness_precondition_success():
+    import time
+
+    from agent_control_plane import FreshnessPrecondition
+
+    now = time.time()
+    precond = FreshnessPrecondition(
+        resource_id="db_dump",
+        expected_state="fresh",
+        metadata={"max_age_seconds": 10.0, "resource_timestamp": now - 5.0},
+    )
+
+    repo = InMemoryEventRepository()
+    verifier = PreconditionVerifier(EventStore(repo))
+    result = await verifier.verify(uuid4(), [precond])
+    assert result.status == PreconditionStatus.PASSED
+
+
+@pytest.mark.asyncio
+async def test_freshness_precondition_stale():
+    import time
+
+    from agent_control_plane import FreshnessPrecondition
+
+    now = time.time()
+    precond = FreshnessPrecondition(
+        resource_id="db_dump",
+        expected_state="fresh",
+        metadata={"max_age_seconds": 10.0, "resource_timestamp": now - 15.0},
+    )
+
+    repo = InMemoryEventRepository()
+    verifier = PreconditionVerifier(EventStore(repo))
+    result = await verifier.verify(uuid4(), [precond])
+    assert result.status == PreconditionStatus.FAILED
+    assert len(result.divergences) == 1
+    assert result.divergences[0].actual_state == "stale_context"
+
+
+@pytest.mark.asyncio
+async def test_freshness_precondition_custom_resolver():
+    import time
+
+    from agent_control_plane import FreshnessPrecondition, FreshnessStateProvider
+
+    now = time.time()
+
+    def resolver(resource_id):
+        if resource_id == "my_resource":
+            return now - 2.0
+        return None
+
+    custom_provider = FreshnessStateProvider(get_timestamp_fn=resolver)
+
+    precond = FreshnessPrecondition(
+        resource_id="my_resource", expected_state="fresh", metadata={"max_age_seconds": 5.0}
+    )
+
+    repo = InMemoryEventRepository()
+    verifier = PreconditionVerifier(EventStore(repo), providers=[custom_provider])
+    result = await verifier.verify(uuid4(), [precond])
+    assert result.status == PreconditionStatus.PASSED
+
+
+@pytest.mark.asyncio
+async def test_consensus_precondition_success():
+    from agent_control_plane import ConsensusPrecondition, ConsensusStateProvider
+
+    provider1 = _MapProvider({"db_replica1": "data_v1"})
+    provider2 = _MapProvider({"db_replica1": "data_v1"})
+
+    consensus_provider = ConsensusStateProvider(providers=[provider1, provider2])
+
+    precond = ConsensusPrecondition(
+        resource_id="db_replica1",
+        expected_state="data_v1",
+    )
+
+    repo = InMemoryEventRepository()
+    verifier = PreconditionVerifier(EventStore(repo), providers=[consensus_provider])
+    result = await verifier.verify(uuid4(), [precond])
+    assert result.status == PreconditionStatus.PASSED
+
+
+@pytest.mark.asyncio
+async def test_consensus_precondition_conflict():
+    from agent_control_plane import ConsensusPrecondition, ConsensusStateProvider
+
+    provider1 = _MapProvider({"db_replica1": "data_v1"})
+    provider2 = _MapProvider({"db_replica1": "data_v2"})
+
+    consensus_provider = ConsensusStateProvider(providers=[provider1, provider2])
+
+    precond = ConsensusPrecondition(
+        resource_id="db_replica1",
+        expected_state="data_v1",
+    )
+
+    repo = InMemoryEventRepository()
+    verifier = PreconditionVerifier(EventStore(repo), providers=[consensus_provider])
+    result = await verifier.verify(uuid4(), [precond])
+    assert result.status == PreconditionStatus.FAILED
+    assert len(result.divergences) == 1
+    assert result.divergences[0].actual_state == "conflicting_context"

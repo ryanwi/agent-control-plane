@@ -75,6 +75,7 @@ class PolicySnapshot(AliasProfiledModel):
     asset_scope: AssetScope | None = None
     execution_mode: ExecutionMode = ExecutionMode.DRY_RUN
     approval_timeout_seconds: int = 3600
+    max_steering_retries: int = 3
     auto_approve_conditions: AutoApproveConditions = Field(default_factory=AutoApproveConditions)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

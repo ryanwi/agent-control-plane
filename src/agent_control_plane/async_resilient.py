@@ -213,9 +213,13 @@ class AsyncResilientLifecycleGateway:
         except Exception as exc:
             return self._p.handle_error(exc, "pause_session", OperationCategory.STATE_BEARING, None)
 
-    async def resume_session(self, session_id: UUID) -> SessionLifecycleResult | None:
+    async def resume_session(
+        self,
+        session_id: UUID,
+        resolved_parameters: dict[str, Any] | None = None,
+    ) -> SessionLifecycleResult | None:
         try:
-            return await self._g.resume_session(session_id)
+            return await self._g.resume_session(session_id, resolved_parameters=resolved_parameters)
         except Exception as exc:
             return self._p.handle_error(exc, "resume_session", OperationCategory.STATE_BEARING, None)
 

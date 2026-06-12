@@ -43,6 +43,9 @@ class SessionState(AliasProfiledModel):
     active_cycle_id: UUID | None = None
     dry_run_session_id: UUID | None = None
 
+    # Steering loop tracking
+    steering_history: dict[str, int] = Field(default_factory=dict)
+
     # Abort info
     abort_reason: AbortReason | None = None
     abort_details: str | None = None

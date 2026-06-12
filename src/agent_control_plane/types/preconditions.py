@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -27,6 +28,18 @@ class Precondition(BaseModel):
     expected_state: Any
     provider_id: str = "default"
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class FreshnessPrecondition(Precondition):
+    """Precondition for resource freshness (TTL)."""
+
+    provider_id: str = "freshness"
+
+
+class ConsensusPrecondition(Precondition):
+    """Precondition for multi-source consensus mismatch check."""
+
+    provider_id: str = "consensus"
 
 
 class PreconditionDivergence(BaseModel):
@@ -83,6 +96,66 @@ class EnvironmentVariableStateProvider:
 
     def read_state(self, precondition: Precondition) -> str | None:
         return os.environ.get(precondition.resource_id)
+
+
+class FreshnessStateProvider:
+    """Checks a resource's metadata/timestamp for decay."""
+
+    provider_id = "freshness"
+
+    def __init__(self, get_timestamp_fn: Callable[[str], float | None] | None = None) -> None:
+        self.get_timestamp_fn = get_timestamp_fn
+
+    def read_state(self, precondition: Precondition) -> str:
+        import time
+
+        now = time.time()
+        max_age = precondition.metadata.get("max_age_seconds", 60.0)
+
+        resource_time = None
+        if self.get_timestamp_fn is not None:
+            resource_time = self.get_timestamp_fn(precondition.resource_id)
+
+        if resource_time is None:
+            resource_time = precondition.metadata.get("resource_timestamp")
+
+        if resource_time is None:
+            raise ValueError("No timestamp available for resource")
+
+        if now - resource_time > max_age:
+            return "stale_context"
+        return "fresh"
+
+
+class ConsensusStateProvider:
+    """Checks for agreement among multiple state providers."""
+
+    provider_id = "consensus"
+
+    def __init__(self, providers: list[PreconditionStateProvider]) -> None:
+        self.providers = providers
+
+    def read_state(self, precondition: Precondition) -> Any:
+        results = []
+        for provider in self.providers:
+            sub_precond = Precondition(
+                resource_id=precondition.resource_id,
+                expected_state=precondition.expected_state,
+                provider_id=provider.provider_id,
+                metadata=precondition.metadata,
+            )
+            try:
+                val = provider.read_state(sub_precond)
+                results.append(val)
+            except Exception as exc:
+                results.append(f"error: {exc}")
+
+        if not results:
+            raise ValueError("No providers configured for consensus")
+
+        if len(set(results)) > 1:
+            return "conflicting_context"
+        return results[0]
 
 
 def encode_preconditions_for_metadata(

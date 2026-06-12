@@ -11,6 +11,7 @@ class ActionTier(StrEnum):
     ALWAYS_APPROVE = "always_approve"
     AUTO_APPROVE = "auto_approve"
     STEER = "steer"
+    CLARIFY = "clarify"
     UNRESTRICTED = "unrestricted"
 
 
@@ -72,6 +73,7 @@ class SessionStatus(StrEnum):
     PAUSED = "paused"
     COMPLETED = "completed"
     ABORTED = "aborted"
+    SUSPENDED_FOR_CLARIFICATION = "suspended_for_clarification"
 
 
 class EventKind(StrEnum):
@@ -122,6 +124,9 @@ class EventKind(StrEnum):
     TOKEN_BUDGET_EXHAUSTED = "token_budget_exhausted"
     MODEL_ACCESS_DENIED = "model_access_denied"
     TOKEN_USAGE_RECORDED = "token_usage_recorded"
+    STEERING_LIMIT_EXCEEDED = "steering_limit_exceeded"
+    CLARIFICATION_REQUESTED = "clarification_requested"
+    CLARIFICATION_RESOLVED = "clarification_resolved"
 
 
 class BudgetPeriod(StrEnum):

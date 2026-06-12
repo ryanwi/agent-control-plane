@@ -168,3 +168,85 @@ class TestProposalRouterSteer:
         decision = await router.route(proposal)
         assert decision.tier == ActionTier.AUTO_APPROVE
         assert decision.steering is None
+
+
+def _session_state(**overrides):
+    from agent_control_plane.types.sessions import SessionState, SessionStatus
+
+    defaults = {
+        "id": uuid4(),
+        "session_name": "test-session",
+        "status": SessionStatus.ACTIVE,
+        "execution_mode": ExecutionMode.DRY_RUN,
+        "max_cost": Decimal("100"),
+        "max_action_count": 50,
+        "steering_history": {},
+    }
+    defaults.update(overrides)
+    return SessionState(**defaults)
+
+
+class TestProposalRouterSteerRecursion:
+    @pytest.mark.asyncio
+    async def test_route_steer_recursion_escalation(self):
+        policy = _policy(max_steering_retries=2)
+        router = ProposalRouter(PolicyEngine(policy))
+
+        session = _session_state(steering_history={"change_address": 0})
+
+        proposal = _proposal(
+            decision="change_address",
+            weight=Decimal("1.0"),
+            score=Decimal("0.9"),
+        )
+
+        # First route: count goes from 0 to 1, tier should be STEER
+        decision1 = await router.route(proposal, session_state=session)
+        assert decision1.tier == ActionTier.STEER
+        assert session.steering_history["change_address"] == 1
+
+        # Second route: count goes from 1 to 2, tier should be STEER
+        decision2 = await router.route(proposal, session_state=session)
+        assert decision2.tier == ActionTier.STEER
+        assert session.steering_history["change_address"] == 2
+
+        # Third route: count is 2 (equal to max_steering_retries), should escalate!
+        decision3 = await router.route(proposal, session_state=session)
+        assert decision3.tier == ActionTier.ALWAYS_APPROVE
+        assert session.steering_history["change_address"] == 2  # should not increment further
+        assert decision3.reason.startswith("Steering limit exceeded")
+
+    @pytest.mark.asyncio
+    async def test_route_steer_recursion_event_store(self):
+        from agent_control_plane.engine.event_store import EventStore
+        from agent_control_plane.types.enums import EventKind
+        from tests.fakes import InMemoryEventRepository
+
+        policy = _policy(max_steering_retries=0)
+        repo = InMemoryEventRepository()
+        event_store = EventStore(repo)
+
+        router = ProposalRouter(
+            PolicyEngine(policy),
+            event_store=event_store,
+        )
+
+        session = _session_state(steering_history={"change_address": 0})
+
+        proposal = _proposal(
+            session_id=session.id,
+            decision="change_address",
+            weight=Decimal("1.0"),
+            score=Decimal("0.9"),
+        )
+
+        decision = await router.route(proposal, session_state=session)
+        assert decision.tier == ActionTier.ALWAYS_APPROVE
+
+        # Verify event was recorded
+        events = await event_store.replay(session.id)
+        assert len(events) == 1
+        assert events[0].kind == EventKind.STEERING_LIMIT_EXCEEDED
+        assert events[0].state_bearing is True
+        assert events[0].payload["steer_count"] == 0
+        assert events[0].payload["max_retries"] == 0
