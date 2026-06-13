@@ -2,6 +2,85 @@
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-06-12
+
+### Added
+
+- **`ActionTier.CLARIFY` — clarification governance tier** — `ProposalRouter` now
+  supports a new `CLARIFY` routing tier. When a proposal's `ActionProposal.preconditions`
+  list contains a `ClarificationPrecondition` (or when the policy engine returns
+  `ActionTier.CLARIFY`), the router suspends the session with
+  `SessionStatus.SUSPENDED_FOR_CLARIFICATION`, emits a state-bearing
+  `EventKind.CLARIFICATION_REQUESTED` event, and returns a `RoutingDecision` carrying a
+  `ClarificationRequest` DTO (new type, exported from `agent_control_plane`). Hosts
+  resolve clarification by re-submitting the proposal after supplying missing fields;
+  `EventKind.CLARIFICATION_RESOLVED` is emitted on resolution.
+
+- **Steering loop limit with escalation** — `ProposalRouter` now tracks per-decision
+  steering retries via `SessionState.steering_history` (new `dict[str, int]` field). When
+  a proposal would be routed to `ActionTier.STEER` but its decision key has reached
+  `policy.max_steering_retries` (default `3`), the router escalates automatically to
+  `ActionTier.ALWAYS_APPROVE` (requiring human sign-off) and emits a state-bearing
+  `EventKind.STEERING_LIMIT_EXCEEDED` event with the count and threshold in its payload.
+  `SessionState.steering_history` is persisted via `update_session()`.
+
+- **`FreshnessPrecondition` / `FreshnessStateProvider`** — built-in precondition type and
+  provider for TTL-based resource staleness checks. Accepts an optional
+  `get_timestamp_fn(resource_id) -> float | None` hook; falls back to
+  `metadata["resource_timestamp"]`. Returns `"fresh"` or `"stale_context"`. Exported
+  from `agent_control_plane`.
+
+- **`ConsensusPrecondition` / `ConsensusStateProvider`** — built-in precondition type and
+  provider for multi-source state agreement checks. Delegates to a list of
+  `PreconditionStateProvider` instances and returns `"conflicting_context"` if any
+  provider disagrees; returns the agreed value otherwise. Exported from
+  `agent_control_plane`.
+
+- **`ClarificationRequest` DTO** — new Pydantic model (`id`, `session_id`, `proposal_id`,
+  `required_fields`, `created_at`) carried in `RoutingDecision` when `tier=CLARIFY`.
+  Exported from `agent_control_plane`.
+
+- **`SessionStatus.SUSPENDED_FOR_CLARIFICATION`** — new session status emitted during
+  clarification routing; complements existing suspension statuses.
+
+- **`EventKind.STEERING_LIMIT_EXCEEDED`, `CLARIFICATION_REQUESTED`,
+  `CLARIFICATION_RESOLVED`** — three new event kinds covering the steering and
+  clarification governance paths.
+
+- **`CONTEXT.md` domain glossary** — Pocock-style ubiquitous-language reference covering
+  ACP core concepts (proposal flow, tiers, sessions, budgets, approvals, events,
+  gateways) so hosts and agents can reason about ACP without re-explanation in every
+  prompt.
+
+### Fixed
+
+- **`McpGateway` storage bypass** — `McpGateway._create_approval_request` was importing
+  `SyncSqlAlchemyUnitOfWork` directly, bypassing the `SyncControlPlane` abstraction.
+  Replaced with `self._cp.uow_factory(db)` so the configured factory is always used.
+
+- **`TokenBudgetTracker.from_session()` restored** — the method was removed in
+  `f893825` as part of import-boundary enforcement (it imported `sqlalchemy_async` inside
+  the engine layer). Restored with an explicit `# noqa: PLC0415` import-linter carve-out
+  and a comment explaining why the lazy import is acceptable here, preserving the public
+  API contract.
+
+### Changed
+
+- **Import boundary contracts enforced** — two new `import-linter` contracts prevent:
+  1. `engine/` from importing concrete storage backends or `mcp/`.
+  2. `evaluators/` from importing `engine/`.
+  Both are checked in CI alongside the existing `ruff` and `mypy` steps.
+
+- **Governance invariant rules (Semgrep)** — `lint/semgrep/governance_invariants.yml`
+  adds four static-analysis rules enforced in CI via `returntocorp/semgrep-action`:
+  `fail-open-return-true-in-except`, `bare-pass-swallow`, `state-bearing-exception-swallowed`,
+  and `fail-open-budget-override`. `pylint` and `lint-imports` steps were also added to
+  the CI lint job (both were previously missing).
+
+- **Routing log moved** — the `logger.info("Routed proposal…")` call in `ProposalRouter`
+  is now emitted immediately before the return statement rather than after building the
+  decision object, making the log line deterministic with respect to the returned value.
+
 ## [0.25.0] - 2026-06-05
 
 ### Added
