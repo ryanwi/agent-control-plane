@@ -473,6 +473,8 @@ class AsyncLifecycleGateway(_AsyncGatewayBase):
             cs = await uow.session_repo.get_session_for_update(session_id)
             if cs.status not in {SessionStatus.PAUSED, SessionStatus.SUSPENDED_FOR_CLARIFICATION}:
                 raise ValueError(f"Cannot resume session in state {cs.status}")
+            if cs.killed_at is not None:
+                raise ValueError(f"Cannot resume a killed session (killed_at={cs.killed_at})")
 
             if cs.status == SessionStatus.SUSPENDED_FOR_CLARIFICATION:
                 if not resolved_parameters:
@@ -484,9 +486,6 @@ class AsyncLifecycleGateway(_AsyncGatewayBase):
                     payload={"resolved_parameters": resolved_parameters},
                     state_bearing=True,
                 )
-
-            if cs.killed_at is not None:
-                raise ValueError(f"Cannot resume a killed session (killed_at={cs.killed_at})")
             violations = validate_session_integrity(cs)
             if violations:
                 await uow.event_repo.append(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import time
 from collections.abc import Callable
 from enum import StrEnum
 from pathlib import Path
@@ -107,8 +108,6 @@ class FreshnessStateProvider:
         self.get_timestamp_fn = get_timestamp_fn
 
     def read_state(self, precondition: Precondition) -> str:
-        import time
-
         now = time.time()
         max_age = precondition.metadata.get("max_age_seconds", 60.0)
 
@@ -138,12 +137,7 @@ class ConsensusStateProvider:
     def read_state(self, precondition: Precondition) -> Any:
         results = []
         for provider in self.providers:
-            sub_precond = Precondition(
-                resource_id=precondition.resource_id,
-                expected_state=precondition.expected_state,
-                provider_id=provider.provider_id,
-                metadata=precondition.metadata,
-            )
+            sub_precond = precondition.model_copy(update={"provider_id": provider.provider_id})
             try:
                 val = provider.read_state(sub_precond)
                 results.append(val)
@@ -153,9 +147,10 @@ class ConsensusStateProvider:
         if not results:
             raise ValueError("No providers configured for consensus")
 
-        if len(set(results)) > 1:
+        first = results[0]
+        if any(r != first for r in results[1:]):
             return "conflicting_context"
-        return results[0]
+        return first
 
 
 def encode_preconditions_for_metadata(

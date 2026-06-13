@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, cast
@@ -51,6 +52,9 @@ class ProposalRouter:
         self.risk_accumulator = risk_accumulator
         self.event_store = event_store
         self.session_repository = session_repository
+        self._session_repo_is_async: bool = session_repository is not None and inspect.iscoroutinefunction(
+            getattr(session_repository, "get_session", None)
+        )
 
     async def _check_agent_registration(self, proposal: ActionProposal) -> RoutingDecision | None:
         if self.agent_registry and proposal.agent_id:
@@ -86,26 +90,24 @@ class ProposalRouter:
         if session_state is not None:
             return session_state
         if self.session_repository is not None and proposal.session_id is not None:
-            import inspect
-
-            if inspect.iscoroutinefunction(self.session_repository.get_session):
+            if self._session_repo_is_async:
                 return cast(SessionState | None, await self.session_repository.get_session(proposal.session_id))
             return cast(SessionState | None, self.session_repository.get_session(proposal.session_id))
         return None
 
     def _get_clarification_fields(self, proposal: ActionProposal) -> list[str]:
-        fields: list[str] = []
         meta = proposal.metadata
         if not meta:
-            return fields
+            return []
+        seen: dict[str, None] = {}
         if "missing_fields" in meta and isinstance(meta["missing_fields"], list):
-            fields.extend(meta["missing_fields"])
+            seen.update(dict.fromkeys(meta["missing_fields"]))
         if "ambiguous_fields" in meta and isinstance(meta["ambiguous_fields"], list):
-            fields.extend(meta["ambiguous_fields"])
+            seen.update(dict.fromkeys(meta["ambiguous_fields"]))
         for k, v in meta.items():
-            if v == "Ambiguous" and k not in fields:
-                fields.append(k)
-        return fields
+            if v == "Ambiguous":
+                seen[k] = None
+        return list(seen)
 
     async def _check_clarification(
         self,
@@ -121,9 +123,7 @@ class ProposalRouter:
         if resolved_state is not None:
             resolved_state.status = SessionStatus.SUSPENDED_FOR_CLARIFICATION
             if self.session_repository is not None and proposal.session_id is not None:
-                import inspect
-
-                if inspect.iscoroutinefunction(self.session_repository.update_session):
+                if self._session_repo_is_async:
                     await self.session_repository.update_session(
                         proposal.session_id, status=SessionStatus.SUSPENDED_FOR_CLARIFICATION
                     )
@@ -188,9 +188,7 @@ class ProposalRouter:
         if resolved_state is not None:
             resolved_state.steering_history[proposal.decision] = steer_count + 1
             if self.session_repository is not None and proposal.session_id is not None:
-                import inspect
-
-                if inspect.iscoroutinefunction(self.session_repository.update_session):
+                if self._session_repo_is_async:
                     await self.session_repository.update_session(
                         proposal.session_id, steering_history=resolved_state.steering_history
                     )
@@ -210,9 +208,10 @@ class ProposalRouter:
         if agent_decision is not None:
             return agent_decision
 
+        resolved_state = await self._resolve_session_state(proposal, session_state)
         original_risk_level = self.policy_engine.classify_risk_level(proposal)
 
-        clarify_decision = await self._check_clarification(proposal, original_risk_level, session_state)
+        clarify_decision = await self._check_clarification(proposal, original_risk_level, resolved_state)
         if clarify_decision is not None:
             return clarify_decision
 
@@ -229,7 +228,7 @@ class ProposalRouter:
         )
 
         if tier == ActionTier.STEER:
-            steer_decision = await self._check_steering_limit(proposal, session_state)
+            steer_decision = await self._check_steering_limit(proposal, resolved_state)
             if steer_decision is not None:
                 return steer_decision
 
