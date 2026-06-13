@@ -42,6 +42,43 @@ an `import agent_control_plane`.
 
 ## Breaking changes
 
+### 0.26.0 — steering history and max_steering_retries columns added
+
+New columns were added to the policy snapshot and session tracking tables. Existing deployments must migrate:
+
+```sql
+-- PostgreSQL
+ALTER TABLE policy_snapshots ADD COLUMN max_steering_retries INTEGER NOT NULL DEFAULT 3;
+ALTER TABLE agent_runs ADD COLUMN steering_history JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE agent_runs ADD COLUMN killed_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE agent_runs ADD COLUMN started_at TIMESTAMP WITH TIME ZONE;
+```
+
+```sql
+-- SQLite
+ALTER TABLE policy_snapshots ADD COLUMN max_steering_retries INTEGER NOT NULL DEFAULT 3;
+ALTER TABLE agent_runs ADD COLUMN steering_history TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE agent_runs ADD COLUMN killed_at DATETIME;
+ALTER TABLE agent_runs ADD COLUMN started_at DATETIME;
+```
+
+For Alembic users, see the template in `docs/migrations/v0.25.0_to_v0.26.0_migration.py`.
+
+---
+
+### 0.25.0 — approval ticket revocation columns added
+
+Three new nullable columns were added to the `approval_tickets` table to track ticket revocation. Existing deployments must migrate:
+
+```sql
+-- SQLite and PostgreSQL
+ALTER TABLE approval_tickets ADD COLUMN revoked_by VARCHAR(100);
+ALTER TABLE approval_tickets ADD COLUMN revocation_reason TEXT;
+ALTER TABLE approval_tickets ADD COLUMN revoked_at TIMESTAMP WITH TIME ZONE;
+```
+
+---
+
 ### 0.24.0 — new nullable columns on `agent_runs`
 
 Two nullable columns were added to the session table. Existing deployments must migrate:

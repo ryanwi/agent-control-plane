@@ -17,6 +17,7 @@ from agent_control_plane.models.reference import (
     create_tables,
     register_models,
 )
+from agent_control_plane.models.registry import registry_from_base
 
 __all__ = [
     "ActionProposalRow",
@@ -34,4 +35,5 @@ __all__ = [
     "TokenUsageLedgerRow",
     "create_tables",
     "register_models",
+    "registry_from_base",
 ]

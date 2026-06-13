@@ -120,7 +120,7 @@ from agent_control_plane.models import (
 from agent_control_plane.models import (
     Base as ReferenceBase,
 )
-from agent_control_plane.models.registry import ModelRegistry, ScopedModelRegistry
+from agent_control_plane.models.registry import ModelRegistry, ScopedModelRegistry, registry_from_base
 from agent_control_plane.policies import (
     EvaluatorPolicy,
     GuardrailPolicy,
@@ -541,6 +541,7 @@ __all__ = [
     "RuntimeMonitorConfig",
     "CancellableExecution",
     "ScopedModelRegistry",
+    "registry_from_base",
     "SessionRiskAccumulator",
     "SessionRiskEscalation",
     "SessionRiskState",

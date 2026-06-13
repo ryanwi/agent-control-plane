@@ -106,3 +106,42 @@ def registry_scope(registry: RegistryProtocol) -> Iterator[None]:
     """Temporarily scope ModelRegistry.get() to an explicit registry instance."""
     with ModelRegistry.scope(registry):
         yield
+
+
+_MIXIN_TO_REGISTRY_KEY = {
+    "PolicySnapshotMixin": "PolicySnapshot",
+    "ControlSessionMixin": "ControlSession",
+    "SessionSeqCounterMixin": "SessionSeqCounter",
+    "ControlEventMixin": "ControlEvent",
+    "ActionProposalMixin": "ActionProposal",
+    "ApprovalTicketMixin": "ApprovalTicket",
+    "AgentMixin": "AgentRecord",
+    "DelegationMixin": "DelegationRecord",
+    "AgentSessionRevocationMixin": "AgentSessionRevocation",
+    "CommandLedgerMixin": "CommandLedger",
+    "TokenBudgetConfigMixin": "TokenBudgetConfig",
+    "TokenBudgetStateMixin": "TokenBudgetState",
+    "TokenUsageLedgerMixin": "TokenUsageLedger",
+}
+
+
+def registry_from_base(base: Any) -> ScopedModelRegistry:
+    """Create a ScopedModelRegistry from a SQLAlchemy declarative base or registry.
+
+    Automatically scans all mapped mappers on the base and maps classes to control plane registry keys
+    based on the mixins they inherit from.
+    """
+    registry = ScopedModelRegistry()
+
+    # Base might be a declarative base class or registry.
+    # In SQLAlchemy 2.0, Base.registry holds the registry.
+    mappers = getattr(getattr(base, "registry", None), "mappers", [])
+    for mapper in mappers:
+        cls = mapper.class_
+        for base_cls in cls.__mro__:
+            name = base_cls.__name__
+            if name in _MIXIN_TO_REGISTRY_KEY:
+                registry.register(_MIXIN_TO_REGISTRY_KEY[name], cls)
+                break
+
+    return registry

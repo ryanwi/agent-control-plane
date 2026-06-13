@@ -26,3 +26,26 @@ def test_scoped_registry_isolated_from_global():
         raise AssertionError("expected scoped registry to not leak globally")
     except RuntimeError:
         pass
+
+
+def test_registry_from_base():
+    from sqlalchemy import Integer
+    from sqlalchemy.orm import DeclarativeBase, mapped_column
+
+    from agent_control_plane.models.mixins import ControlSessionMixin, PolicySnapshotMixin
+    from agent_control_plane.models.registry import registry_from_base
+
+    class DummyBase(DeclarativeBase):
+        pass
+
+    class CustomSession(DummyBase, ControlSessionMixin):
+        __tablename__ = "custom_sessions"
+        id = mapped_column(Integer, primary_key=True)
+
+    class CustomPolicy(DummyBase, PolicySnapshotMixin):
+        __tablename__ = "custom_policies"
+        id = mapped_column(Integer, primary_key=True)
+
+    scoped = registry_from_base(DummyBase)
+    assert scoped.get("ControlSession") is CustomSession
+    assert scoped.get("PolicySnapshot") is CustomPolicy
