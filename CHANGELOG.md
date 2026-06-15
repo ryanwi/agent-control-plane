@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`EventConfig` validates `event_map` values at construction** — passing a raw string
+  instead of an `EventKind` member (e.g. `{"evt": "cycle_started"}` instead of
+  `{"evt": EventKind.CYCLE_STARTED}`) now raises `ValueError` immediately at startup
+  rather than failing silently or raising at the first `emit_app` call.
+
+### Changed
+
+- **`registry_from_base()` docstring expanded** — now explains that auto-discovery
+  is based on mixin inheritance, not class or table names, so hosts using custom
+  naming conventions require no extra configuration.
+
 ## [0.27.0] - 2026-06-14
 
 ### Added

@@ -126,10 +126,16 @@ _MIXIN_TO_REGISTRY_KEY = {
 
 
 def registry_from_base(base: Any) -> ScopedModelRegistry:
-    """Create a ScopedModelRegistry from a SQLAlchemy declarative base or registry.
+    """Create a ScopedModelRegistry by scanning a SQLAlchemy declarative base.
 
-    Automatically scans all mapped mappers on the base and maps classes to control plane registry keys
-    based on the mixins they inherit from.
+    For each mapped class on ``base``, walks the MRO looking for a known ACP mixin
+    (e.g. ``ControlSessionMixin``, ``PolicySnapshotMixin``). The first match wins and
+    the class is registered under the corresponding key (e.g. ``"ControlSession"``,
+    ``"PolicySnapshot"``). The host's concrete class name and table name are irrelevant —
+    only mixin inheritance matters, so custom naming conventions work without any
+    extra configuration.
+
+    Classes on ``base`` that do not inherit any ACP mixin are silently skipped.
     """
     registry = ScopedModelRegistry()
 

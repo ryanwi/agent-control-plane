@@ -58,6 +58,12 @@ class EventConfig:
     mapper: AppEventMapper | None = None
     unknown_event_policy: UnknownAppEventPolicy = UnknownAppEventPolicy.RAISE
 
+    def __post_init__(self) -> None:
+        invalid = {k: v for k, v in self.event_map.items() if not isinstance(v, EventKind)}
+        if invalid:
+            bad = ", ".join(f"{k!r}: {v!r}" for k, v in invalid.items())
+            raise ValueError(f"EventConfig.event_map values must be EventKind members, got: {bad}")
+
 
 @dataclass(frozen=True)
 class ResilienceConfig:
