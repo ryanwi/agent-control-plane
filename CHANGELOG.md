@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-06-14
+
+### Added
+
+- **`registry_from_base(base)` — declarative-base registry factory** — given any
+  SQLAlchemy `DeclarativeBase` subclass, scans all mapped classes and returns a
+  `ScopedModelRegistry` pre-populated with the correct registry keys for every
+  control-plane mixin found in the class hierarchy (`ControlSession`, `PolicySnapshot`,
+  `ControlEvent`, `ActionProposal`, `ApprovalTicket`, `AgentRecord`, `DelegationRecord`,
+  `AgentSessionRevocation`, `CommandLedger`, `TokenBudgetConfig`, `TokenBudgetState`,
+  `TokenUsageLedger`). Hosts that define custom models on their own `Base` can now build
+  an isolated registry with a single call instead of manually calling `register()` for
+  every key. Exported from `agent_control_plane` and `agent_control_plane.models`.
+
+  ```python
+  from agent_control_plane import registry_from_base, registry_scope
+
+  scoped = registry_from_base(MyBase)   # discovers all ACP mixins on MyBase
+  with registry_scope(scoped):
+      cp.sessions.open_session(...)
+  ```
+
+  `ScopedModelRegistry` and `registry_scope` were already available since 0.18.0; this
+  factory removes the need to enumerate every model name manually.
+
+- **`docs/migrations/` — per-release Alembic migration templates** — starting with
+  `v0.25.0_to_v0.26.0_migration.py`, each release that adds or renames columns ships a
+  copy-paste Alembic script in `docs/migrations/`. These templates include both `upgrade`
+  and `downgrade` paths and use exact SQLAlchemy types from the mixins.
+
 ## [0.26.0] - 2026-06-12
 
 ### Added
